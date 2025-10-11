@@ -1,0 +1,10 @@
+﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:String x:Key="/Default/Environment/Hierarchy/Build/BuildTool/DotNetCliExePath/@EntryValue">/Users/dily/.dotnet/dotnet</s:String>
+	<s:String x:Key="/Default/Environment/Hierarchy/Build/BuildTool/CustomBuildToolPath/@EntryValue">/Users/dily/.dotnet/sdk/9.0.200/MSBuild.dll</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=ef9a92fd_002D3d35_002D428e_002Db067_002Dcdf2e13037ba/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="All tests from UserControllerTests.cs" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;Or&gt;
+    &lt;ProjectFile&gt;F0E78A03-64EB-4864-9349-CC8F73854E6B/d:Controllers/f:UserControllerTests.cs&lt;/ProjectFile&gt;
+    &lt;ProjectFile&gt;D07F48A5-3A36-4561-8DF4-1B155C531E07/d:Services/f:UserServiceTests.cs&lt;/ProjectFile&gt;
+    &lt;Project Location="/Users/dily/RiderProjects/UserService/tests/UserService.Infrastructure.Tests" Presentation="&amp;lt;tests&amp;gt;\&amp;lt;UserService.Infrastructure.Tests&amp;gt;" /&gt;
+  &lt;/Or&gt;
+&lt;/SessionState&gt;</s:String></wpf:ResourceDictionary>
