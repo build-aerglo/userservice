@@ -269,6 +269,7 @@ dotnet test
 | Reviewer(s) | — |
 
 ---
+<img width="1536" height="1024" alt="ChatGPT Image Oct 12, 2025, 04_28_39 PM" src="https://github.com/user-attachments/assets/a82846f4-324e-4290-b017-66732a90c957" />
 
 ## 🏁 License
 
