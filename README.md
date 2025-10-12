@@ -1,113 +1,219 @@
-# 🧩 UserService — Microservice for User Management
+# 🧩 UserService — User Management Microservice
 
-A **.NET 9 Domain-Driven Design (DDD)** based microservice responsible for managing users, businesses, business reps, and support users in the **Aerglo Review Platform** (similar to TrustPilot/Yelp).
+A **.NET 9**, **DDD-based microservice** that manages all **user-related data** in the **Aerglo Review Platform**, including:
 
-This service provides secure, token-based CRUD APIs via **Auth0**, connects to a **PostgreSQL** database using **Dapper**, and manages schema migrations using **DbUp**.
+- End users (consumers who leave reviews)  
+- Business representatives (linked to businesses from another service)  
+- Support users (admins and internal staff)  
+
+This service connects to **PostgreSQL** via **Dapper**, uses **Auth0** for authentication, and integrates with a separate **BusinessService** for business registration.  
 
 ---
 
-## 🏗️ Architecture Overview
+## 🧱 Architecture Overview
 
-The service follows **Domain-Driven Design (DDD)** principles and **Clean Architecture** boundaries:
+The service follows **Domain-Driven Design (DDD)** and **Clean Architecture** layering:
 
 ```
 +-----------------------------------------------------------+
-|                    UserService.Api                        |
-|  → Authentication (Auth0, JWT)                            |
-|  → Controllers / Endpoints                                |
-|  → Swagger / OpenAPI Docs                                 |
+|                     UserService.Api                       |
+|  → Auth0 JWT authentication                               |
+|  → Controllers / Swagger UI                               |
 +-----------------------------------------------------------+
 |                UserService.Application                    |
-|  → Business Logic (Use Cases)                             |
-|  → DTOs / Validation                                      |
-|  → Service Interfaces (IUserService)                      |
+|  → Business logic (user registration, business rep linking)|
+|  → DTOs / Use cases                                       |
 +-----------------------------------------------------------+
 |                   UserService.Domain                      |
-|  → Core Entities (User, Business, BusinessRep, Review)    |
-|  → Value Objects / Enums                                  |
-|  → Repository Interfaces                                  |
+|  → Entities: User, BusinessRep, EndUserProfile, SupportUserProfile |
+|  → Repository interfaces (contracts)                      |
 +-----------------------------------------------------------+
 |                UserService.Infrastructure                 |
-|  → PostgreSQL Repositories (Dapper)                       |
-|  → SQL Queries                                            |
-|  → Database Access via Npgsql                             |
+|  → Dapper-based repositories (PostgreSQL)                 |
+|  → Database access via Npgsql                             |
 +-----------------------------------------------------------+
 |                   tools/UserService.DbUp                  |
-|  → DbUp migrations (SQL scripts)                          |
-|  → Schema versioning and upgrades                         |
+|  → SQL migrations for schema creation                     |
 +-----------------------------------------------------------+
 ```
 
 ---
 
-## 📁 Folder Structure
+## 📁 Project Structure
 
 ```
 UserService/
 ├── src/
-│   ├── UserService.Api/              # API endpoints, authentication, Swagger
-│   ├── UserService.Application/      # Application logic, DTOs, services
-│   ├── UserService.Domain/           # Domain models, interfaces, value objects
-│   ├── UserService.Infrastructure/   # Dapper/Postgres repositories
-│   └── tools/
-│       └── UserService.DbUp/         # Database migrations (DbUp console app)
+│   ├── UserService.Api/               # API & Auth0 config
+│   ├── UserService.Application/       # Business logic and service layer
+│   ├── UserService.Domain/            # Entities & repository interfaces
+│   ├── UserService.Infrastructure/    # Dapper repositories
+│   └── tools/UserService.DbUp/        # Schema migrations via DbUp
 │
 ├── tests/
-│   ├── UserService.Api.Tests/        # Controller tests (NUnit + Moq)
-│   ├── UserService.Application.Tests # Service-level tests
-│   └── UserService.Infrastructure.Tests # Repository integration tests
+│   ├── UserService.Api.Tests/
+│   ├── UserService.Application.Tests/
+│   └── UserService.Infrastructure.Tests/
 │
 └── README.md
 ```
 
 ---
 
-## ⚙️ Tech Stack
+## ⚙️ Technology Stack
 
 | Layer | Technology |
-|-------|-------------|
-| API | ASP.NET Core 9 (Minimal API + Controllers) |
-| Authentication | Auth0 (JWT Bearer Tokens) |
-| Database | PostgreSQL |
+|--------|-------------|
+| API | ASP.NET Core 9 |
+| Auth | Auth0 (JWT Bearer) |
 | ORM | Dapper |
-| Migration | DbUp |
+| Database | PostgreSQL |
+| Migrations | DbUp |
 | Testing | NUnit + Moq |
-| Build | .NET SDK 9 |
-| Packaging | Docker (optional) |
+| Containerization | Docker (optional) |
 
 ---
 
-## 🚀 Getting Started
+## 🧩 Database Schema
 
-### 1️⃣ Prerequisites
+UserService manages only **4 tables**.
 
-| Tool | Version |
-|------|----------|
-| .NET SDK | 9.0+ |
-| PostgreSQL | 15+ |
-| Auth0 Account | Required |
-| Git | Latest |
-| Rider / VS Code / Visual Studio | Any modern IDE |
+| Table | Description |
+|--------|-------------|
+| `users` | Core user table for all types (business, end-user, support) |
+| `business_reps` | Links a business (from BusinessService) to a user |
+| `end_user_profiles` | Extended details for end users |
+| `support_user_profiles` | Extended details for internal support staff |
+
+### SQL Definition
+
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    phone TEXT,
+    user_type TEXT NOT NULL CHECK (user_type IN ('end_user', 'business_user', 'support_user')),
+    address TEXT,
+    join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE business_reps (
+    id UUID PRIMARY KEY,
+    business_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_business_rep_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE end_user_profiles (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
+    preferences JSONB,
+    bio TEXT,
+    social_links JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_end_user_profile_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE support_user_profiles (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
+    department TEXT,
+    role TEXT,
+    permissions JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_support_user_profile_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
 
 ---
 
-### 2️⃣ Clone the Repository
+## 🧭 ERD (Entity Relationship Diagram)
 
+📊 [Download ERD Diagram](UserService_ERD.png)
+
+Each child table links to `users.id` via a foreign key with cascade delete.
+
+---
+
+## 🚀 Business Registration Flow
+
+When a **new business account** registers through UserService:
+
+1. **UserService** receives the user payload.
+2. It calls the **BusinessService API** (`POST /api/businesses`) with that payload.
+3. **BusinessService** creates the business and returns a `businessId`.
+4. UserService:
+   - Creates a record in `users` (type = `business_user`)
+   - Creates a record in `business_reps` linking the new user to that businessId.
+
+### Example (C#)
+```csharp
+public async Task<(User user, Guid businessId)> RegisterBusinessAccountAsync(User userPayload)
+{
+    var response = await _httpClient.PostAsJsonAsync("https://business-service/api/businesses", userPayload);
+    response.EnsureSuccessStatusCode();
+
+    var result = await response.Content.ReadFromJsonAsync<BusinessCreatedResponse>();
+
+    await _userRepository.AddAsync(userPayload);
+
+    var businessRep = new BusinessRep(result.BusinessId, userPayload.Id);
+    await _businessRepRepository.AddAsync(businessRep);
+
+    return (userPayload, result.BusinessId);
+}
+```
+
+---
+
+## 🔒 Authentication
+
+Uses **Auth0 JWT Bearer** authentication.  
+All `/api/user/*` endpoints are protected.
+
+Example protected route header:ƒ√
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+---
+
+Example curl:- curl --request POST \
+  --url https://dev-jx8cz5q0wcoddune.us.auth0.com/oauth/token \
+  --header 'content-type: application/json' \
+  --data '{
+    "client_id":"HYUCewQj7h3Ybt8ttM0jvL5tQApkKEMg",
+    "client_secret":"jmwxviI8ZCSqSqD-2ZjYQxZXXn1PHVhzvTMJR4C5W6BHpHflcrlkqdt16VIOEoJv",
+    "audience":"https://user-service.aerglotechnology.com",
+    "grant_type":"client_credentials"
+  }'
+
+
+## 🧰 Setup Instructions
+
+### 1️⃣ Install prerequisites
+- .NET 9 SDK  
+- PostgreSQL  
+- Auth0 account
+
+### 2️⃣ Clone and configure
 ```bash
 git clone https://github.com/build-aerglo/userservice.git
 cd userservice
 ```
 
----
-
-### 3️⃣ Set Up Environment Variables
-
-Create an `appsettings.Development.json` file in `src/UserService.Api/`:
-
+### 3️⃣ Configure appsettings
 ```json
 {
   "ConnectionStrings": {
-    "PostgresConnection": "Host=localhost;Port=5432;Database=user_service;Username=postgres;Password=postgres;Include Error Detail=true;"
+    "PostgresConnection": "Host=localhost;Port=5432;Database=user_service;Username=postgres;Password=postgres"
   },
   "Auth0": {
     "Domain": "your-tenant.auth0.com",
@@ -116,181 +222,41 @@ Create an `appsettings.Development.json` file in `src/UserService.Api/`:
 }
 ```
 
----
-
-### 4️⃣ Apply Database Migrations (DbUp)
-
-From the project root, run:
-
+### 4️⃣ Run migrations
 ```bash
 dotnet run --project src/tools/UserService.DbUp
 ```
 
-✅ This creates the schema and tables defined in `/tools/UserService.DbUp/Scripts/`.
-
-Tables include:
-- `users`
-- `businesses`
-- `business_reps`
-- `business_media`
-- `business_social_media`
-- `support_users`
-- `reviews`
-
----
-
 ### 5️⃣ Run the API
-
 ```bash
 dotnet run --project src/UserService.Api
 ```
 
-API will start at:
-```
-https://localhost:5001
-```
-
-Swagger UI:
-```
-https://localhost:5001/swagger
-```
+Swagger UI:  
+👉 `https://localhost:5001/swagger`
 
 ---
 
-### 6️⃣ Authenticate via Auth0
+## 🧪 Testing
 
-You’ll need an Auth0 **access token** to call protected routes.
-
-**Public route:**
-```
-GET /
-→ "Welcome to the public API!"
-```
-
-**Protected route:**
-```
-GET /secure
-→ Requires Bearer token in Authorization header
-```
-
-**Example header:**
-```
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
----
-
-## 🧩 Example Endpoints
-
-| Method | Route | Description | Auth |
-|--------|--------|--------------|------|
-| `GET` | `/api/user` | List all users | 🔒 |
-| `GET` | `/api/user/{id}` | Get user by ID | 🔒 |
-| `POST` | `/api/user` | Create a new user | 🔒 |
-| `PUT` | `/api/user/{id}` | Update a user | 🔒 |
-| `DELETE` | `/api/user/{id}` | Delete a user | 🔒 |
-| `GET` | `/` | Welcome route | Public |
-
----
-
-## 🧱 Database Schema (Simplified)
-
-```sql
-users
- ├── id (UUID, PK)
- ├── username
- ├── email
- ├── phone
- ├── user_type ('end_user', 'business_user', 'support_user')
- ├── address
- ├── join_date
- ├── created_at / updated_at
-
-businesses
- ├── id (UUID, PK)
- ├── business_name
- ├── business_email
- ├── sector
- ├── verified
- ├── ...etc
-
-reviews
- ├── id (UUID, PK)
- ├── business_id (FK)
- ├── user_id (FK)
- ├── rating (1–5)
- ├── comment
-```
-
----
-
-## 🧪 Running Tests
-
-To execute all test projects:
-
+All test projects use **NUnit + Moq**:
 ```bash
 dotnet test
 ```
 
-Tests use **NUnit + Moq** and include:
-- API endpoint tests (controllers)
-- Application logic tests (service layer)
-- Integration tests (repository → Postgres)
-
 ---
 
-## 🧰 Local Development with Docker
+## 🧱 Example Endpoints
 
-You can spin up a local Postgres instance with Docker:
-
-```bash
-docker run --name userdb -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres
-```
-
-Then update your `appsettings.Development.json` to point to `localhost:5432`.
-
----
-
-## 🔒 Authentication Flow
-
-1. Client authenticates with **Auth0** and receives an **Access Token**.
-2. API validates token via `JwtBearer` middleware.
-3. Protected routes (like `/api/user`) require a valid token.
-4. Authorization attributes ensure scoped access.
-
----
-
-## 🧩 Application Flow
-
-```text
-Client → API Controller → Application Service → Domain Entity → Repository (Dapper) → PostgreSQL
-```
-
-- **API**: Handles HTTP requests and Auth0 validation.  
-- **Application Layer**: Contains business logic and DTO mappings.  
-- **Domain Layer**: Core entities and contracts (no dependencies).  
-- **Infrastructure Layer**: Handles persistence with Dapper.  
-- **DbUp Tool**: Handles database schema creation and versioning.
-
----
-
-## 🧠 Design Highlights
-
-✅ Clean separation of concerns  
-✅ Testable architecture (unit and integration tests)  
-✅ Explicit domain model with value objects  
-✅ Lightweight data access (Dapper)  
-✅ Secure JWT authentication (Auth0)  
-✅ Versioned migrations with DbUp  
-✅ Cross-platform development via .NET 9  
-
----
-
-## 🧱 Future Enhancements
-
-- ✅ Add Review,Company,Notification etc Service microservice 
-- 📦 Containerize and deploy via Docker Compose / Kubernetes
-- 📊 Add health checks and distributed tracing
+| Method | Route | Description | Auth |
+|--------|--------|--------------|------|
+| `GET` | `/api/user` | Get all users | 🔒 |
+| `GET` | `/api/user/{id}` | Get user by ID | 🔒 |
+| `POST` | `/api/user` | Create user | 🔒 |
+| `POST` | `/api/user/register-business` | Register new business account | 🔒 |
+| `PUT` | `/api/user/{id}` | Update user | 🔒 |
+| `DELETE` | `/api/user/{id}` | Delete user | 🔒 |
+| `GET` | `/` | Public welcome route | Public |
 
 ---
 
@@ -298,7 +264,7 @@ Client → API Controller → Application Service → Domain Entity → Reposito
 
 | Role | Name |
 |------|------|
-| Architect / Lead | Dili & Chinedu |
+| Architect / Lead | Dily & Chinedu |
 | Developer(s) | — |
 | Reviewer(s) | — |
 
@@ -306,4 +272,4 @@ Client → API Controller → Application Service → Domain Entity → Reposito
 
 ## 🏁 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** — see the `LICENSE` file for details.
