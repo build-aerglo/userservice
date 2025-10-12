@@ -1,41 +1,43 @@
+using System.Net.Http.Json;
 using UserService.Domain.Entities;
 using UserService.Domain.Repositories;
 
 namespace UserService.Application.Services
 {
-    public class UserService : IUserService
+    public class UserService
     {
         private readonly IUserRepository _userRepository;
+        private readonly IBusinessRepRepository _businessRepRepository;
+        private readonly HttpClient _httpClient;
 
-        public UserService(IUserRepository userRepository)
+        public UserService(IUserRepository userRepository, IBusinessRepRepository businessRepRepository, HttpClient httpClient)
         {
             _userRepository = userRepository;
+            _businessRepRepository = businessRepRepository;
+            _httpClient = httpClient;
         }
+        
 
-        public async Task<IEnumerable<User>> GetAllAsync()
-            => await _userRepository.GetAllAsync();
-
-        public async Task<User?> GetByIdAsync(Guid id)
-            => await _userRepository.GetByIdAsync(id);
-
-        public async Task<User> CreateAsync(string username, string email, string phone, string userType, string? address)
+        public async Task<(User user, Guid businessId)> RegisterBusinessAccountAsync(User userPayload)
         {
-            var user = new User(username, email, phone, userType, address);
-            await _userRepository.AddAsync(user);
-            return user;
-        }
+            // Step 1: Call BusinessService API
+            var response = await _httpClient.PostAsJsonAsync("https://business-service/api/businesses", userPayload);
+            response.EnsureSuccessStatusCode();
 
-        public async Task UpdateAsync(Guid id, string? email, string? phone, string? address)
-        {
-            var user = await _userRepository.GetByIdAsync(id);
-            if (user == null) return;
-            user.Update(email, phone, address);
-            await _userRepository.UpdateAsync(user);
-        }
+            var result = await response.Content.ReadFromJsonAsync<BusinessCreatedResponse>();
 
-        public async Task DeleteAsync(Guid id)
-        {
-            await _userRepository.DeleteAsync(id);
+            // Step 2: Save User
+            await _userRepository.AddAsync(userPayload);
+
+            // Step 3: Save BusinessRep
+            var businessRep = new BusinessRep(result.BusinessId, userPayload.Id, null, null);
+            await _businessRepRepository.AddAsync(businessRep);
+
+            return (userPayload, result.BusinessId);
         }
+    }
+    public class BusinessCreatedResponse
+    {
+        public Guid BusinessId { get; set; }
     }
 }
