@@ -13,7 +13,7 @@ namespace UserService.Infrastructure.Tests.Repositories
         private IConfiguration _configuration = null!;
 
         private const string ConnectionString =
-            "Host=localhost;Port=5432;Database=voicely;Username=dily;Password=password1";
+            "Host=localhost;Port=5432;Database=reviewapp;Username=prnzdiamond;Password=diamond";
 
         [OneTimeSetUp]
         public async Task GlobalSetup()
@@ -56,7 +56,7 @@ namespace UserService.Infrastructure.Tests.Repositories
         public async Task AddAsync_ShouldInsertUser()
         {
             // Arrange
-            var user = new User("JohnDoe", "john@example.com", "1234567890", "end", "123 Main St");
+            var user = new User("JohnDoe", "john@example.com", "1234567890", "end_user", "123 Main St");
 
             // Act
             await _repository.AddAsync(user);
@@ -71,8 +71,8 @@ namespace UserService.Infrastructure.Tests.Repositories
         public async Task GetAllAsync_ShouldReturnUsers()
         {
             // Arrange
-            var u1 = new User("JohnDoe", "john@example.com", "1234567890", "end", "123 Main St");
-            var u2 = new User("JaneDoe", "jane@example.com", "9876543210", "end", "456 Elm St");
+            var u1 = new User("JohnDoe", "john@example.com", "1234567890", "end_user", "123 Main St");
+            var u2 = new User("JaneDoe", "jane@example.com", "9876543210", "end_user", "456 Elm St");
             await _repository.AddAsync(u1);
             await _repository.AddAsync(u2);
 
@@ -88,7 +88,7 @@ namespace UserService.Infrastructure.Tests.Repositories
         public async Task GetByIdAsync_ShouldReturnUser_WhenExists()
         {
             // Arrange
-            var user = new User("JohnDoe", "john@example.com", "1234567890", "end", "123 Main St");
+            var user = new User("JohnDoe", "john@example.com", "1234567890", "end_user", "123 Main St");
             await _repository.AddAsync(user);
 
             // Act
@@ -113,7 +113,7 @@ namespace UserService.Infrastructure.Tests.Repositories
         public async Task UpdateAsync_ShouldModifyUser()
         {
             // Arrange
-            var user = new User("JohnDoe", "john@example.com", "1234567890", "end", "123 Main St");
+            var user = new User("JohnDoe", "john@example.com", "1234567890", "end_user", "123 Main St");
             await _repository.AddAsync(user);
 
             user.Update("new@example.com", "5555555555", "New Address");
@@ -129,7 +129,7 @@ namespace UserService.Infrastructure.Tests.Repositories
         public async Task DeleteAsync_ShouldRemoveUser()
         {
             // Arrange
-            var user = new User("JohnDoe", "john@example.com", "1234567890", "end", "123 Main St");
+            var user = new User("JohnDoe", "john@example.com", "1234567890", "end_user", "123 Main St");
             await _repository.AddAsync(user);
 
             // Act

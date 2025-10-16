@@ -8,13 +8,15 @@ namespace UserService.Application.Tests.Services
     public class UserServiceTests
     {
         private Mock<IUserRepository> _mockRepository = null!;
+        private Mock<IBusinessRepRepository> _mockBusinessRepRepository = null!;
         private Application.Services.UserService _service = null!;
 
         [SetUp]
         public void Setup()
         {
             _mockRepository = new Mock<IUserRepository>();
-            _service = new Application.Services.UserService(_mockRepository.Object);
+            _mockBusinessRepRepository = new Mock<IBusinessRepRepository>();
+            _service = new Application.Services.UserService(_mockRepository.Object, _mockBusinessRepRepository.Object);
         }
 
         [Test]

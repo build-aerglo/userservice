@@ -12,7 +12,7 @@ public class UserController : ControllerBase
 {
     private readonly IUserService _service;
     public UserController(IUserService service) => _service = service;
-
+	
     [HttpGet]
     public async Task<IActionResult> GetAll() => Ok(await _service.GetAllAsync());
 
@@ -40,5 +40,25 @@ public class UserController : ControllerBase
         await _service.DeleteAsync(id);
         return NoContent();
     }
+
+
+  [HttpPost("sub-business")]
+    public async Task<IActionResult> CreateSubBusinessUser([FromBody] CreateSubBusinessUserDto dto)
+    {
+        try
+        {
+            
+            var result = await _service.CreateSubBusinessUserAsync(dto);
+
+            return CreatedAtAction(nameof(Get), new { id = result.UserId }, result
+            );
+        }
+        catch (Exception ex)
+        {
+            
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
 }
 
