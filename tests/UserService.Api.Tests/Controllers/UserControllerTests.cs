@@ -74,57 +74,5 @@ namespace UserService.Api.Tests.Controllers
             // Assert
             Assert.That(result, Is.TypeOf<NotFoundResult>());
         }
-
-        [Test]
-        public async Task Create_ReturnsCreatedAtAction_WithCreatedUser()
-        {
-            // Arrange
-            var dto = new UserDto("JohnDoe", "john@example.com", "1234567890", "EndUser", "123 Main St");
-            var createdUser = new User(dto.Username, dto.Email, dto.Phone, dto.UserType, dto.Address);
-
-            _mockUserService.Setup(s => s.CreateAsync(dto.Username, dto.Email, dto.Phone, dto.UserType, dto.Address))
-                .ReturnsAsync(createdUser);
-
-            // Act
-            var result = await _controller.Create(dto);
-
-            // Assert
-            var createdAtAction = result as CreatedAtActionResult;
-            Assert.That(createdAtAction, Is.Not.Null);
-            Assert.That(createdAtAction!.StatusCode, Is.EqualTo(201));
-            Assert.That(createdAtAction.Value, Is.EqualTo(createdUser));
-            Assert.That(createdAtAction.ActionName, Is.EqualTo(nameof(UserController.Get)));
-        }
-
-        [Test]
-        public async Task Update_ReturnsNoContent()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            var dto = new UpdateUserDto("john@example.com", "1234567890", "New Address");
-
-            _mockUserService.Setup(s => s.UpdateAsync(id, dto.Email, dto.Phone, dto.Address))
-                .Returns(Task.CompletedTask);
-
-            // Act
-            var result = await _controller.Update(id, dto);
-
-            // Assert
-            Assert.That(result, Is.TypeOf<NoContentResult>());
-        }
-
-        [Test]
-        public async Task Delete_ReturnsNoContent()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            _mockUserService.Setup(s => s.DeleteAsync(id)).Returns(Task.CompletedTask);
-
-            // Act
-            var result = await _controller.Delete(id);
-
-            // Assert
-            Assert.That(result, Is.TypeOf<NoContentResult>());
-        }
     }
 }

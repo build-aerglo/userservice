@@ -6,10 +6,12 @@ namespace UserService.Application.Services
     public class UserService : IUserService
     {
         private readonly IUserRepository _userRepository;
+        private readonly IEndUsersRepository _endUsersRepository;
 
-        public UserService(IUserRepository userRepository)
+        public UserService(IUserRepository userRepository, IEndUsersRepository endUsersRepository)
         {
             _userRepository = userRepository;
+            _endUsersRepository = endUsersRepository;
         }
 
         public async Task<IEnumerable<User>> GetAllAsync()
@@ -36,6 +38,13 @@ namespace UserService.Application.Services
         public async Task DeleteAsync(Guid id)
         {
             await _userRepository.DeleteAsync(id);
+        }
+        
+        public async Task<User> CreateEndUsers(string username, string email, string phone, string userType, string? address)
+        {
+            var user = new User(username, email, phone, userType, address);
+            await _endUsersRepository.AddAsync(user);
+            return user;
         }
     }
 }

@@ -7,6 +7,7 @@ namespace UserService.Application.Services
         Task<IEnumerable<User>> GetAllAsync();
         Task<User?> GetByIdAsync(Guid id);
         Task<User> CreateAsync(string username, string email, string phone, string userType, string? address);
+        Task<User> CreateEndUsers(string username, string email, string phone, string userType, string? address);
         Task UpdateAsync(Guid id, string? email, string? phone, string? address);
         Task DeleteAsync(Guid id);
     }

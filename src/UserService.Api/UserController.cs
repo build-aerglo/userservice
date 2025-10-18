@@ -15,30 +15,16 @@ public class UserController : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> GetAll() => Ok(await _service.GetAllAsync());
-
+    
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id)
         => await _service.GetByIdAsync(id) is { } user ? Ok(user) : NotFound();
-
+    
     [HttpPost]
-    public async Task<IActionResult> Create(UserDto dto)
+    public async Task<IActionResult> CreateEndUsers(UserDto dto)
     {
-        var user = await _service.CreateAsync(dto.Username, dto.Email, dto.Phone, dto.UserType, dto.Address);
+        var user = await _service.CreateEndUsers(dto.Username, dto.Email, dto.Phone, dto.UserType, dto.Address);
         return CreatedAtAction(nameof(Get), new { id = user.Id }, user);
-    }
-
-    [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, UpdateUserDto dto)
-    {
-        await _service.UpdateAsync(id, dto.Email, dto.Phone, dto.Address);
-        return NoContent();
-    }
-
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
-    {
-        await _service.DeleteAsync(id);
-        return NoContent();
     }
 }
 

@@ -15,6 +15,7 @@ builder.Services.AddControllers();
 
 // 2️⃣ Register Dapper Repository + Application Service
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IEndUsersRepository, EndUsersRepository>();
 builder.Services.AddScoped<IUserService, UserService.Application.Services.UserService>();
 
 

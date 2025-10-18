@@ -1,4 +1,5 @@
 ﻿using Moq;
+using UserService.Application.Services;
 using UserService.Domain.Entities;
 using UserService.Domain.Repositories;
 
@@ -9,12 +10,14 @@ namespace UserService.Application.Tests.Services
     {
         private Mock<IUserRepository> _mockRepository = null!;
         private Application.Services.UserService _service = null!;
+        private Mock<IEndUsersRepository> _mockEndUserRepository = null!;
 
         [SetUp]
         public void Setup()
         {
             _mockRepository = new Mock<IUserRepository>();
-            _service = new Application.Services.UserService(_mockRepository.Object);
+            _mockEndUserRepository = new Mock<IEndUsersRepository>();
+            _service = new Application.Services.UserService(_mockRepository.Object,_mockEndUserRepository.Object);
         }
 
         [Test]
