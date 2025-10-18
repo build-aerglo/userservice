@@ -47,20 +47,54 @@ namespace UserService.Application.Services
         /// Create Sub BusinessUser 
         public async Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto)
         {
-            // Create the user with type 'business_user'
-            var user = new User(username: dto.Username, email: dto.Email, phone: dto.Phone, userType: "business_user", address: dto.Address);
+         
+
+            //  Check if business exists in database
+            // TODO: Replace this with API call to BusinessService when it's ready
+            // Example: var businessExists = await _businessServiceClient.CheckBusinessExists(dto.BusinessId);
+            var businessExists = await _businessRepRepository.CheckBusinessExistsInDatabase(dto.BusinessId); 
+            if (!businessExists)
+                throw new InvalidOperationException($"Business with ID {dto.BusinessId} does not exist");
+
+
+            // Create the user 
+            var user = new User(
+                username: dto.Username,
+                email: dto.Email,
+                phone: dto.Phone,
+                userType: "business_user",
+                address: dto.Address
+            );
 
             // Save user to database
             await _userRepository.AddAsync(user);
 
-            // Create the business rep relationship
-            var businessRep = new BusinessRep(businessId: dto.BusinessId, userId: user.Id, branchName: dto.BranchName, branchAddress: dto.BranchAddress);
+            //  Verify user was saved successfully before creating relationship
+            var savedUser = await _userRepository.GetByIdAsync(user.Id);
+            if (savedUser == null)
+                throw new InvalidOperationException("Failed to create user - user not found after save");
+
+            //  Create the business rep relationship
+            var businessRep = new BusinessRep(
+                businessId: dto.BusinessId,
+                userId: user.Id,
+                branchName: dto.BranchName,
+                branchAddress: dto.BranchAddress
+            );
 
             // Save business rep link to database
             await _businessRepRepository.AddAsync(businessRep);
 
+            // Verify business rep was saved successfully
+            var savedBusinessRep = await _businessRepRepository.GetByIdAsync(businessRep.Id);
+            if (savedBusinessRep == null)
+                throw new InvalidOperationException("Failed to create business representative relationship");
+
             //  Return response DTO with all the info
-            return new SubBusinessUserResponseDto(UserId: user.Id, BusinessRepId: businessRep.Id, BusinessId: businessRep.BusinessId,
+            return new SubBusinessUserResponseDto(
+                UserId: user.Id,
+                BusinessRepId: businessRep.Id,
+                BusinessId: businessRep.BusinessId,
                 Username: user.Username,
                 Email: user.Email,
                 Phone: user.Phone,
@@ -69,6 +103,6 @@ namespace UserService.Application.Services
                 BranchAddress: businessRep.BranchAddress,
                 CreatedAt: user.CreatedAt
             );
-        }
-    }
+        }  
+} 
 }

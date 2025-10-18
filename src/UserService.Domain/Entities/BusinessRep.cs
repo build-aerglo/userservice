@@ -14,8 +14,6 @@ public class BusinessRep
     
     // Foreign key to users table
     public Guid UserId { get; private set; }
-    
-    // Optional: Branch details for multi-location businesses
     public string? BranchName { get; private set; }
     public string? BranchAddress { get; private set; }
     
@@ -29,7 +27,7 @@ public class BusinessRep
     // Domain constructor - used when creating new business reps in code
     public BusinessRep(Guid businessId, Guid userId, string? branchName = null, string? branchAddress = null)
     {
-        Id = Guid.NewGuid(); // Generate new unique ID
+        Id = Guid.NewGuid();
         BusinessId = businessId;
         UserId = userId;
         BranchName = branchName;

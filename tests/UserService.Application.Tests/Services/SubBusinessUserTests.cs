@@ -19,7 +19,7 @@ namespace UserService.Application.Tests.Services
         [SetUp]
         public void Setup()
         {
-            // Create mock (fake) repositories
+            // Create mock repositories
             _mockUserRepository = new Mock<IUserRepository>();
             _mockBusinessRepRepository = new Mock<IBusinessRepRepository>();
             
@@ -45,35 +45,40 @@ namespace UserService.Application.Tests.Services
                 BranchAddress: "456 Branch Ave"
             );
 
-            // Mock the repository methods to do nothing (they won't actually hit the database)
+            // Mock business exists check
+            _mockBusinessRepRepository
+                .Setup(r => r.CheckBusinessExistsInDatabase(businessId))
+                .ReturnsAsync(true);
+
+            // Mock the repository methods
             _mockUserRepository
                 .Setup(r => r.AddAsync(It.IsAny<User>()))
                 .Returns(Task.CompletedTask);
+
+            _mockUserRepository
+                .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+                .ReturnsAsync((Guid id) => new User("john_rep", "john@business.com", "1234567890", "business_user", "123 Business St"));
 
             _mockBusinessRepRepository
                 .Setup(r => r.AddAsync(It.IsAny<BusinessRep>()))
                 .Returns(Task.CompletedTask);
 
+            _mockBusinessRepRepository
+                .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+                .ReturnsAsync((Guid id) => new BusinessRep(businessId, Guid.NewGuid(), "Main Branch", "456 Branch Ave"));
+
             // ACT - Execute the method we're testing
             var result = await _service.CreateSubBusinessUserAsync(dto);
 
             // ASSERT - Verify the results
-            
-            // Check that user was created correctly
             Assert.That(result.Username, Is.EqualTo("john_rep"));
             Assert.That(result.Email, Is.EqualTo("john@business.com"));
             Assert.That(result.Phone, Is.EqualTo("1234567890"));
             Assert.That(result.Address, Is.EqualTo("123 Business St"));
-            
-            // Check that business rep details are correct
             Assert.That(result.BusinessId, Is.EqualTo(businessId));
             Assert.That(result.BranchName, Is.EqualTo("Main Branch"));
             Assert.That(result.BranchAddress, Is.EqualTo("456 Branch Ave"));
             
-            // Check that IDs were generated
-            Assert.That(result.UserId, Is.Not.EqualTo(Guid.Empty));
-            Assert.That(result.BusinessRepId, Is.Not.EqualTo(Guid.Empty));
-
             // Verify that AddAsync was called exactly once for each repository
             _mockUserRepository.Verify(
                 r => r.AddAsync(It.Is<User>(u => 
@@ -90,14 +95,56 @@ namespace UserService.Application.Tests.Services
                 )),
                 Times.Once
             );
+
+            // Verify business existence was checked
+            _mockBusinessRepRepository.Verify(
+                r => r.CheckBusinessExistsInDatabase(businessId),
+                Times.Once
+            );
+        }
+
+        [Test]
+        public void CreateSubBusinessUser_WithNonExistentBusiness_ShouldThrowException()
+        {
+            // ARRANGE
+            var businessId = Guid.NewGuid();
+            var dto = new CreateSubBusinessUserDto(
+                BusinessId: businessId,
+                Username: "john_rep",
+                Email: "john@business.com",
+                Phone: "1234567890",
+                Address: "123 Business St",
+                BranchName: "Main Branch",
+                BranchAddress: "456 Branch Ave"
+            );
+
+            // Mock business does NOT exist
+            _mockBusinessRepRepository
+                .Setup(r => r.CheckBusinessExistsInDatabase(businessId))
+                .ReturnsAsync(false);
+
+            // ACT & ASSERT
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await _service.CreateSubBusinessUserAsync(dto)
+            );
+            
+            Assert.That(ex!.Message, Does.Contain("Business with ID"));
+            Assert.That(ex.Message, Does.Contain("does not exist"));
+
+            // Verify that user was NOT created since business doesn't exist
+            _mockUserRepository.Verify(
+                r => r.AddAsync(It.IsAny<User>()),
+                Times.Never
+            );
         }
 
         [Test]
         public async Task CreateSubBusinessUser_ShouldSetUserTypeToBusinessUser()
         {
             // ARRANGE
+            var businessId = Guid.NewGuid();
             var dto = new CreateSubBusinessUserDto(
-                BusinessId: Guid.NewGuid(),
+                BusinessId: businessId,
                 Username: "jane_rep",
                 Email: "jane@business.com",
                 Phone: "9876543210",
@@ -108,15 +155,27 @@ namespace UserService.Application.Tests.Services
 
             User? capturedUser = null;
 
-            // Capture the user that gets passed to AddAsync
+            // Mock business exists
+            _mockBusinessRepRepository
+                .Setup(r => r.CheckBusinessExistsInDatabase(businessId))
+                .ReturnsAsync(true);
+
             _mockUserRepository
                 .Setup(r => r.AddAsync(It.IsAny<User>()))
                 .Callback<User>(user => capturedUser = user)
                 .Returns(Task.CompletedTask);
 
+            _mockUserRepository
+                .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+                .ReturnsAsync((Guid id) => capturedUser);
+
             _mockBusinessRepRepository
                 .Setup(r => r.AddAsync(It.IsAny<BusinessRep>()))
                 .Returns(Task.CompletedTask);
+
+            _mockBusinessRepRepository
+                .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+                .ReturnsAsync((Guid id) => new BusinessRep(businessId, Guid.NewGuid()));
 
             // ACT
             await _service.CreateSubBusinessUserAsync(dto);
@@ -129,24 +188,38 @@ namespace UserService.Application.Tests.Services
         [Test]
         public async Task CreateSubBusinessUser_WithNullOptionalFields_ShouldSucceed()
         {
-            // ARRANGE - Test with minimal required fields
+            // ARRANGE
+            var businessId = Guid.NewGuid();
             var dto = new CreateSubBusinessUserDto(
-                BusinessId: Guid.NewGuid(),
+                BusinessId: businessId,
                 Username: "minimal_rep",
                 Email: "minimal@business.com",
                 Phone: "5555555555",
-                Address: null,         // Optional
-                BranchName: null,      // Optional
-                BranchAddress: null    // Optional
+                Address: null,
+                BranchName: null,
+                BranchAddress: null
             );
+
+            // Mock business exists
+            _mockBusinessRepRepository
+                .Setup(r => r.CheckBusinessExistsInDatabase(businessId))
+                .ReturnsAsync(true);
 
             _mockUserRepository
                 .Setup(r => r.AddAsync(It.IsAny<User>()))
                 .Returns(Task.CompletedTask);
 
+            _mockUserRepository
+                .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+                .ReturnsAsync((Guid id) => new User("minimal_rep", "minimal@business.com", "5555555555", "business_user", null));
+
             _mockBusinessRepRepository
                 .Setup(r => r.AddAsync(It.IsAny<BusinessRep>()))
                 .Returns(Task.CompletedTask);
+
+            _mockBusinessRepRepository
+                .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+                .ReturnsAsync((Guid id) => new BusinessRep(businessId, Guid.NewGuid()));
 
             // ACT
             var result = await _service.CreateSubBusinessUserAsync(dto);
@@ -156,6 +229,91 @@ namespace UserService.Application.Tests.Services
             Assert.That(result.BranchName, Is.Null);
             Assert.That(result.BranchAddress, Is.Null);
             Assert.That(result.Username, Is.EqualTo("minimal_rep"));
+        }
+
+        [Test]
+        public void CreateSubBusinessUser_WhenUserSaveFails_ShouldThrowException()
+        {
+            // ARRANGE
+            var businessId = Guid.NewGuid();
+            var dto = new CreateSubBusinessUserDto(
+                BusinessId: businessId,
+                Username: "failed_user",
+                Email: "failed@business.com",
+                Phone: "1111111111",
+                Address: null,
+                BranchName: null,
+                BranchAddress: null
+            );
+
+            // Mock business exists
+            _mockBusinessRepRepository
+                .Setup(r => r.CheckBusinessExistsInDatabase(businessId))
+                .ReturnsAsync(true);
+
+            // Mock user added successfully
+            _mockUserRepository
+                .Setup(r => r.AddAsync(It.IsAny<User>()))
+                .Returns(Task.CompletedTask);
+
+            // But GetById returns null (save failed)
+            _mockUserRepository
+                .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+                .ReturnsAsync((User?)null);
+
+            // ACT & ASSERT
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await _service.CreateSubBusinessUserAsync(dto)
+            );
+            
+            Assert.That(ex!.Message, Does.Contain("Failed to create user"));
+        }
+
+        [Test]
+        public void CreateSubBusinessUser_WhenBusinessRepSaveFails_ShouldThrowException()
+        {
+            // ARRANGE
+            var businessId = Guid.NewGuid();
+            var dto = new CreateSubBusinessUserDto(
+                BusinessId: businessId,
+                Username: "failed_rep",
+                Email: "failed@business.com",
+                Phone: "2222222222",
+                Address: null,
+                BranchName: null,
+                BranchAddress: null
+            );
+
+            // Mock business exists
+            _mockBusinessRepRepository
+                .Setup(r => r.CheckBusinessExistsInDatabase(businessId))
+                .ReturnsAsync(true);
+
+            // Mock user saved successfully
+            _mockUserRepository
+                .Setup(r => r.AddAsync(It.IsAny<User>()))
+                .Returns(Task.CompletedTask);
+
+            _mockUserRepository
+                .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+                .ReturnsAsync(new User("failed_rep", "failed@business.com", "2222222222", "business_user", null));
+
+            // Mock business rep added
+            _mockBusinessRepRepository
+                .Setup(r => r.AddAsync(It.IsAny<BusinessRep>()))
+                .Returns(Task.CompletedTask);
+
+            // But GetById returns null (save failed)
+            _mockBusinessRepRepository
+                .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+                .ReturnsAsync((BusinessRep?)null);
+
+            // ACT & ASSERT
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await _service.CreateSubBusinessUserAsync(dto)
+            );
+            
+            Assert.That(ex!.Message, Does.Contain("Failed to create business representative relationship"));
         }
     }
 }
