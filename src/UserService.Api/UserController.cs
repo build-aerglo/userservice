@@ -11,7 +11,14 @@ namespace UserService.Api;
 public class UserController : ControllerBase
 {
     private readonly IUserService _service;
-    public UserController(IUserService service) => _service = service;
+
+    public UserController(IUserService service, IEndUserService endUserService)
+    {
+        _service = service;
+        _endUserService = endUserService;
+    }
+
+    private readonly IEndUserService _endUserService;
 
     [HttpGet]
     public async Task<IActionResult> GetAll() => Ok(await _service.GetAllAsync());
@@ -25,6 +32,13 @@ public class UserController : ControllerBase
     {
         var user = await _service.CreateAsync(dto.Username, dto.Email, dto.Phone, dto.UserType, dto.Address);
         return CreatedAtAction(nameof(Get), new { id = user.Id }, user);
+    }
+    
+    [HttpPost]
+    public async Task<IActionResult> CreateEndUser(EndUserDto dto)
+    {
+        var endUser = await _endUserService.CreateAsync(dto);
+        return CreatedAtAction(nameof(Get), new { id = endUser.Id }, endUser);
     }
 
     [HttpPut("{id:guid}")]
