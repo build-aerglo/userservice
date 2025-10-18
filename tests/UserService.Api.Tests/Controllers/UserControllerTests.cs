@@ -126,5 +126,135 @@ namespace UserService.Api.Tests.Controllers
             // Assert
             Assert.That(result, Is.TypeOf<NoContentResult>());
         }
+
+
+	    [Test]
+        public async Task CreateSubBusinessUser_ReturnsCreatedAtAction_WithCreatedSubBusinessUser()
+        {
+            // ARRANGE
+            var businessId = Guid.NewGuid();
+            var dto = new CreateSubBusinessUserDto(
+                BusinessId: businessId,
+                Username: "john_rep",
+                Email: "john@business.com",
+                Phone: "1234567890",
+                Address: "123 Business St",
+                BranchName: "Main Branch",
+                BranchAddress: "456 Branch Ave"
+            );
+
+            var response = new SubBusinessUserResponseDto(
+                UserId: Guid.NewGuid(),
+                BusinessRepId: Guid.NewGuid(),
+                BusinessId: businessId,
+                Username: "john_rep",
+                Email: "john@business.com",
+                Phone: "1234567890",
+                Address: "123 Business St",
+                BranchName: "Main Branch",
+                BranchAddress: "456 Branch Ave",
+                CreatedAt: DateTime.UtcNow
+            );
+
+            _mockUserService
+                .Setup(s => s.CreateSubBusinessUserAsync(dto))
+                .ReturnsAsync(response);
+
+            // ACT
+            var result = await _controller.CreateSubBusinessUser(dto);
+
+            // ASSERT
+            var createdAtAction = result as CreatedAtActionResult;
+            Assert.That(createdAtAction, Is.Not.Null);
+            Assert.That(createdAtAction!.StatusCode, Is.EqualTo(201));
+            Assert.That(createdAtAction.ActionName, Is.EqualTo(nameof(UserController.Get)));
+
+            var returnedValue = createdAtAction.Value as SubBusinessUserResponseDto;
+            Assert.That(returnedValue, Is.Not.Null);
+            Assert.That(returnedValue!.Username, Is.EqualTo("john_rep"));
+            Assert.That(returnedValue.BusinessId, Is.EqualTo(businessId));
+        }
+
+        [Test]
+        public async Task CreateSubBusinessUser_ReturnsBadRequest_WhenBusinessDoesNotExist()
+        {
+            // ARRANGE
+            var dto = new CreateSubBusinessUserDto(
+                BusinessId: Guid.NewGuid(),
+                Username: "john_rep",
+                Email: "john@business.com",
+                Phone: "1234567890",
+                Address: null,
+                BranchName: null,
+                BranchAddress: null
+            );
+
+            _mockUserService
+                .Setup(s => s.CreateSubBusinessUserAsync(dto))
+                .ThrowsAsync(new InvalidOperationException("Business with ID does not exist"));
+
+            // ACT
+            var result = await _controller.CreateSubBusinessUser(dto);
+
+            // ASSERT
+            var badRequestResult = result as BadRequestObjectResult;
+            Assert.That(badRequestResult, Is.Not.Null);
+            Assert.That(badRequestResult!.StatusCode, Is.EqualTo(400));
+        }
+
+        [Test]
+        public async Task CreateSubBusinessUser_ReturnsBadRequest_WhenUserSaveFails()
+        {
+            // ARRANGE
+            var dto = new CreateSubBusinessUserDto(
+                BusinessId: Guid.NewGuid(),
+                Username: "failed_user",
+                Email: "failed@business.com",
+                Phone: "1234567890",
+                Address: null,
+                BranchName: null,
+                BranchAddress: null
+            );
+
+            _mockUserService
+                .Setup(s => s.CreateSubBusinessUserAsync(dto))
+                .ThrowsAsync(new InvalidOperationException("Failed to create user - user not found after save"));
+
+            // ACT
+            var result = await _controller.CreateSubBusinessUser(dto);
+
+            // ASSERT
+            var badRequestResult = result as BadRequestObjectResult;
+            Assert.That(badRequestResult, Is.Not.Null);
+            Assert.That(badRequestResult!.StatusCode, Is.EqualTo(400));
+        }
+
+        [Test]
+        public async Task CreateSubBusinessUser_ReturnsBadRequest_WhenBusinessRepSaveFails()
+        {
+            // ARRANGE
+            var dto = new CreateSubBusinessUserDto(
+                BusinessId: Guid.NewGuid(),
+                Username: "failed_rep",
+                Email: "failed@business.com",
+                Phone: "1234567890",
+                Address: null,
+                BranchName: null,
+                BranchAddress: null
+            );
+
+            _mockUserService
+                .Setup(s => s.CreateSubBusinessUserAsync(dto))
+                .ThrowsAsync(new InvalidOperationException("Failed to create business representative relationship"));
+
+            // ACT
+            var result = await _controller.CreateSubBusinessUser(dto);
+
+            // ASSERT
+            var badRequestResult = result as BadRequestObjectResult;
+            Assert.That(badRequestResult, Is.Not.Null);
+            Assert.That(badRequestResult!.StatusCode, Is.EqualTo(400));
+        }
+
     }
 }
