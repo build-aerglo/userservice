@@ -1,141 +1,225 @@
-﻿using Moq;
+using Moq;
+using UserService.Application.DTOs;
+using UserService.Application.Interfaces;
 using UserService.Domain.Entities;
+using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
 
-namespace UserService.Application.Tests.Services
+namespace UserService.Application.Tests.Services;
+
+[TestFixture]
+public class UserServiceTests
 {
-    [TestFixture]
-    public class UserServiceTests
+    private Mock<IUserRepository> _mockUserRepository = null!;
+    private Mock<IBusinessRepRepository> _mockBusinessRepRepository = null!;
+    private Mock<IBusinessServiceClient> _mockBusinessServiceClient = null!;
+    private Application.Services.UserService _service = null!;
+
+    [SetUp]
+    public void Setup()
     {
-        private Mock<IUserRepository> _mockRepository = null!;
-        private Mock<IBusinessRepRepository> _mockBusinessRepRepository = null!;
-        private Application.Services.UserService _service = null!;
+        _mockUserRepository = new Mock<IUserRepository>();
+        _mockBusinessRepRepository = new Mock<IBusinessRepRepository>();
+        _mockBusinessServiceClient = new Mock<IBusinessServiceClient>();
 
-        [SetUp]
-        public void Setup()
+        _service = new Application.Services.UserService(
+            _mockUserRepository.Object,
+            _mockBusinessRepRepository.Object,
+            _mockBusinessServiceClient.Object
+        );
+    }
+
+    [Test]
+    public async Task CreateSubBusinessUser_ShouldReturnResponse_WhenSuccessful()
+    {
+        // ARRANGE
+        var businessId = Guid.NewGuid();
+        var dto = new CreateSubBusinessUserDto(
+            BusinessId: businessId,
+            Username: "john_rep",
+            Email: "john@business.com",
+            Phone: "1234567890",
+            Address: "123 Business St",
+            BranchName: "Main Branch",
+            BranchAddress: "456 Branch Ave"
+        );
+
+        _mockBusinessServiceClient.Setup(c => c.BusinessExistsAsync(businessId)).ReturnsAsync(true);
+
+        _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync(new User("john_rep", "john@business.com", "1234567890", "business_user", "123 Business St"));
+
+        _mockBusinessRepRepository.Setup(r => r.AddAsync(It.IsAny<BusinessRep>())).Returns(Task.CompletedTask);
+        _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync(new BusinessRep(businessId, Guid.NewGuid(), "Main Branch", "456 Branch Ave"));
+
+        // ACT
+        var result = await _service.CreateSubBusinessUserAsync(dto);
+
+        // ASSERT
+        Assert.Multiple(() =>
         {
-            _mockRepository = new Mock<IUserRepository>();
-            _mockBusinessRepRepository = new Mock<IBusinessRepRepository>();
-            _service = new Application.Services.UserService(_mockRepository.Object, _mockBusinessRepRepository.Object);
-        }
+            Assert.That(result.Username, Is.EqualTo("john_rep"));
+            Assert.That(result.Email, Is.EqualTo("john@business.com"));
+            Assert.That(result.BusinessId, Is.EqualTo(businessId));
+            Assert.That(result.BranchName, Is.EqualTo("Main Branch"));
+        });
 
-        [Test]
-        public async Task GetAllAsync_ReturnsUsers()
+        _mockBusinessServiceClient.Verify(c => c.BusinessExistsAsync(businessId), Times.Once);
+        _mockUserRepository.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Once);
+        _mockBusinessRepRepository.Verify(r => r.AddAsync(It.IsAny<BusinessRep>()), Times.Once);
+    }
+
+    [Test]
+    public void CreateSubBusinessUser_ShouldThrow_WhenBusinessDoesNotExist()
+    {
+        // ARRANGE
+        var businessId = Guid.NewGuid();
+        var dto = new CreateSubBusinessUserDto(
+            BusinessId: businessId,
+            Username: "nonexistent_rep",
+            Email: "no@biz.com",
+            Phone: "0000000000",
+            Address: null,
+            BranchName: null,
+            BranchAddress: null
+        );
+
+        _mockBusinessServiceClient.Setup(c => c.BusinessExistsAsync(businessId)).ReturnsAsync(false);
+
+        // ACT & ASSERT
+        var ex = Assert.ThrowsAsync<BusinessNotFoundException>(
+            async () => await _service.CreateSubBusinessUserAsync(dto)
+        );
+
+        Assert.That(ex!.Message, Does.Contain(businessId.ToString()));
+        _mockUserRepository.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Test]
+    public void CreateSubBusinessUser_ShouldThrow_WhenUserSaveFails()
+    {
+        // ARRANGE
+        var businessId = Guid.NewGuid();
+        var dto = new CreateSubBusinessUserDto(
+            BusinessId: businessId,
+            Username: "failed_user",
+            Email: "fail@user.com",
+            Phone: "1231231234",
+            Address: "Somewhere",
+            BranchName: "Branch A",
+            BranchAddress: "Address A"
+        );
+
+        _mockBusinessServiceClient.Setup(c => c.BusinessExistsAsync(businessId)).ReturnsAsync(true);
+        _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((User?)null);
+
+        // ACT & ASSERT
+        var ex = Assert.ThrowsAsync<UserCreationFailedException>(
+            async () => await _service.CreateSubBusinessUserAsync(dto)
+        );
+
+        Assert.That(ex!.Message, Does.Contain("Failed to create user record."));
+    }
+
+    [Test]
+    public void CreateSubBusinessUser_ShouldThrow_WhenBusinessRepSaveFails()
+    {
+        // ARRANGE
+        var businessId = Guid.NewGuid();
+        var dto = new CreateSubBusinessUserDto(
+            BusinessId: businessId,
+            Username: "rep_fail",
+            Email: "rep@fail.com",
+            Phone: "9999999999",
+            Address: null,
+            BranchName: null,
+            BranchAddress: null
+        );
+
+        _mockBusinessServiceClient.Setup(c => c.BusinessExistsAsync(businessId)).ReturnsAsync(true);
+        _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync(new User("rep_fail", "rep@fail.com", "9999999999", "business_user", null));
+        _mockBusinessRepRepository.Setup(r => r.AddAsync(It.IsAny<BusinessRep>())).Returns(Task.CompletedTask);
+        _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((BusinessRep?)null);
+
+        // ACT & ASSERT
+        var ex = Assert.ThrowsAsync<UserCreationFailedException>(
+            async () => await _service.CreateSubBusinessUserAsync(dto)
+        );
+
+        Assert.That(ex!.Message, Does.Contain("Failed to create business representative relationship."));
+    }
+
+    [Test]
+    public async Task CreateSubBusinessUser_ShouldSetUserTypeToBusinessUser()
+    {
+        // ARRANGE
+        var businessId = Guid.NewGuid();
+        var dto = new CreateSubBusinessUserDto(
+            BusinessId: businessId,
+            Username: "type_test",
+            Email: "type@test.com",
+            Phone: "4444444444",
+            Address: null,
+            BranchName: null,
+            BranchAddress: null
+        );
+
+        User? capturedUser = null;
+
+        _mockBusinessServiceClient.Setup(c => c.BusinessExistsAsync(businessId)).ReturnsAsync(true);
+        _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>()))
+            .Callback<User>(u => capturedUser = u)
+            .Returns(Task.CompletedTask);
+        _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(() => capturedUser);
+        _mockBusinessRepRepository.Setup(r => r.AddAsync(It.IsAny<BusinessRep>())).Returns(Task.CompletedTask);
+        _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync(new BusinessRep(businessId, Guid.NewGuid()));
+
+        // ACT
+        await _service.CreateSubBusinessUserAsync(dto);
+
+        // ASSERT
+        Assert.That(capturedUser, Is.Not.Null);
+        Assert.That(capturedUser!.UserType, Is.EqualTo("business_user"));
+    }
+
+    [Test]
+    public async Task CreateSubBusinessUser_WithOptionalNulls_ShouldSucceed()
+    {
+        // ARRANGE
+        var businessId = Guid.NewGuid();
+        var dto = new CreateSubBusinessUserDto(
+            BusinessId: businessId,
+            Username: "optional_rep",
+            Email: "optional@biz.com",
+            Phone: "7777777777",
+            Address: null,
+            BranchName: null,
+            BranchAddress: null
+        );
+
+        _mockBusinessServiceClient.Setup(c => c.BusinessExistsAsync(businessId)).ReturnsAsync(true);
+        _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync(new User("optional_rep", "optional@biz.com", "7777777777", "business_user", null));
+        _mockBusinessRepRepository.Setup(r => r.AddAsync(It.IsAny<BusinessRep>())).Returns(Task.CompletedTask);
+        _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync(new BusinessRep(businessId, Guid.NewGuid()));
+
+        // ACT
+        var result = await _service.CreateSubBusinessUserAsync(dto);
+
+        // ASSERT
+        Assert.Multiple(() =>
         {
-            // Arrange
-            var users = new List<User>
-            {
-                new User("JohnDoe", "john@example.com", "1234567890", "EndUser", "123 Main St"),
-                new User("JaneDoe", "jane@example.com", "9876543210", "EndUser", "456 Elm St")
-            };
-
-            _mockRepository.Setup(r => r.GetAllAsync()).ReturnsAsync(users);
-
-            // Act
-            var result = await _service.GetAllAsync();
-
-            // Assert
-            Assert.That(result, Is.Not.Null);
-            Assert.That(result.Count(), Is.EqualTo(2));
-            Assert.That(result.First().Username, Is.EqualTo("JohnDoe"));
-        }
-
-        [Test]
-        public async Task GetByIdAsync_ReturnsUser_WhenExists()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            var user = new User("JohnDoe", "john@example.com", "1234567890", "EndUser", "123 Main St");
-            _mockRepository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(user);
-
-            // Act
-            var result = await _service.GetByIdAsync(id);
-
-            // Assert
-            Assert.That(result, Is.Not.Null);
-            Assert.That(result!.Username, Is.EqualTo("JohnDoe"));
-        }
-
-        [Test]
-        public async Task GetByIdAsync_ReturnsNull_WhenNotFound()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            _mockRepository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((User?)null);
-
-            // Act
-            var result = await _service.GetByIdAsync(id);
-
-            // Assert
-            Assert.That(result, Is.Null);
-        }
-
-        [Test]
-        public async Task CreateAsync_AddsUser_AndReturnsIt()
-        {
-            // Arrange
-            var username = "JohnDoe";
-            var email = "john@example.com";
-            var phone = "1234567890";
-            var userType = "EndUser";
-            var address = "123 Main St";
-
-            _mockRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
-
-            // Act
-            var result = await _service.CreateAsync(username, email, phone, userType, address);
-
-            // Assert
-            _mockRepository.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Once);
-            Assert.That(result.Username, Is.EqualTo(username));
-            Assert.That(result.Email, Is.EqualTo(email));
-        }
-
-        [Test]
-        public async Task UpdateAsync_UserExists_UpdatesUser()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            var user = new User("JohnDoe", "old@example.com", "1234567890", "EndUser", "Old Address");
-            _mockRepository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(user);
-
-            // Act
-            await _service.UpdateAsync(id, "new@example.com", "5555555555", "New Address");
-
-            // Assert
-            _mockRepository.Verify(r => r.UpdateAsync(It.Is<User>(u =>
-                u.Email == "new@example.com" &&
-                u.Phone == "5555555555" &&
-                u.Address == "New Address"
-            )), Times.Once);
-        }
-
-        [Test]
-        public async Task UpdateAsync_UserDoesNotExist_DoesNothing()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            _mockRepository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((User?)null);
-
-            // Act
-            await _service.UpdateAsync(id, "new@example.com", "5555555555", "New Address");
-
-            // Assert
-            _mockRepository.Verify(r => r.UpdateAsync(It.IsAny<User>()), Times.Never);
-        }
-
-        [Test]
-        public async Task DeleteAsync_DeletesUser()
-        {
-            // Arrange
-            var id = Guid.NewGuid();
-            _mockRepository.Setup(r => r.DeleteAsync(id)).Returns(Task.CompletedTask);
-
-            // Act
-            await _service.DeleteAsync(id);
-
-            // Assert
-            _mockRepository.Verify(r => r.DeleteAsync(id), Times.Once);
-        }
+            Assert.That(result.Username, Is.EqualTo("optional_rep"));
+            Assert.That(result.Address, Is.Null);
+            Assert.That(result.BranchName, Is.Null);
+        });
     }
 }

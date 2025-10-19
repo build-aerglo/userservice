@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.OpenApi.Models;
+using UserService.Application.Interfaces;
 using UserService.Application.Services;
 using UserService.Domain.Repositories;
+using UserService.Infrastructure.Clients;
 using UserService.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,13 +15,26 @@ var builder = WebApplication.CreateBuilder(args);
 // 1️⃣ Add Controllers (instead of minimal APIs)
 builder.Services.AddControllers();
 
-// 2️⃣ Register Dapper Repository + Application Service
+// 2️⃣ Register Dapper Repositories + Application Services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IBusinessRepRepository, BusinessRepRepository>();
 builder.Services.AddScoped<IUserService, UserService.Application.Services.UserService>();
 
+// 3️⃣ Register HttpClient for Business Service
+builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(client =>
+{
+    var baseUrl = builder.Configuration["Services:BusinessServiceBaseUrl"];
+    if (string.IsNullOrWhiteSpace(baseUrl))
+        throw new InvalidOperationException("Missing configuration: Services:BusinessServiceBaseUrl");
 
-// 3️⃣ Configure Auth0 Authentication
+    client.BaseAddress = new Uri(baseUrl);
+
+    // Optional: Set defaults like timeout or headers
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
+// 4️⃣ Configure Auth0 Authentication
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -45,10 +60,10 @@ builder.Services
         };
     });
 
-// 4️⃣ Authorization
+// 5️⃣ Authorization
 builder.Services.AddAuthorization();
 
-// 5️⃣ Add Swagger with JWT support
+// 6️⃣ Swagger with JWT Support
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -56,7 +71,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "User Service API",
         Version = "v1",
-        Description = "User service Microservice implemented in DDD"
+        Description = "User Service Microservice implemented with DDD"
     });
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -89,8 +104,11 @@ builder.Services.AddSwaggerGen(options =>
 // 🚀 BUILD APP
 // -------------------------------
 var app = builder.Build();
+
+// ✅ Dapper naming convention fix
 Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
+// 🔒 HTTPS
 app.UseHttpsRedirection();
 
 // 1️⃣ Swagger setup
@@ -104,7 +122,7 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();    
 app.UseAuthorization();
 
-// 3️⃣ Map Controllers (routes defined via [Route] + [HttpGet]/[HttpPost])
+// 3️⃣ Map Controllers
 app.MapControllers();
 
 // -------------------------------
