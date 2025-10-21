@@ -3,6 +3,8 @@ using UserService.Application.Interfaces;
 using UserService.Domain.Entities;
 using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
+using System.Net.Http.Json;
+using Microsoft.Extensions.Configuration;
 
 namespace UserService.Application.Services;
 
@@ -12,6 +14,7 @@ public class UserService(
     IBusinessServiceClient businessServiceClient
 ) : IUserService
 {
+    
     public async Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto)
     {
         // ✅ 1. Check if the target business exists via BusinessService API
@@ -44,7 +47,7 @@ public class UserService(
         );
 
         await businessRepRepository.AddAsync(businessRep);
-       
+
         // ✅ 6. Confirm save
         var savedBusinessRep = await businessRepRepository.GetByIdAsync(businessRep.Id);
         if (savedBusinessRep is null)
@@ -64,4 +67,37 @@ public class UserService(
             CreatedAt: user.CreatedAt
         );
     }
+
+    public async Task<(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload)
+        {   
+            // fetch business
+            var businessId = await businessServiceClient.CreateBusinessAsync(userPayload);
+            if (businessId == null || businessId == Guid.Empty)
+                    throw new BusinessUserCreationFailedException("Business creation failed: BusinessId is missing - services.");
+
+            // save user
+            var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, userPayload.UserType, userPayload.Address);
+            await userRepository.AddAsync(user);
+            
+            // confirm save
+            var savedUser = await userRepository.GetByIdAsync(user.Id);
+            if (savedUser == null)
+                throw new UserCreationFailedException("Failed to create user record.");
+            
+            
+            // save business
+            var businessRep = new BusinessRep(businessId.Value, savedUser.Id, userPayload.BranchName, userPayload.BranchAddress);
+            await businessRepRepository.AddAsync(businessRep);
+            
+            // confirm save
+            var savedUBusiness = await GetBusinessRepByIdAsync(businessRep.Id);
+            if (savedUBusiness == null)
+                throw new BusinessUserCreationFailedException("Failed to create business record.");
+
+            return (user, businessId.Value, businessRep);
+        }
+    
+        public async Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id)
+            => await businessRepRepository.GetByIdAsync(id);
+
 }

@@ -1,3 +1,6 @@
+using UserService.Application.DTOs;
+using UserService.Domain.Entities;
+
 namespace UserService.Application.Interfaces;
 
 /// <summary>
@@ -12,4 +15,9 @@ public interface IBusinessServiceClient
     /// <param name="businessId">Business ID (GUID)</param>
     /// <returns>True if business exists, otherwise false</returns>
     Task<bool> BusinessExistsAsync(Guid businessId);
+    
+    // <summary>
+    // Create a new business
+    //
+    Task<Guid?> CreateBusinessAsync(BusinessUserDto business);
 }
