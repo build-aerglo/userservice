@@ -13,7 +13,7 @@ public class UserServiceTests
     private Mock<IUserRepository> _mockUserRepository = null!;
     private Mock<IBusinessRepRepository> _mockBusinessRepRepository = null!;
     private Mock<IBusinessServiceClient> _mockBusinessServiceClient = null!;
-    private Application.Services.UserService _service = null!;
+    private Application.Services.UserService _service = null!; 
 
     [SetUp]
     public void Setup()
@@ -21,12 +21,7 @@ public class UserServiceTests
         _mockUserRepository = new Mock<IUserRepository>();
         _mockBusinessRepRepository = new Mock<IBusinessRepRepository>();
         _mockBusinessServiceClient = new Mock<IBusinessServiceClient>();
-
-        _service = new Application.Services.UserService(
-            _mockUserRepository.Object,
-            _mockBusinessRepRepository.Object,
-            _mockBusinessServiceClient.Object
-        );
+        _service = new Application.Services.UserService(_mockUserRepository.Object, _mockBusinessRepRepository.Object, _mockBusinessServiceClient.Object);
     }
 
     [Test]

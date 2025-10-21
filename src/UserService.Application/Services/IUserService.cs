@@ -5,6 +5,9 @@ namespace UserService.Application.Services
 {
     public interface IUserService
     {
-		Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto);
+      Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto);
+      
+      Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id);
+      Task <(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload);
     }
 }

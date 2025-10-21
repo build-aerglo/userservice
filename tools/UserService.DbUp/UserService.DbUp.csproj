@@ -30,6 +30,7 @@
       <EmbeddedResource Include="Scripts\006_Create_Support_Users_Table.sql" />
       <None Remove="Scripts\007_Create_Reviews_Table.sql" />
       <EmbeddedResource Include="Scripts\007_Create_Reviews_Table.sql" />
+      <None Remove="Scripts\009_Update_Business_Structure.sql" />
     </ItemGroup>
 
 </Project>

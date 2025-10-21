@@ -14,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // 1️⃣ Add Controllers (instead of minimal APIs)
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
 
 // 2️⃣ Register Dapper Repositories + Application Services
 builder.Services.AddScoped<IUserRepository, UserRepository>();

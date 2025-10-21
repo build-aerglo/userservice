@@ -1,8 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using UserService.Application.DTOs;
 using UserService.Application.Interfaces;
+using UserService.Domain.Entities;
+using UserService.Domain.Exceptions;
 
 namespace UserService.Infrastructure.Clients;
 
@@ -65,4 +69,48 @@ public class BusinessServiceClient : IBusinessServiceClient
             return false;
         }
     }
+    
+    /// <summary>
+    /// Creates a new business.
+    /// </summary>
+    public async Task<Guid?> CreateBusinessAsync(BusinessUserDto business)
+    {
+        try
+        {
+            // var options = new JsonSerializerOptions
+            // {
+            //     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            //     PropertyNameCaseInsensitive = true
+            // };
+            
+            var response = await _httpClient.PostAsJsonAsync($"/api/Business/", business);
+            Console.WriteLine("response: " + response);
+            // if (response.StatusCode != HttpStatusCode.Created)
+            //     throw new BusinessUserCreationFailedException("Business creation failed: Business Endpoint Error.");
+            response.EnsureSuccessStatusCode();
+            
+            var result = await response.Content.ReadFromJsonAsync<BusinessFetchResponseClass>();
+            Console.WriteLine("result: " + result);
+            if (result == null || result.Id == Guid.Empty)
+                throw new BusinessUserCreationFailedException("Business creation failed: BusinessId is missing.");
+            return result.Id;
+
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Error connecting to Business Service API.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error occurred while checking business existence.");
+            return null;
+        }
+    }
+    
+    public class BusinessFetchResponseClass
+    {
+        public Guid Id { get; set; }
+    }
+
 }
