@@ -13,3 +13,27 @@ public record UpdateUserDto(
     string? Phone,
     string? Address
 );
+
+
+public record CreateSubBusinessUserDto(
+    Guid BusinessId,           
+    string Username,          
+    string Email,              
+    string Phone,             
+    string? Address,         
+    string? BranchName,        
+    string? BranchAddress     
+);
+
+public record SubBusinessUserResponseDto(
+    Guid UserId,              
+    Guid BusinessRepId,       
+    Guid BusinessId,           
+    string Username,
+    string Email,
+    string Phone,
+    string? Address,
+    string? BranchName,
+    string? BranchAddress,
+    DateTime CreatedAt
+);
