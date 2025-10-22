@@ -1,10 +1,12 @@
+using System.Text.Json;
+using UserService.Domain.Entities;
+
 namespace UserService.Application.DTOs;
 
 public record EndUserDto(
-    Guid UserId,
-    string? Preferences,
+    JsonDocument? Preferences,
     string? Bio,
-    string? SocialLinks,
+    JsonDocument? SocialLinks,
     string Username,
     string Email,
     string Phone,

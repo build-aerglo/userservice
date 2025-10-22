@@ -8,10 +8,43 @@ namespace UserService.Application.Services;
 
 public class UserService(
     IUserRepository userRepository,
+    IEndUserRepository endUserRepository,
     IBusinessRepRepository businessRepRepository,
     IBusinessServiceClient businessServiceClient
 ) : IUserService
 {
+    public async Task<EndUser> CreateEndUser(EndUserDto dto)
+    {
+        var user = new User(
+            username: dto.Username,
+            email: dto.Email,
+            phone: dto.Phone,
+            userType: "end_user",
+            address: dto.Address
+        );
+        await userRepository.AddAsync(user);
+
+        // Confirm save
+        var savedUser = await userRepository.GetByIdAsync(user.Id);
+        if (savedUser is null)
+            throw new UserCreationFailedException("Failed to create user record.");
+
+        var endUser = new EndUser(
+            savedUser.Id,
+            preferences: dto.Preferences,
+            bio: dto.Bio,
+            socialLinks: dto.SocialLinks
+        );
+        await endUserRepository.AddAsync(endUser);
+
+        var savedEndUser = await endUserRepository.GetByIdAsync(endUser.Id);
+        if (savedEndUser is null)
+            throw new UserCreationFailedException("Failed to create business representative relationship.");
+        
+        
+        return endUser;
+    }
+
     public async Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto)
     {
         // ✅ 1. Check if the target business exists via BusinessService API

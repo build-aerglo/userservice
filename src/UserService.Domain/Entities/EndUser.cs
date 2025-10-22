@@ -1,12 +1,14 @@
+using System.Text.Json;
+
 namespace UserService.Domain.Entities;
 
 public class EndUser
 {
     public Guid Id { get; private set; }
     public Guid UserId { get; private set; }
-    public string? Preferences { get; private set; }
+    public JsonDocument? Preferences { get; private set; }
     public string? Bio { get; private set; } 
-    public string? SocialLinks { get; private set; }
+    public JsonDocument? SocialLinks { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
@@ -15,7 +17,7 @@ public class EndUser
     {
     }
 
-    public EndUser(Guid userId, string? preferences, string? bio, string? socialLinks)
+    public EndUser(Guid userId, string? bio, JsonDocument? preferences = null, JsonDocument? socialLinks = null)
     {
         Id = Guid.NewGuid();
         UserId = userId;
@@ -26,7 +28,7 @@ public class EndUser
         UpdatedAt = DateTime.UtcNow;
     }
     
-    public void Update(string? preferences, string? bio, string? socialLinks)
+    public void Update(JsonDocument? preferences, string? bio, JsonDocument? socialLinks)
     {
         Preferences = preferences ?? Preferences;
         Bio = bio ?? Bio;
