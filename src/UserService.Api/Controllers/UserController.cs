@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using UserService.Application.DTOs;
 using UserService.Application.Services;
+using UserService.Domain.Entities;
 using UserService.Domain.Exceptions;
 
 namespace UserService.Api.Controllers;
@@ -37,5 +38,14 @@ public class UserController(IUserService service, ILogger<UserController> logger
             logger.LogError(ex, "Unexpected error creating sub-business user");
             return StatusCode(500, new { error = "Internal server error occurred." });
         }
+    }
+    
+    [HttpPost("create-end-user")]
+        public async Task<EndUser> CreateEndUser([FromBody] EndUserDto dto)
+        {
+
+            var endUser = await service.CreateEndUser(dto);
+                
+                return endUser;
     }
 }

@@ -1,4 +1,4 @@
-using Moq;
+﻿using Moq;
 using UserService.Application.DTOs;
 using UserService.Application.Interfaces;
 using UserService.Domain.Entities;
@@ -11,6 +11,7 @@ namespace UserService.Application.Tests.Services;
 public class UserServiceTests
 {
     private Mock<IUserRepository> _mockUserRepository = null!;
+    private Mock<IEndUserRepository> _mockEndUserRepository = null!;
     private Mock<IBusinessRepRepository> _mockBusinessRepRepository = null!;
     private Mock<IBusinessServiceClient> _mockBusinessServiceClient = null!;
     private Application.Services.UserService _service = null!;
@@ -24,6 +25,7 @@ public class UserServiceTests
 
         _service = new Application.Services.UserService(
             _mockUserRepository.Object,
+            _mockEndUserRespository.Object,
             _mockBusinessRepRepository.Object,
             _mockBusinessServiceClient.Object
         );
