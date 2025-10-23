@@ -9,7 +9,8 @@ namespace UserService.Application.Services;
 public class UserService(
     IUserRepository userRepository,
     IBusinessRepRepository businessRepRepository,
-    IBusinessServiceClient businessServiceClient
+    IBusinessServiceClient businessServiceClient,
+    ISupportUserProfileRepository supportUserProfileRepository
 ) : IUserService
 {
     public async Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto)
@@ -61,6 +62,47 @@ public class UserService(
             Address: user.Address,
             BranchName: businessRep.BranchName,
             BranchAddress: businessRep.BranchAddress,
+            CreatedAt: user.CreatedAt
+        );
+    }
+
+    public async Task<SupportUserResponseDto> CreateSupportUserAsync(CreateSupportUserDto dto)
+    {
+        // ✅ 1. Create the user entity with support_user type
+        var user = new User(
+            username: dto.Username,
+            email: dto.Email,
+            phone: dto.Phone,
+            userType: "support_user",
+            address: dto.Address
+        );
+
+        // ✅ 2. Save user
+        await userRepository.AddAsync(user);
+
+        // ✅ 3. Confirm user was saved
+        var savedUser = await userRepository.GetByIdAsync(user.Id);
+        if (savedUser is null)
+            throw new UserCreationFailedException("Failed to create user record.");
+
+        // ✅ 4. Create support user profile link
+        var supportUserProfile = new SupportUserProfile(userId: user.Id);
+
+        await supportUserProfileRepository.AddAsync(supportUserProfile);
+
+        // ✅ 5. Confirm support profile was saved
+        var savedSupportProfile = await supportUserProfileRepository.GetByIdAsync(supportUserProfile.Id);
+        if (savedSupportProfile is null)
+            throw new UserCreationFailedException("Failed to create support user profile.");
+
+        // ✅ 6. Map to response DTO
+        return new SupportUserResponseDto(
+            UserId: user.Id,
+            SupportUserProfileId: supportUserProfile.Id,
+            Username: user.Username,
+            Email: user.Email,
+            Phone: user.Phone,
+            Address: user.Address,
             CreatedAt: user.CreatedAt
         );
     }

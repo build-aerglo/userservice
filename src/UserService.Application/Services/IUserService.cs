@@ -5,6 +5,10 @@ namespace UserService.Application.Services
 {
     public interface IUserService
     {
+		// Business Rep Services interfaces
 		Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto);
+		
+		//Support user Services  interfaces
+		Task<SupportUserResponseDto> CreateSupportUserAsync(CreateSupportUserDto dto);
     }
 }

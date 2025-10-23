@@ -37,3 +37,23 @@ public record SubBusinessUserResponseDto(
     string? BranchAddress,
     DateTime CreatedAt
 );
+
+
+// Support users Dtos for requets and response
+public record CreateSupportUserDto(
+    string Username,
+    string Email,
+    string Phone,
+    string? Address
+);
+
+
+public record SupportUserResponseDto(
+    Guid UserId,
+    Guid SupportUserProfileId,
+    string Username,
+    string Email,
+    string Phone,
+    string? Address,
+    DateTime CreatedAt
+);
