@@ -33,7 +33,7 @@ public class SupportUserProfileRepositoryTests
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        var requiredTables = new[] { "support_users", "users" };
+        var requiredTables = new[] { "support_user", "users" };
         foreach (var table in requiredTables)
         {
             var exists = await conn.ExecuteScalarAsync<bool>($@"
@@ -52,7 +52,7 @@ public class SupportUserProfileRepositoryTests
     {
         // ✅ Clean test data before each test
         await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.ExecuteAsync("DELETE FROM support_users;");
+        await conn.ExecuteAsync("DELETE FROM support_user;");
         await conn.ExecuteAsync("DELETE FROM users WHERE user_type = 'support_user';");
     }
 
@@ -175,7 +175,7 @@ public class SupportUserProfileRepositoryTests
         var supportProfile = new SupportUserProfile(user.Id);
         await _repository.AddAsync(supportProfile);
 
-        // Delete the user (should cascade to support_users)
+        // Delete the user (should cascade to support_user)
         await _userRepository.DeleteAsync(user.Id);
 
         var result = await _repository.GetByIdAsync(supportProfile.Id);

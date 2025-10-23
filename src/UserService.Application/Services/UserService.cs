@@ -110,4 +110,37 @@ public class UserService(
             CreatedAt: user.CreatedAt
         );
     }
+    
+    public async Task<(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload)
+    {   
+        // fetch business
+        var businessId = await businessServiceClient.CreateBusinessAsync(userPayload);
+        if (businessId == null || businessId == Guid.Empty)
+            throw new BusinessUserCreationFailedException("Business creation failed: BusinessId is missing from services.");
+
+        // save user
+        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, userPayload.UserType, userPayload.Address);
+        await userRepository.AddAsync(user);
+
+        // confirm save
+        var savedUser = await userRepository.GetByIdAsync(user.Id);
+        if (savedUser == null)
+            throw new UserCreationFailedException("Failed to create user record.");
+
+
+        // save business
+        var businessRep = new BusinessRep(businessId.Value, savedUser.Id, userPayload.BranchName, userPayload.BranchAddress);
+        await businessRepRepository.AddAsync(businessRep);
+
+        // confirm save
+        var savedBusiness = await GetBusinessRepByIdAsync(businessRep.Id);
+        if (savedBusiness == null)
+            throw new BusinessUserCreationFailedException("Failed to create business record.");
+
+        return (user, businessId.Value, businessRep);
+    }
+    
+    public async Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id)
+        => await businessRepRepository.GetByIdAsync(id);
+
 }
