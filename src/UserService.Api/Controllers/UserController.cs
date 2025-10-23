@@ -38,8 +38,7 @@ public class UserController(IUserService service, ILogger<UserController> logger
             return StatusCode(500, new { error = "Internal server error occurred." });
         }
     }
-
-
+    
     // Support User Routes 
 	[HttpPost("support")]
     public async Task<IActionResult> CreateSupportUser([FromBody] CreateSupportUserDto dto)
@@ -70,4 +69,25 @@ public class UserController(IUserService service, ILogger<UserController> logger
             return StatusCode(500, new { error = "Internal server error occurred." });
         }
     }
+    
+    [HttpPost("create-business-user")]
+    public async Task<IActionResult> CreateBusinessUser([FromBody] BusinessUserDto dto)
+    {
+        var (user, businessId, business) = await service.RegisterBusinessAccountAsync(dto);
+
+        return CreatedAtAction(
+            nameof(CreateBusinessUser),
+            new { id = businessId },
+            new
+            {
+                User = user,
+                BusinessId = businessId,
+                Business = business
+            }
+        );
+    }
+    
+    [HttpGet("get-business-rep-user/{id:guid}")]
+    public async Task<IActionResult> GetBusinessUser(Guid id)
+        => await service.GetBusinessRepByIdAsync(id) is { } user ? Ok(user) : NotFound();
 }

@@ -373,4 +373,215 @@ public class UserServiceTests
             Assert.That(result.Address, Is.Null);
         });
     }
+    
+    // NEW BUSINESS REGISTRATION TESTS
+[Test]
+public async Task RegisterBusinessAccountAsync_ShouldReturnTuple_WhenSuccessful()
+{
+    // ARRANGE
+    var dto = new BusinessUserDto
+    (
+        Name: "TechNova",
+        Email: "info@technova.com",
+        Phone: "5551234567",
+        UserType: "business_user",
+        Address: "123 Innovation Blvd",
+        BranchName: "HQ",
+        BranchAddress: "123 Innovation Blvd",
+        Website: "https://technova.com",
+        CategoryIds: new List<string>() { "software", "cloud" }
+    );
+
+    var businessId = Guid.NewGuid();
+    var user = new User(dto.Name, dto.Email, dto.Phone, dto.UserType, dto.Address);
+    var businessRep = new BusinessRep(businessId, user.Id, dto.BranchName, dto.BranchAddress);
+
+    _mockBusinessServiceClient
+        .Setup(c => c.CreateBusinessAsync(dto))
+        .ReturnsAsync(businessId);
+
+    _mockUserRepository
+        .Setup(r => r.AddAsync(It.IsAny<User>()))
+        .Returns(Task.CompletedTask);
+
+    _mockUserRepository
+        .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+        .ReturnsAsync(user);
+
+    _mockBusinessRepRepository
+        .Setup(r => r.AddAsync(It.IsAny<BusinessRep>()))
+        .Returns(Task.CompletedTask);
+
+    _mockBusinessRepRepository
+        .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+        .ReturnsAsync(businessRep);
+
+    // ACT
+    var (createdUser, createdBusinessId, createdRep) = await _service.RegisterBusinessAccountAsync(dto);
+
+    // ASSERT
+    Assert.Multiple(() =>
+    {
+        Assert.That(createdUser.Username, Is.EqualTo(dto.Name));
+        Assert.That(createdUser.Email, Is.EqualTo(dto.Email));
+        Assert.That(createdBusinessId, Is.EqualTo(businessId));
+        Assert.That(createdRep.BusinessId, Is.EqualTo(businessId));
+        Assert.That(createdRep.BranchName, Is.EqualTo("HQ"));
+    });
+
+    _mockBusinessServiceClient.Verify(c => c.CreateBusinessAsync(dto), Times.Once);
+    _mockUserRepository.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Once);
+    _mockBusinessRepRepository.Verify(r => r.AddAsync(It.IsAny<BusinessRep>()), Times.Once);
+}
+
+[Test]
+public void RegisterBusinessAccountAsync_ShouldThrow_WhenBusinessCreationFails()
+{
+    // ARRANGE
+    var dto = new BusinessUserDto(
+        Name: "FailCo",
+        Email: "fail@co.com",
+        Phone: "0000000000",
+        UserType: "business_user",
+        Address: "Nowhere",
+        BranchName: "Fail Branch",
+        BranchAddress: "Nowhere",
+        Website: "https://fail.com",
+        CategoryIds: new List<string>() { "fail" }
+    );
+
+    _mockBusinessServiceClient
+        .Setup(c => c.CreateBusinessAsync(dto))
+        .ReturnsAsync((Guid?)null);
+
+    // ACT & ASSERT
+    var ex = Assert.ThrowsAsync<BusinessUserCreationFailedException>(
+        async () => await _service.RegisterBusinessAccountAsync(dto)
+    );
+
+    Assert.That(ex!.Message, Does.Contain("Business creation failed"));
+}
+
+[Test]
+public void RegisterBusinessAccountAsync_ShouldThrow_WhenUserSaveFails()
+{
+    // ARRANGE
+    var dto = new BusinessUserDto(
+        Name: "NoUser",
+        Email: "nouser@co.com",
+        Phone: "1111111111",
+        UserType: "business_user",
+        Address: "No Address",
+        BranchName: "No Branch",
+        BranchAddress: "No Addr",
+        Website: "https://nouser.com",
+        CategoryIds: new List<string>() { "none" }
+    );
+
+    var businessId = Guid.NewGuid();
+
+    _mockBusinessServiceClient
+        .Setup(c => c.CreateBusinessAsync(dto))
+        .ReturnsAsync(businessId);
+
+    _mockUserRepository
+        .Setup(r => r.AddAsync(It.IsAny<User>()))
+        .Returns(Task.CompletedTask);
+
+    _mockUserRepository
+        .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+        .ReturnsAsync((User?)null);
+
+    // ACT & ASSERT
+    var ex = Assert.ThrowsAsync<UserCreationFailedException>(
+        async () => await _service.RegisterBusinessAccountAsync(dto)
+    );
+
+    Assert.That(ex!.Message, Does.Contain("Failed to create user record."));
+}
+
+[Test]
+public void RegisterBusinessAccountAsync_ShouldThrow_WhenBusinessRepSaveFails()
+{
+    // ARRANGE
+    var dto = new BusinessUserDto(
+        Name: "BizRepFail",
+        Email: "rep@fail.com",
+        Phone: "1231231234",
+        UserType: "business_user",
+        Address: "123 Street",
+        BranchName: "BranchFail",
+        BranchAddress: "Branch Addr",
+        Website: "https://failrep.com",
+        CategoryIds: new List<string>() { "rep" }
+    );
+
+    var businessId = Guid.NewGuid();
+    var user = new User(dto.Name, dto.Email, dto.Phone, dto.UserType, dto.Address);
+    var businessRep = new BusinessRep(businessId, user.Id, dto.BranchName, dto.BranchAddress);
+
+    _mockBusinessServiceClient
+        .Setup(c => c.CreateBusinessAsync(dto))
+        .ReturnsAsync(businessId);
+
+    _mockUserRepository
+        .Setup(r => r.AddAsync(It.IsAny<User>()))
+        .Returns(Task.CompletedTask);
+
+    _mockUserRepository
+        .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+        .ReturnsAsync(user);
+
+    _mockBusinessRepRepository
+        .Setup(r => r.AddAsync(It.IsAny<BusinessRep>()))
+        .Returns(Task.CompletedTask);
+
+    _mockBusinessRepRepository
+        .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+        .ReturnsAsync((BusinessRep?)null);
+
+    // ACT & ASSERT
+    var ex = Assert.ThrowsAsync<BusinessUserCreationFailedException>(
+        async () => await _service.RegisterBusinessAccountAsync(dto)
+    );
+
+    Assert.That(ex!.Message, Does.Contain("Failed to create business record."));
+}
+
+[Test]
+public async Task GetBusinessRepByIdAsync_ShouldReturnBusinessRep_WhenFound()
+{
+    // ARRANGE
+    var repId = Guid.NewGuid();
+    var businessRep = new BusinessRep(Guid.NewGuid(), Guid.NewGuid(), "HQ", "123 Main St");
+
+    _mockBusinessRepRepository
+        .Setup(r => r.GetByIdAsync(repId))
+        .ReturnsAsync(businessRep);
+
+    // ACT
+    var result = await _service.GetBusinessRepByIdAsync(repId);
+
+    // ASSERT
+    Assert.That(result, Is.Not.Null);
+    Assert.That(result!.BranchName, Is.EqualTo("HQ"));
+    _mockBusinessRepRepository.Verify(r => r.GetByIdAsync(repId), Times.Once);
+}
+
+[Test]
+public async Task GetBusinessRepByIdAsync_ShouldReturnNull_WhenNotFound()
+{
+    // ARRANGE
+    var repId = Guid.NewGuid();
+    _mockBusinessRepRepository
+        .Setup(r => r.GetByIdAsync(repId))
+        .ReturnsAsync((BusinessRep?)null);
+
+    // ACT
+    var result = await _service.GetBusinessRepByIdAsync(repId);
+
+    // ASSERT
+    Assert.That(result, Is.Null);
+}
+
 }
