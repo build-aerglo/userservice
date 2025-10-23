@@ -54,6 +54,11 @@ public class UserController(IUserService service, ILogger<UserController> logger
             var location = Url.Action("Get", "User", new { id = result.UserId });
             return Created(location ?? string.Empty, result);
         }
+        catch (DuplicateUserEmailException ex)
+        {
+            logger.LogError(ex, "Email already exist: {Email}", dto.Email);
+            return StatusCode(500, new { error = ex.Message });
+        }
         catch (UserCreationFailedException ex)
         {
             logger.LogError(ex, "Support user creation failed: {Username}", dto.Username);

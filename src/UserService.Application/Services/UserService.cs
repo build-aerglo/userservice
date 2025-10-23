@@ -76,10 +76,14 @@ public class UserService(
             userType: "support_user",
             address: dto.Address
         );
+        
+        // validate email address
+        if (await userRepository.EmailExistsAsync(dto.Email))
+            throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
 
         // ✅ 2. Save user
         await userRepository.AddAsync(user);
-
+        
         // ✅ 3. Confirm user was saved
         var savedUser = await userRepository.GetByIdAsync(user.Id);
         if (savedUser is null)
@@ -89,7 +93,7 @@ public class UserService(
         var supportUserProfile = new SupportUserProfile(userId: user.Id);
 
         await supportUserProfileRepository.AddAsync(supportUserProfile);
-
+        
         // ✅ 5. Confirm support profile was saved
         var savedSupportProfile = await supportUserProfileRepository.GetByIdAsync(supportUserProfile.Id);
         if (savedSupportProfile is null)
