@@ -19,6 +19,7 @@ builder.Services.AddControllers();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IBusinessRepRepository, BusinessRepRepository>();
 builder.Services.AddScoped<IUserService, UserService.Application.Services.UserService>();
+builder.Services.AddScoped<ISupportUserProfileRepository, SupportUserProfileRepository>();
 
 // 3️⃣ Register HttpClient for Business Service
 builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(client =>

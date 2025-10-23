@@ -16,7 +16,15 @@ public class UserRepository : IUserRepository
     }
 
     private NpgsqlConnection CreateConnection() => new(_connectionString);
-
+    
+    public async Task<bool> EmailExistsAsync(string email)
+    {
+        const string sql = "SELECT COUNT(1) FROM users WHERE email = @Email;";
+        using var conn = CreateConnection();
+        var count = await conn.ExecuteScalarAsync<int>(sql, new { Email = email });
+        return count > 0;
+    }
+    
     public async Task<IEnumerable<User>> GetAllAsync()
     {
         const string sql = "SELECT * FROM users ORDER BY created_at DESC;";

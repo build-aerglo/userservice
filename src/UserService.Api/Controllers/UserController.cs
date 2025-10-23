@@ -38,4 +38,36 @@ public class UserController(IUserService service, ILogger<UserController> logger
             return StatusCode(500, new { error = "Internal server error occurred." });
         }
     }
+
+
+    // Support User Routes 
+	[HttpPost("support")]
+    public async Task<IActionResult> CreateSupportUser([FromBody] CreateSupportUserDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var result = await service.CreateSupportUserAsync(dto);
+            
+            var location = Url.Action("Get", "User", new { id = result.UserId });
+            return Created(location ?? string.Empty, result);
+        }
+        catch (DuplicateUserEmailException ex)
+        {
+            logger.LogError(ex, "Email already exist: {Email}", dto.Email);
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (UserCreationFailedException ex)
+        {
+            logger.LogError(ex, "Support user creation failed: {Username}", dto.Username);
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error creating support user");
+            return StatusCode(500, new { error = "Internal server error occurred." });
+        }
+    }
 }
