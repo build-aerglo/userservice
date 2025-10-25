@@ -10,6 +10,8 @@ namespace UserService.Application.Services
 		
 		//Support user Services  interfaces
 		Task<SupportUserResponseDto> CreateSupportUserAsync(CreateSupportUserDto dto);
+		Task<SupportUserResponseDto> UpdateSupportUserAsync(Guid userId, UpdateSupportUserDto dto);
+
 		
 		// Register business
 		Task <(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload);

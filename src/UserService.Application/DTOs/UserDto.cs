@@ -47,6 +47,12 @@ public record CreateSupportUserDto(
     string? Address
 );
 
+public record UpdateSupportUserDto(
+    string? Email,
+    string? Phone,
+    string? Address
+);
+
 
 public record SupportUserResponseDto(
     Guid UserId,

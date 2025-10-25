@@ -69,6 +69,38 @@ public class UserController(IUserService service, ILogger<UserController> logger
             return StatusCode(500, new { error = "Internal server error occurred." });
         }
     }
+
+
+		
+
+
+	[HttpPut("support/{userId:guid}")]
+    public async Task<IActionResult> UpdateSupportUser(Guid userId, [FromBody] UpdateSupportUserDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var result = await service.UpdateSupportUserAsync(userId, dto);
+            return Ok(result);
+        }
+        catch (SupportUserNotFoundException ex)
+        {
+            logger.LogWarning(ex, "Support user not found: {UserId}", userId);
+            return NotFound(new { error = ex.Message });
+        }
+        catch (SupportUserUpdateFailedException ex)
+        {
+            logger.LogError(ex, "Support user update failed: {UserId}", userId);
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error updating support user: {UserId}", userId);
+            return StatusCode(500, new { error = "Internal server error occurred." });
+        }
+    }
     
     [HttpPost("create-business-user")]
     public async Task<IActionResult> CreateBusinessUser([FromBody] BusinessUserDto dto)
