@@ -16,5 +16,7 @@ namespace UserService.Application.Services
 		
 		Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id);
 
+		Task<EndUserResponseDto> CreateEndUserAsync(CreateEndUserDto dto);
+
     }
 }

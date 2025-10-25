@@ -20,6 +20,7 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IBusinessRepRepository, BusinessRepRepository>();
 builder.Services.AddScoped<IUserService, UserService.Application.Services.UserService>();
 builder.Services.AddScoped<ISupportUserProfileRepository, SupportUserProfileRepository>();
+builder.Services.AddScoped<IEndUserProfileRepository, EndUserProfileRepository>();
 
 // 3️⃣ Register HttpClient for Business Service
 builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(client =>
@@ -116,7 +117,11 @@ app.UseHttpsRedirection();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "User Service API v1");
+        options.RoutePrefix = string.Empty; 
+    });
 }
 
 // 2️⃣ Authentication + Authorization

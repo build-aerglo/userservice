@@ -89,5 +89,39 @@ public class UserController(IUserService service, ILogger<UserController> logger
     
     [HttpGet("get-business-rep-user/{id:guid}")]
     public async Task<IActionResult> GetBusinessUser(Guid id)
-        => await service.GetBusinessRepByIdAsync(id) is { } user ? Ok(user) : NotFound();
+    {
+        var result = await service.GetBusinessRepByIdAsync(id);
+        return result is not null ? Ok(result) : NotFound();
+    }
+    
+    // ---------------------- END USER ----------------------
+    [HttpPost("end-user")]
+    public async Task<IActionResult> CreateEndUser([FromBody] CreateEndUserDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var result = await service.CreateEndUserAsync(dto);
+
+            var location = Url.Action("Get", "User", new { id = result.UserId });
+            return Created(location ?? string.Empty, result);
+        }
+        catch (DuplicateUserEmailException ex)
+        {
+            logger.LogError(ex, "Email already exists: {Email}", dto.Email);
+            return Conflict(new { error = ex.Message });
+        }
+        catch (UserCreationFailedException ex)
+        {
+            logger.LogError(ex, "End user creation failed: {Username}", dto.Username);
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error creating end user");
+            return StatusCode(500, new { error = "Internal server error occurred." });
+        }
+    }
 }

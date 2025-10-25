@@ -10,7 +10,8 @@ public class UserService(
     IUserRepository userRepository,
     IBusinessRepRepository businessRepRepository,
     IBusinessServiceClient businessServiceClient,
-    ISupportUserProfileRepository supportUserProfileRepository
+    ISupportUserProfileRepository supportUserProfileRepository,
+    IEndUserProfileRepository endUserProfileRepository
 ) : IUserService
 {
     public async Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto)
@@ -142,5 +143,55 @@ public class UserService(
     
     public async Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id)
         => await businessRepRepository.GetByIdAsync(id);
+    
+    public async Task<EndUserResponseDto> CreateEndUserAsync(CreateEndUserDto dto)
+    {
+        // ✅ 1. Validate email uniqueness
+        if (await userRepository.EmailExistsAsync(dto.Email))
+            throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
+
+        // ✅ 2. Create user entity
+        var user = new User(
+            username: dto.Username,
+            email: dto.Email,
+            phone: dto.Phone,
+            userType: "end_user",
+            address: dto.Address
+        );
+
+        // ✅ 3. Save user
+        await userRepository.AddAsync(user);
+
+        // ✅ 4. Confirm save
+        var savedUser = await userRepository.GetByIdAsync(user.Id);
+        if (savedUser is null)
+            throw new UserCreationFailedException("Failed to create user record.");
+
+        // ✅ 5. Create end user profile
+        var endUserProfile = new EndUserProfile(
+            userId: user.Id,
+            socialMedia: dto.SocialMedia
+        );
+
+        await endUserProfileRepository.AddAsync(endUserProfile);
+
+        // ✅ 6. Confirm profile saved
+        var savedProfile = await endUserProfileRepository.GetByIdAsync(endUserProfile.Id);
+        if (savedProfile is null)
+            throw new UserCreationFailedException("Failed to create end user profile.");
+
+        // ✅ 7. Map to response DTO
+        return new EndUserResponseDto(
+            UserId: user.Id,
+            EndUserProfileId: endUserProfile.Id,
+            Username: user.Username,
+            Email: user.Email,
+            Phone: user.Phone,
+            Address: user.Address,
+            SocialMedia: endUserProfile.SocialMedia,
+            CreatedAt: user.CreatedAt
+        );
+    }
+
 
 }

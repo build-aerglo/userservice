@@ -340,4 +340,206 @@ public class UserControllerTests
         var returnedValue = createdResult!.Value as SupportUserResponseDto;
         Assert.That(returnedValue!.Address, Is.Null);
     }
+    
+    // ---------------------- END USER TESTS ----------------------
+[Test]
+public async Task CreateEndUser_ShouldReturnCreated_WhenSuccessful()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "jane_doe",
+        Email: "jane@example.com",
+        Phone: "1234567890",
+        Address: "123 Main St",
+        SocialMedia: "https://twitter.com/jane_doe"
+    );
+
+    var response = new EndUserResponseDto(
+        UserId: Guid.NewGuid(),
+        EndUserProfileId: Guid.NewGuid(),
+        Username: "jane_doe",
+        Email: "jane@example.com",
+        Phone: "1234567890",
+        Address: "123 Main St",
+        SocialMedia: "https://twitter.com/jane_doe",
+        CreatedAt: DateTime.UtcNow
+    );
+
+    _mockUserService
+        .Setup(s => s.CreateEndUserAsync(dto))
+        .ReturnsAsync(response);
+
+    var mockUrlHelper = new Mock<IUrlHelper>();
+    mockUrlHelper
+        .Setup(u => u.Action(It.IsAny<UrlActionContext>()))
+        .Returns("/api/user/" + response.UserId);
+
+    _controller.Url = mockUrlHelper.Object;
+
+    // ACT
+    var result = await _controller.CreateEndUser(dto);
+
+    // ASSERT
+    var createdResult = result as CreatedResult;
+    Assert.That(createdResult, Is.Not.Null);
+    Assert.That(createdResult!.StatusCode, Is.EqualTo(201));
+
+    var returnedValue = createdResult.Value as EndUserResponseDto;
+    Assert.That(returnedValue, Is.Not.Null);
+    Assert.That(returnedValue!.Username, Is.EqualTo("jane_doe"));
+    Assert.That(returnedValue.Email, Is.EqualTo("jane@example.com"));
+    Assert.That(returnedValue.SocialMedia, Is.EqualTo("https://twitter.com/jane_doe"));
+
+    _mockUserService.Verify(s => s.CreateEndUserAsync(dto), Times.Once);
+}
+
+[Test]
+public async Task CreateEndUser_ShouldReturnConflict_WhenEmailAlreadyExists()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "duplicate_user",
+        Email: "duplicate@example.com",
+        Phone: "9999999999",
+        Address: "Duplicate St",
+        SocialMedia: null
+    );
+
+    _mockUserService
+        .Setup(s => s.CreateEndUserAsync(dto))
+        .ThrowsAsync(new DuplicateUserEmailException($"Email '{dto.Email}' already exists."));
+
+    // ACT
+    var result = await _controller.CreateEndUser(dto);
+
+    // ASSERT
+    var conflictResult = result as ObjectResult;
+    Assert.That(conflictResult, Is.Not.Null);
+    Assert.That(conflictResult!.StatusCode, Is.EqualTo(409));
+
+    var errorValue = conflictResult.Value?.ToString();
+    Assert.That(errorValue, Does.Contain("already exists"));
+}
+
+[Test]
+public async Task CreateEndUser_ShouldReturnInternalServerError_WhenUserCreationFails()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "failed_end_user",
+        Email: "fail@enduser.com",
+        Phone: "0000000000",
+        Address: null,
+        SocialMedia: null
+    );
+
+    _mockUserService
+        .Setup(s => s.CreateEndUserAsync(dto))
+        .ThrowsAsync(new UserCreationFailedException("Failed to create user record."));
+
+    // ACT
+    var result = await _controller.CreateEndUser(dto);
+
+    // ASSERT
+    var errorResult = result as ObjectResult;
+    Assert.That(errorResult, Is.Not.Null);
+    Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
+    Assert.That(errorResult.Value?.ToString(), Does.Contain("Failed to create user record."));
+}
+
+[Test]
+public async Task CreateEndUser_ShouldReturnInternalServerError_WhenUnexpectedErrorOccurs()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "unexpected_user",
+        Email: "unexpected@enduser.com",
+        Phone: "4444444444",
+        Address: "Unexpected St",
+        SocialMedia: null
+    );
+
+    _mockUserService
+        .Setup(s => s.CreateEndUserAsync(dto))
+        .ThrowsAsync(new Exception("Unexpected failure"));
+
+    // ACT
+    var result = await _controller.CreateEndUser(dto);
+
+    // ASSERT
+    var errorResult = result as ObjectResult;
+    Assert.That(errorResult, Is.Not.Null);
+    Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
+    Assert.That(errorResult.Value?.ToString(), Does.Contain("Internal server error occurred."));
+}
+
+[Test]
+public async Task CreateEndUser_ShouldReturnBadRequest_WhenModelStateIsInvalid()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "", // invalid
+        Email: "invalid@enduser.com",
+        Phone: "5555555555",
+        Address: "Bad Street",
+        SocialMedia: null
+    );
+
+    _controller.ModelState.AddModelError("Username", "Username is required");
+
+    // ACT
+    var result = await _controller.CreateEndUser(dto);
+
+    // ASSERT
+    var badRequestResult = result as BadRequestObjectResult;
+    Assert.That(badRequestResult, Is.Not.Null);
+    Assert.That(badRequestResult!.StatusCode, Is.EqualTo(400));
+}
+
+[Test]
+public async Task CreateEndUser_WithNullSocialMedia_ShouldSucceed()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "no_social",
+        Email: "nosocial@enduser.com",
+        Phone: "1234567890",
+        Address: "123 No Social St",
+        SocialMedia: null
+    );
+
+    var response = new EndUserResponseDto(
+        UserId: Guid.NewGuid(),
+        EndUserProfileId: Guid.NewGuid(),
+        Username: "no_social",
+        Email: "nosocial@enduser.com",
+        Phone: "1234567890",
+        Address: "123 No Social St",
+        SocialMedia: null,
+        CreatedAt: DateTime.UtcNow
+    );
+
+    _mockUserService
+        .Setup(s => s.CreateEndUserAsync(dto))
+        .ReturnsAsync(response);
+
+    var mockUrlHelper = new Mock<IUrlHelper>();
+    mockUrlHelper
+        .Setup(u => u.Action(It.IsAny<UrlActionContext>()))
+        .Returns("/api/user/" + response.UserId);
+
+    _controller.Url = mockUrlHelper.Object;
+
+    // ACT
+    var result = await _controller.CreateEndUser(dto);
+
+    // ASSERT
+    var createdResult = result as CreatedResult;
+    Assert.That(createdResult, Is.Not.Null);
+    Assert.That(createdResult!.StatusCode, Is.EqualTo(201));
+
+    var returnedValue = createdResult.Value as EndUserResponseDto;
+    Assert.That(returnedValue!.SocialMedia, Is.Null);
+}
+
 }
