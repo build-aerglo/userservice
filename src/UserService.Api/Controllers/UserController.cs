@@ -18,7 +18,7 @@ public class UserController(IUserService service, ILogger<UserController> logger
         try
         {
             var result = await service.CreateSubBusinessUserAsync(dto);
-            
+
             var location = Url.Action("Get", "User", new { id = result.UserId });
             return Created(location ?? string.Empty, result);
         }
@@ -38,9 +38,37 @@ public class UserController(IUserService service, ILogger<UserController> logger
             return StatusCode(500, new { error = "Internal server error occurred." });
         }
     }
-    
+
+    [HttpPut("sub-business/{userId:guid}")]
+    public async Task<IActionResult> UpdateSubBusinessUser(Guid userId, [FromBody] UpdateSubBusinessUserDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var result = await service.UpdateSubBusinessUserAsync(userId, dto);
+            return Ok(result);
+        }
+        catch (SubBusinessUserNotFoundException ex)
+        {
+            logger.LogWarning(ex, "Sub-business user not found: {UserId}", userId);
+            return NotFound(new { error = ex.Message });
+        }
+        catch (SubBusinessUserUpdateFailedException ex)
+        {
+            logger.LogError(ex, "Sub-business user update failed: {UserId}", userId);
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error updating sub-business user: {UserId}", userId);
+            return StatusCode(500, new { error = "Internal server error occurred." });
+        }
+    }
+
     // Support User Routes 
-	[HttpPost("support")]
+    [HttpPost("support")]
     public async Task<IActionResult> CreateSupportUser([FromBody] CreateSupportUserDto dto)
     {
         if (!ModelState.IsValid)

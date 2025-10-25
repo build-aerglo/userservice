@@ -231,6 +231,222 @@ public class UserServiceTests
         });
     }
 
+    
+
+    // UPDATE SUB-BUSINESS USER TESTS
+    [Test]
+    public async Task UpdateSubBusinessUser_ShouldReturnResponse_WhenSuccessful()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var businessId = Guid.NewGuid();
+
+        var existingUser = new User("old_name", "old@email.com", "1111111111", "business_user", "Old Address");
+        var existingBusinessRep = new BusinessRep(businessId, userId, "Old Branch", "Old Branch Address");
+
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "updated@email.com",
+            Phone: "2222222222",
+            Address: "Updated Address",
+            BranchName: "Updated Branch",
+            BranchAddress: "Updated Branch Address"
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(existingUser);
+        _mockBusinessRepRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(existingBusinessRep);
+        _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockBusinessRepRepository.Setup(r => r.UpdateAsync(It.IsAny<BusinessRep>())).Returns(Task.CompletedTask);
+
+        // After updates
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId))
+            .ReturnsAsync(new User("old_name", "updated@email.com", "2222222222", "business_user", "Updated Address"));
+        _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(existingBusinessRep.Id))
+            .ReturnsAsync(new BusinessRep(businessId, userId, "Updated Branch", "Updated Branch Address"));
+
+        // ACT
+        var result = await _service.UpdateSubBusinessUserAsync(userId, dto);
+
+        // ASSERT
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Email, Is.EqualTo("updated@email.com"));
+            Assert.That(result.Phone, Is.EqualTo("2222222222"));
+            Assert.That(result.Address, Is.EqualTo("Updated Address"));
+            Assert.That(result.BranchName, Is.EqualTo("Updated Branch"));
+            Assert.That(result.BranchAddress, Is.EqualTo("Updated Branch Address"));
+        });
+
+        _mockUserRepository.Verify(r => r.GetByIdAsync(userId), Times.AtLeastOnce);
+        _mockBusinessRepRepository.Verify(r => r.GetByUserIdAsync(userId), Times.Once);
+        _mockUserRepository.Verify(r => r.UpdateAsync(It.IsAny<User>()), Times.Once);
+        _mockBusinessRepRepository.Verify(r => r.UpdateAsync(It.IsAny<BusinessRep>()), Times.Once);
+    }
+
+    [Test]
+    public void UpdateSubBusinessUser_ShouldThrow_WhenUserNotFound()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "test@email.com",
+            Phone: "1234567890",
+            Address: null,
+            BranchName: null,
+            BranchAddress: null
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync((User?)null);
+
+        // ACT & ASSERT
+        var ex = Assert.ThrowsAsync<SubBusinessUserNotFoundException>(
+            async () => await _service.UpdateSubBusinessUserAsync(userId, dto)
+        );
+
+        Assert.That(ex!.Message, Does.Contain(userId.ToString()));
+    }
+
+    [Test]
+    public void UpdateSubBusinessUser_ShouldThrow_WhenBusinessRepNotFound()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "test@email.com",
+            Phone: "1234567890",
+            Address: null,
+            BranchName: null,
+            BranchAddress: null
+        );
+
+        var existingUser = new User("user", "user@email.com", "1111111111", "business_user", "Address");
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(existingUser);
+        _mockBusinessRepRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync((BusinessRep?)null);
+
+        // ACT & ASSERT
+        var ex = Assert.ThrowsAsync<SubBusinessUserNotFoundException>(
+            async () => await _service.UpdateSubBusinessUserAsync(userId, dto)
+        );
+
+        Assert.That(ex!.Message, Does.Contain(userId.ToString()));
+    }
+
+    [Test]
+public void UpdateSubBusinessUser_ShouldThrow_WhenUserUpdateFails()
+{
+    // ARRANGE
+    var userId = Guid.NewGuid();
+    var businessId = Guid.NewGuid();
+    
+    var existingUser = new User("user", "user@email.com", "1111111111", "business_user", "Address");
+    var existingBusinessRep = new BusinessRep(businessId, userId, "Branch", "Branch Address");
+    
+    var dto = new UpdateSubBusinessUserDto(
+        Email: "updated@email.com",
+        Phone: "2222222222",
+        Address: "Updated Address",
+        BranchName: "Updated Branch",
+        BranchAddress: "Updated Branch Address"
+    );
+
+    // Setup sequence: first call returns user, second call (after update) returns null
+    _mockUserRepository.SetupSequence(r => r.GetByIdAsync(userId))
+        .ReturnsAsync(existingUser)  // First call - user exists
+        .ReturnsAsync((User?)null);  // Second call - update failed
+        
+    _mockBusinessRepRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(existingBusinessRep);
+    _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+
+    // ACT & ASSERT
+    var ex = Assert.ThrowsAsync<SubBusinessUserUpdateFailedException>(
+        async () => await _service.UpdateSubBusinessUserAsync(userId, dto)
+    );
+
+    Assert.That(ex!.Message, Does.Contain("Failed to update user record."));
+}
+
+    [Test]
+    public void UpdateSubBusinessUser_ShouldThrow_WhenBusinessRepUpdateFails()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var businessId = Guid.NewGuid();
+
+        var existingUser = new User("user", "user@email.com", "1111111111", "business_user", "Address");
+        var existingBusinessRep = new BusinessRep(businessId, userId, "Branch", "Branch Address");
+
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "updated@email.com",
+            Phone: "2222222222",
+            Address: "Updated Address",
+            BranchName: "Updated Branch",
+            BranchAddress: "Updated Branch Address"
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(existingUser);
+        _mockBusinessRepRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(existingBusinessRep);
+        _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockBusinessRepRepository.Setup(r => r.UpdateAsync(It.IsAny<BusinessRep>())).Returns(Task.CompletedTask);
+
+        // User update succeeds
+        _mockUserRepository.SetupSequence(r => r.GetByIdAsync(userId))
+            .ReturnsAsync(existingUser)
+            .ReturnsAsync(new User("user", "updated@email.com", "2222222222", "business_user", "Updated Address"));
+
+        // BusinessRep update fails
+        _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(existingBusinessRep.Id)).ReturnsAsync((BusinessRep?)null);
+
+        // ACT & ASSERT
+        var ex = Assert.ThrowsAsync<SubBusinessUserUpdateFailedException>(
+            async () => await _service.UpdateSubBusinessUserAsync(userId, dto)
+        );
+
+        Assert.That(ex!.Message, Does.Contain("Failed to update business representative record."));
+    }
+
+    [Test]
+    public async Task UpdateSubBusinessUser_WithPartialUpdate_ShouldOnlyUpdateProvidedFields()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var businessId = Guid.NewGuid();
+
+        var existingUser = new User("user", "old@email.com", "1111111111", "business_user", "Old Address");
+        var existingBusinessRep = new BusinessRep(businessId, userId, "Old Branch", "Old Branch Address");
+
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "new@email.com",
+            Phone: null,  // Not updating phone
+            Address: null, // Not updating address
+            BranchName: "New Branch",
+            BranchAddress: null // Not updating branch address
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(existingUser);
+        _mockBusinessRepRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(existingBusinessRep);
+        _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockBusinessRepRepository.Setup(r => r.UpdateAsync(It.IsAny<BusinessRep>())).Returns(Task.CompletedTask);
+
+        // After updates - only specified fields changed
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId))
+            .ReturnsAsync(new User("user", "new@email.com", "1111111111", "business_user", "Old Address"));
+        _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(existingBusinessRep.Id))
+            .ReturnsAsync(new BusinessRep(businessId, userId, "New Branch", "Old Branch Address"));
+
+        // ACT
+        var result = await _service.UpdateSubBusinessUserAsync(userId, dto);
+
+        // ASSERT
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Email, Is.EqualTo("new@email.com"));
+            Assert.That(result.Phone, Is.EqualTo("1111111111")); // Unchanged
+            Assert.That(result.Address, Is.EqualTo("Old Address")); // Unchanged
+            Assert.That(result.BranchName, Is.EqualTo("New Branch"));
+            Assert.That(result.BranchAddress, Is.EqualTo("Old Branch Address")); // Unchanged
+        });
+    }
+
 
 
     // NEW SUPPORT USER TESTS

@@ -14,6 +14,8 @@ public class UserService(
     IEndUserProfileRepository endUserProfileRepository
 ) : IUserService
 {
+
+	//Sub business user services
     public async Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto)
     {
         // ✅ 1. Check if the target business exists via BusinessService API
@@ -67,6 +69,55 @@ public class UserService(
         );
     }
 
+
+    public async Task<SubBusinessUserResponseDto> UpdateSubBusinessUserAsync(Guid userId, UpdateSubBusinessUserDto dto)
+    {
+        //Get existing user
+        var user = await userRepository.GetByIdAsync(userId);
+        if (user is null)
+            throw new SubBusinessUserNotFoundException(userId);
+
+        //Get existing business rep record
+        var businessRep = await businessRepRepository.GetByUserIdAsync(userId);
+        if (businessRep is null)
+            throw new SubBusinessUserNotFoundException(userId);
+
+        //Update user details
+        user.Update(dto.Email, dto.Phone, dto.Address);
+        await userRepository.UpdateAsync(user);
+
+        //Verify user update
+        var updatedUser = await userRepository.GetByIdAsync(userId);
+        if (updatedUser is null)
+            throw new SubBusinessUserUpdateFailedException("Failed to update user record.");
+
+        //Update business rep branch details
+        businessRep.UpdateBranch(dto.BranchName, dto.BranchAddress);
+        await businessRepRepository.UpdateAsync(businessRep);
+
+        //Verify business rep update
+        var updatedBusinessRep = await businessRepRepository.GetByIdAsync(businessRep.Id);
+        if (updatedBusinessRep is null)
+            throw new SubBusinessUserUpdateFailedException("Failed to update business representative record.");
+
+        //Map to response DTO
+        return new SubBusinessUserResponseDto(
+            UserId: updatedUser.Id,
+            BusinessRepId: updatedBusinessRep.Id,
+            BusinessId: updatedBusinessRep.BusinessId,
+            Username: updatedUser.Username,
+            Email: updatedUser.Email,
+            Phone: updatedUser.Phone,
+            Address: updatedUser.Address,
+            BranchName: updatedBusinessRep.BranchName,
+            BranchAddress: updatedBusinessRep.BranchAddress,
+            CreatedAt: updatedUser.CreatedAt
+        );
+    }
+
+
+	//Support User Services
+
     public async Task<SupportUserResponseDto> CreateSupportUserAsync(CreateSupportUserDto dto)
     {
         // ✅ 1. Create the user entity with support_user type
@@ -111,6 +162,9 @@ public class UserService(
             CreatedAt: user.CreatedAt
         );
     }
+
+
+	//Business User Services
     
     public async Task<(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload)
     {   
