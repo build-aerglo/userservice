@@ -14,6 +14,7 @@ public class UserServiceTests
     private Mock<IBusinessRepRepository> _mockBusinessRepRepository = null!;
     private Mock<IBusinessServiceClient> _mockBusinessServiceClient = null!;
     private Mock<ISupportUserProfileRepository> _mockSupportUserProfileRepository = null!;
+    private Mock<IEndUserProfileRepository> _mockEndUserProfileRepository = null!;
     private Application.Services.UserService _service = null!;
 
     [SetUp]
@@ -23,12 +24,14 @@ public class UserServiceTests
         _mockBusinessRepRepository = new Mock<IBusinessRepRepository>();
         _mockBusinessServiceClient = new Mock<IBusinessServiceClient>();
         _mockSupportUserProfileRepository = new Mock<ISupportUserProfileRepository>();
+        _mockEndUserProfileRepository = new Mock<IEndUserProfileRepository>();
 
         _service = new Application.Services.UserService(
             _mockUserRepository.Object,
             _mockBusinessRepRepository.Object,
             _mockBusinessServiceClient.Object,
-            _mockSupportUserProfileRepository.Object
+            _mockSupportUserProfileRepository.Object,
+        _mockEndUserProfileRepository.Object
         );
     }
 
@@ -583,5 +586,187 @@ public async Task GetBusinessRepByIdAsync_ShouldReturnNull_WhenNotFound()
     // ASSERT
     Assert.That(result, Is.Null);
 }
+
+
+// NEW END USER TESTS
+[Test]
+public async Task CreateEndUser_ShouldReturnResponse_WhenSuccessful()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "jane_doe",
+        Email: "jane@example.com",
+        Phone: "1234567890",
+        Address: "123 Main Street",
+        SocialMedia: "https://twitter.com/jane_doe"
+    );
+
+    var user = new User("jane_doe", "jane@example.com", "1234567890", "end_user", "123 Main Street");
+    var endProfile = new EndUserProfile(user.Id, "https://twitter.com/jane_doe");
+
+    _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(false);
+    _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+    _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(user);
+
+    _mockEndUserProfileRepository.Setup(r => r.AddAsync(It.IsAny<EndUserProfile>())).Returns(Task.CompletedTask);
+    _mockEndUserProfileRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(endProfile);
+
+    // ACT
+    var result = await _service.CreateEndUserAsync(dto);
+
+    // ASSERT
+    Assert.Multiple(() =>
+    {
+        Assert.That(result.Username, Is.EqualTo("jane_doe"));
+        Assert.That(result.Email, Is.EqualTo("jane@example.com"));
+        Assert.That(result.SocialMedia, Is.EqualTo("https://twitter.com/jane_doe"));
+    });
+
+    _mockUserRepository.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Once);
+    _mockEndUserProfileRepository.Verify(r => r.AddAsync(It.IsAny<EndUserProfile>()), Times.Once);
+}
+
+[Test]
+public void CreateEndUser_ShouldThrow_WhenEmailAlreadyExists()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "duplicate",
+        Email: "duplicate@example.com",
+        Phone: "5555555555",
+        Address: null,
+        SocialMedia: null
+    );
+
+    _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(true);
+
+    // ACT & ASSERT
+    var ex = Assert.ThrowsAsync<DuplicateUserEmailException>(
+        async () => await _service.CreateEndUserAsync(dto)
+    );
+
+    Assert.That(ex!.Message, Does.Contain(dto.Email));
+}
+
+[Test]
+public void CreateEndUser_ShouldThrow_WhenUserSaveFails()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "fail_user",
+        Email: "fail@user.com",
+        Phone: "0000000000",
+        Address: null,
+        SocialMedia: null
+    );
+
+    _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(false);
+    _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+    _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((User?)null);
+
+    // ACT & ASSERT
+    var ex = Assert.ThrowsAsync<UserCreationFailedException>(
+        async () => await _service.CreateEndUserAsync(dto)
+    );
+
+    Assert.That(ex!.Message, Does.Contain("Failed to create user record."));
+}
+
+[Test]
+public void CreateEndUser_ShouldThrow_WhenProfileSaveFails()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "profile_fail",
+        Email: "profile@fail.com",
+        Phone: "1231231234",
+        Address: "Somewhere",
+        SocialMedia: "https://fail.com"
+    );
+
+    var user = new User("profile_fail", "profile@fail.com", "1231231234", "end_user", "Somewhere");
+
+    _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(false);
+    _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+    _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(user);
+
+    _mockEndUserProfileRepository.Setup(r => r.AddAsync(It.IsAny<EndUserProfile>())).Returns(Task.CompletedTask);
+    _mockEndUserProfileRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((EndUserProfile?)null);
+
+    // ACT & ASSERT
+    var ex = Assert.ThrowsAsync<UserCreationFailedException>(
+        async () => await _service.CreateEndUserAsync(dto)
+    );
+
+    Assert.That(ex!.Message, Does.Contain("Failed to create end user profile."));
+}
+
+[Test]
+public async Task CreateEndUser_ShouldSetUserTypeToEndUser()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "type_check",
+        Email: "type@enduser.com",
+        Phone: "1231231234",
+        Address: "Type Street",
+        SocialMedia: null
+    );
+
+    User? capturedUser = null;
+
+    _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(false);
+    _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>()))
+        .Callback<User>(u => capturedUser = u)
+        .Returns(Task.CompletedTask);
+
+    _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+        .ReturnsAsync(() => capturedUser);
+
+    _mockEndUserProfileRepository.Setup(r => r.AddAsync(It.IsAny<EndUserProfile>())).Returns(Task.CompletedTask);
+    _mockEndUserProfileRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+        .ReturnsAsync(new EndUserProfile(Guid.NewGuid(), null));
+
+    // ACT
+    await _service.CreateEndUserAsync(dto);
+
+    // ASSERT
+    Assert.That(capturedUser, Is.Not.Null);
+    Assert.That(capturedUser!.UserType, Is.EqualTo("end_user"));
+}
+
+[Test]
+public async Task CreateEndUser_WithNullSocialMedia_ShouldSucceed()
+{
+    // ARRANGE
+    var dto = new CreateEndUserDto(
+        Username: "nosocial",
+        Email: "nosocial@example.com",
+        Phone: "5556667777",
+        Address: "123 Nowhere",
+        SocialMedia: null
+    );
+
+    var user = new User("nosocial", "nosocial@example.com", "5556667777", "end_user", "123 Nowhere");
+    var profile = new EndUserProfile(user.Id, null);
+
+    _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(false);
+    _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+    _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(user);
+
+    _mockEndUserProfileRepository.Setup(r => r.AddAsync(It.IsAny<EndUserProfile>())).Returns(Task.CompletedTask);
+    _mockEndUserProfileRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(profile);
+
+    // ACT
+    var result = await _service.CreateEndUserAsync(dto);
+
+    // ASSERT
+    Assert.Multiple(() =>
+    {
+        Assert.That(result.Username, Is.EqualTo("nosocial"));
+        Assert.That(result.SocialMedia, Is.Null);
+    });
+}
+
 
 }
