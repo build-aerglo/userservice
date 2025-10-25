@@ -170,8 +170,211 @@ public class UserControllerTests
         var errorValue = errorResult.Value?.ToString();
         Assert.That(errorValue, Does.Contain("Internal server error occurred."));
     }
-    
-    
+
+
+    // UPDATE SUB-BUSINESS USER CONTROLLER TESTS
+    [Test]
+    public async Task UpdateSubBusinessUser_ShouldReturnOk_WhenSuccessful()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var businessId = Guid.NewGuid();
+
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "updated@business.com",
+            Phone: "9876543210",
+            Address: "456 Updated St",
+            BranchName: "Updated Branch",
+            BranchAddress: "789 Branch Ave"
+        );
+
+        var response = new SubBusinessUserResponseDto(
+            UserId: userId,
+            BusinessRepId: Guid.NewGuid(),
+            BusinessId: businessId,
+            Username: "john_rep",
+            Email: "updated@business.com",
+            Phone: "9876543210",
+            Address: "456 Updated St",
+            BranchName: "Updated Branch",
+            BranchAddress: "789 Branch Ave",
+            CreatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSubBusinessUserAsync(userId, dto))
+            .ReturnsAsync(response);
+
+        // ACT
+        var result = await _controller.UpdateSubBusinessUser(userId, dto);
+
+        // ASSERT
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        Assert.That(okResult!.StatusCode, Is.EqualTo(200));
+
+        var returnedValue = okResult.Value as SubBusinessUserResponseDto;
+        Assert.That(returnedValue, Is.Not.Null);
+        Assert.That(returnedValue!.Email, Is.EqualTo("updated@business.com"));
+        Assert.That(returnedValue.BranchName, Is.EqualTo("Updated Branch"));
+
+        _mockUserService.Verify(s => s.UpdateSubBusinessUserAsync(userId, dto), Times.Once);
+    }
+
+    [Test]
+    public async Task UpdateSubBusinessUser_ShouldReturnNotFound_WhenUserDoesNotExist()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "test@email.com",
+            Phone: "1234567890",
+            Address: null,
+            BranchName: null,
+            BranchAddress: null
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSubBusinessUserAsync(userId, dto))
+            .ThrowsAsync(new SubBusinessUserNotFoundException(userId));
+
+        // ACT
+        var result = await _controller.UpdateSubBusinessUser(userId, dto);
+
+        // ASSERT
+        var notFoundResult = result as NotFoundObjectResult;
+        Assert.That(notFoundResult, Is.Not.Null);
+        Assert.That(notFoundResult!.StatusCode, Is.EqualTo(404));
+        Assert.That(notFoundResult.Value?.ToString(), Does.Contain(userId.ToString()));
+    }
+
+    [Test]
+    public async Task UpdateSubBusinessUser_ShouldReturnInternalServerError_WhenUpdateFails()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "fail@email.com",
+            Phone: "1234567890",
+            Address: "Fail Address",
+            BranchName: "Fail Branch",
+            BranchAddress: "Fail Branch Address"
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSubBusinessUserAsync(userId, dto))
+            .ThrowsAsync(new SubBusinessUserUpdateFailedException("Failed to update user record."));
+
+        // ACT
+        var result = await _controller.UpdateSubBusinessUser(userId, dto);
+
+        // ASSERT
+        var errorResult = result as ObjectResult;
+        Assert.That(errorResult, Is.Not.Null);
+        Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
+
+        var value = errorResult.Value?.ToString();
+        Assert.That(value, Does.Contain("Failed to update user record."));
+    }
+
+    [Test]
+    public async Task UpdateSubBusinessUser_ShouldReturnInternalServerError_WhenUnexpectedErrorOccurs()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "unexpected@email.com",
+            Phone: "9999999999",
+            Address: null,
+            BranchName: null,
+            BranchAddress: null
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSubBusinessUserAsync(userId, dto))
+            .ThrowsAsync(new Exception("Unexpected failure"));
+
+        // ACT
+        var result = await _controller.UpdateSubBusinessUser(userId, dto);
+
+        // ASSERT
+        var errorResult = result as ObjectResult;
+        Assert.That(errorResult, Is.Not.Null);
+        Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
+
+        var errorValue = errorResult.Value?.ToString();
+        Assert.That(errorValue, Does.Contain("Internal server error occurred."));
+    }
+
+    [Test]
+    public async Task UpdateSubBusinessUser_ShouldReturnBadRequest_WhenModelStateIsInvalid()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "", // Invalid - empty email
+            Phone: "1234567890",
+            Address: null,
+            BranchName: null,
+            BranchAddress: null
+        );
+
+        _controller.ModelState.AddModelError("Email", "Email is required");
+
+        // ACT
+        var result = await _controller.UpdateSubBusinessUser(userId, dto);
+
+        // ASSERT
+        var badRequestResult = result as BadRequestObjectResult;
+        Assert.That(badRequestResult, Is.Not.Null);
+        Assert.That(badRequestResult!.StatusCode, Is.EqualTo(400));
+    }
+
+    [Test]
+    public async Task UpdateSubBusinessUser_WithPartialData_ShouldSucceed()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var businessId = Guid.NewGuid();
+
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "partial@email.com",
+            Phone: null, // Not updating
+            Address: null, // Not updating
+            BranchName: null, // Not updating
+            BranchAddress: null // Not updating
+        );
+
+        var response = new SubBusinessUserResponseDto(
+            UserId: userId,
+            BusinessRepId: Guid.NewGuid(),
+            BusinessId: businessId,
+            Username: "john_rep",
+            Email: "partial@email.com",
+            Phone: "1234567890",
+            Address: "123 Business St",
+            BranchName: "Main Branch",
+            BranchAddress: "456 Branch Ave",
+            CreatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSubBusinessUserAsync(userId, dto))
+            .ReturnsAsync(response);
+
+        // ACT
+        var result = await _controller.UpdateSubBusinessUser(userId, dto);
+
+        // ASSERT
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var returnedValue = okResult!.Value as SubBusinessUserResponseDto;
+        Assert.That(returnedValue!.Email, Is.EqualTo("partial@email.com"));
+        Assert.That(returnedValue.Phone, Is.EqualTo("1234567890")); // Unchanged
+    }
+
+
     // Support User tests
     [Test]
     public async Task CreateSupportUser_ShouldReturnCreated_WhenSuccessful()
