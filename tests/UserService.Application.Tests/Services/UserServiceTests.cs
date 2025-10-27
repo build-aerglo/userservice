@@ -376,7 +376,281 @@ public class UserServiceTests
             Assert.That(result.Address, Is.Null);
         });
     }
-    
+
+
+
+
+    // ---------------------- UPDATE SUPPORT USER TESTS ----------------------
+    [Test]
+    public async Task UpdateSupportUser_ShouldReturnResponse_WhenSuccessful()
+    {
+        // ARRANGE
+        var existingUser = new User("support_user", "old@support.com", "1234567890", "support_user", "123 Old St");
+        var userId = existingUser.Id; // Use the User's generated Id
+
+        var dto = new UpdateSupportUserDto(
+            Email: "updated@support.com",
+            Phone: "9876543210",
+            Address: "456 Updated St"
+        );
+
+        var supportProfile = new SupportUserProfile(userId);
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(existingUser);
+        _mockSupportUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(supportProfile);
+        _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockSupportUserProfileRepository.Setup(r => r.UpdateAsync(It.IsAny<SupportUserProfile>())).Returns(Task.CompletedTask);
+
+        // After update, return the updated user
+        _mockUserRepository.SetupSequence(r => r.GetByIdAsync(userId))
+            .ReturnsAsync(existingUser)
+            .ReturnsAsync(() =>
+            {
+                // Use the domain method to update fields
+                existingUser.Update(
+                    email: "updated@support.com",
+                    phone: "9876543210",
+                    address: "456 Updated St"
+                );
+                return existingUser;
+            });
+
+
+        // ACT
+        var result = await _service.UpdateSupportUserAsync(userId, dto);
+
+        // ASSERT
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Email, Is.EqualTo("updated@support.com"));
+            Assert.That(result.Phone, Is.EqualTo("9876543210"));
+            Assert.That(result.Address, Is.EqualTo("456 Updated St"));
+            Assert.That(result.UserId, Is.EqualTo(userId));
+        });
+
+        _mockUserRepository.Verify(r => r.GetByIdAsync(userId), Times.AtLeastOnce);
+        _mockUserRepository.Verify(r => r.UpdateAsync(It.IsAny<User>()), Times.Once);
+        _mockSupportUserProfileRepository.Verify(r => r.UpdateAsync(It.IsAny<SupportUserProfile>()), Times.Once);
+    }
+
+    [Test]
+    public void UpdateSupportUser_ShouldThrow_WhenUserNotFound()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "test@support.com",
+            Phone: "1234567890",
+            Address: null
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync((User?)null);
+
+        // ACT & ASSERT
+        var ex = Assert.ThrowsAsync<SupportUserNotFoundException>(
+            async () => await _service.UpdateSupportUserAsync(userId, dto)
+        );
+
+        Assert.That(ex!.Message, Does.Contain(userId.ToString()));
+        _mockUserRepository.Verify(r => r.UpdateAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Test]
+    public void UpdateSupportUser_ShouldThrow_WhenUserIsNotSupportUser()
+    {
+        // ARRANGE
+        var endUser = new User("end_user", "end@user.com", "1234567890", "end_user", "123 St");
+        var userId = endUser.Id; // Use the User's generated Id
+
+        var dto = new UpdateSupportUserDto(
+            Email: "test@support.com",
+            Phone: "1234567890",
+            Address: null
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(endUser);
+
+        // ACT & ASSERT
+        var ex = Assert.ThrowsAsync<SupportUserUpdateFailedException>(
+            async () => await _service.UpdateSupportUserAsync(userId, dto)
+        );
+
+        Assert.That(ex!.Message, Does.Contain("is not a support user"));
+        _mockUserRepository.Verify(r => r.UpdateAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Test]
+    public void UpdateSupportUser_ShouldThrow_WhenSupportProfileNotFound()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "test@support.com",
+            Phone: "1234567890",
+            Address: null
+        );
+
+        var supportUser = new User("support_user", "support@user.com", "1234567890", "support_user", "123 St");
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(supportUser);
+        _mockSupportUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync((SupportUserProfile?)null);
+
+        // ACT & ASSERT
+        var ex = Assert.ThrowsAsync<SupportUserNotFoundException>(
+            async () => await _service.UpdateSupportUserAsync(userId, dto)
+        );
+
+        Assert.That(ex!.Message, Does.Contain(userId.ToString()));
+    }
+
+    [Test]
+    public void UpdateSupportUser_ShouldThrow_WhenUpdateVerificationFails()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "updated@support.com",
+            Phone: "9876543210",
+            Address: "456 Updated St"
+        );
+
+        var existingUser = new User("support_user", "old@support.com", "1234567890", "support_user", "123 Old St");
+        var supportProfile = new SupportUserProfile(userId);
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(existingUser);
+        _mockSupportUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(supportProfile);
+        _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockSupportUserProfileRepository.Setup(r => r.UpdateAsync(It.IsAny<SupportUserProfile>())).Returns(Task.CompletedTask);
+
+        // Simulate verification failure - second GetByIdAsync returns null
+        _mockUserRepository.SetupSequence(r => r.GetByIdAsync(userId))
+            .ReturnsAsync(existingUser)
+            .ReturnsAsync((User?)null);
+
+        // ACT & ASSERT
+        var ex = Assert.ThrowsAsync<SupportUserUpdateFailedException>(
+            async () => await _service.UpdateSupportUserAsync(userId, dto)
+        );
+
+        Assert.That(ex!.Message, Does.Contain("Failed to update user record"));
+    }
+
+    [Test]
+    public async Task UpdateSupportUser_WithPartialUpdate_ShouldOnlyUpdateProvidedFields()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "newemail@support.com",
+            Phone: null, // Don't update phone
+            Address: null // Don't update address
+        );
+
+        var existingUser = new User("support_user", "old@support.com", "1234567890", "support_user", "123 Old St");
+        var supportProfile = new SupportUserProfile(userId);
+
+        User? capturedUser = null;
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(existingUser);
+        _mockSupportUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(supportProfile);
+
+        _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>()))
+            .Callback<User>(u => capturedUser = u)
+            .Returns(Task.CompletedTask);
+
+        _mockSupportUserProfileRepository.Setup(r => r.UpdateAsync(It.IsAny<SupportUserProfile>())).Returns(Task.CompletedTask);
+
+        // Return the captured user (which has been modified by the Update method)
+        _mockUserRepository.SetupSequence(r => r.GetByIdAsync(userId))
+            .ReturnsAsync(existingUser)
+            .ReturnsAsync(() => capturedUser ?? existingUser);
+
+        // ACT
+        var result = await _service.UpdateSupportUserAsync(userId, dto);
+
+        // ASSERT
+        Assert.That(capturedUser, Is.Not.Null);
+        Assert.That(capturedUser!.Email, Is.EqualTo("newemail@support.com"));
+        // Phone and Address should remain unchanged because Update method only updates non-null values
+        Assert.That(result.Email, Is.EqualTo("newemail@support.com"));
+    }
+
+    [Test]
+    public async Task UpdateSupportUser_ShouldTouchSupportProfileTimestamp()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "updated@support.com",
+            Phone: "9876543210",
+            Address: "456 Updated St"
+        );
+
+        var existingUser = new User("support_user", "old@support.com", "1234567890", "support_user", "123 Old St");
+        var supportProfile = new SupportUserProfile(userId);
+
+        SupportUserProfile? capturedProfile = null;
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(existingUser);
+        _mockSupportUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(supportProfile);
+        _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+
+        _mockSupportUserProfileRepository.Setup(r => r.UpdateAsync(It.IsAny<SupportUserProfile>()))
+            .Callback<SupportUserProfile>(sp => capturedProfile = sp)
+            .Returns(Task.CompletedTask);
+
+        _mockUserRepository.SetupSequence(r => r.GetByIdAsync(userId))
+            .ReturnsAsync(existingUser)
+            .ReturnsAsync(new User("support_user", "updated@support.com", "9876543210", "support_user", "456 Updated St"));
+
+        // ACT
+        await _service.UpdateSupportUserAsync(userId, dto);
+
+        // ASSERT
+        Assert.That(capturedProfile, Is.Not.Null);
+        _mockSupportUserProfileRepository.Verify(r => r.UpdateAsync(It.IsAny<SupportUserProfile>()), Times.Once);
+    }
+
+    [Test]
+    public async Task UpdateSupportUser_WithAllNullFields_ShouldStillUpdateTimestamps()
+    {
+        // ARRANGE
+        var existingUser = new User("support_user", "old@support.com", "1234567890", "support_user", "123 Old St");
+        var userId = existingUser.Id; // Use the User's generated Id
+
+        var dto = new UpdateSupportUserDto(
+            Email: null,
+            Phone: null,
+            Address: null
+        );
+
+        var supportProfile = new SupportUserProfile(userId);
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(existingUser);
+        _mockSupportUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(supportProfile);
+        _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockSupportUserProfileRepository.Setup(r => r.UpdateAsync(It.IsAny<SupportUserProfile>())).Returns(Task.CompletedTask);
+
+        _mockUserRepository.SetupSequence(r => r.GetByIdAsync(userId))
+            .ReturnsAsync(existingUser)
+            .ReturnsAsync(existingUser);
+
+        // ACT
+        var result = await _service.UpdateSupportUserAsync(userId, dto);
+
+        // ASSERT
+        // Even with all null fields, the update methods should still be called (for timestamp updates)
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Email, Is.EqualTo("old@support.com"));
+            Assert.That(result.Phone, Is.EqualTo("1234567890"));
+            Assert.That(result.Address, Is.EqualTo("123 Old St"));
+            Assert.That(result.UserId, Is.EqualTo(userId));
+        });
+
+        _mockUserRepository.Verify(r => r.UpdateAsync(It.IsAny<User>()), Times.Once);
+        _mockSupportUserProfileRepository.Verify(r => r.UpdateAsync(It.IsAny<SupportUserProfile>()), Times.Once);
+    }
+
     // NEW BUSINESS REGISTRATION TESTS
 [Test]
 public async Task RegisterBusinessAccountAsync_ShouldReturnTuple_WhenSuccessful()

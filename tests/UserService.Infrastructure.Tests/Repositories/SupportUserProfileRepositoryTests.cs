@@ -212,32 +212,39 @@ public class SupportUserProfileRepositoryTests
             Assert.That(secondUpdate!.UpdatedAt, Is.GreaterThan(firstUpdate.UpdatedAt));
         }
 
-        // ✅ Test: Verify UpdateAsync doesn't modify CreatedAt
-        [Test]
-        public async Task UpdateAsync_ShouldNotModifyCreatedAt()
+    // ✅ Test: Verify UpdateAsync doesn't modify CreatedAt
+    [Test]
+    public async Task UpdateAsync_ShouldNotModifyCreatedAt()
+    {
+        // Arrange
+        var user = new User("created_check", "created@support.com", "2222222222", "support_user", "Created St");
+        await _userRepository.AddAsync(user);
+
+        var supportProfile = new SupportUserProfile(user.Id);
+        await _repository.AddAsync(supportProfile);
+
+        var originalCreatedAt = supportProfile.CreatedAt;
+
+        // Act
+        await Task.Delay(100); // ensure UpdatedAt will be different
+        supportProfile.Touch();
+        await _repository.UpdateAsync(supportProfile);
+
+        // Assert
+        var updated = await _repository.GetByIdAsync(supportProfile.Id);
+
+        // Round both times to milliseconds to avoid precision mismatch
+        DateTime RoundMs(DateTime dt) => new DateTime(dt.Ticks - (dt.Ticks % TimeSpan.TicksPerMillisecond), dt.Kind);
+
+        Assert.Multiple(() =>
         {
-            // Arrange
-            var user = new User("created_check", "created@support.com", "2222222222", "support_user", "Created St");
-            await _userRepository.AddAsync(user);
+            Assert.That(RoundMs(updated!.CreatedAt), Is.EqualTo(RoundMs(originalCreatedAt)));
+            Assert.That(RoundMs(updated.UpdatedAt), Is.GreaterThan(RoundMs(originalCreatedAt)));
+        });
+    }
 
-            var supportProfile = new SupportUserProfile(user.Id);
-            await _repository.AddAsync(supportProfile);
-
-            var originalCreatedAt = supportProfile.CreatedAt;
-
-            // Act
-            await Task.Delay(100);
-            supportProfile.Touch();
-            await _repository.UpdateAsync(supportProfile);
-
-            // Assert
-            var updated = await _repository.GetByIdAsync(supportProfile.Id);
-            Assert.That(updated!.CreatedAt, Is.EqualTo(originalCreatedAt));
-            Assert.That(updated.UpdatedAt, Is.GreaterThan(originalCreatedAt));
-        }
-
-        // ✅ Test: Update non-existent profile should not throw exception
-        [Test]
+    // ✅ Test: Update non-existent profile should not throw exception
+    [Test]
         public async Task UpdateAsync_WithNonExistentId_ShouldNotThrowException()
         {
             // Arrange
