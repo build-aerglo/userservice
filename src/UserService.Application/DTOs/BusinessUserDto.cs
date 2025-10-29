@@ -21,3 +21,15 @@ public record BusinessFetchResponseDto
 (
     Guid id
 );
+
+public record UpdateBusinessUserDto(
+    Guid Id,
+    string Name,
+    string Email,
+    string Phone,
+    string? Address,
+    string? BranchName,
+    string? BranchAddress,
+    string? Website,
+    List<string?> CategoryIds
+);

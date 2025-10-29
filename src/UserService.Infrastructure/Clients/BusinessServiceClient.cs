@@ -92,4 +92,38 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
     {
         public Guid Id { get; set; }
     }
+    
+    /// <summary>
+    /// Updates a business in the Business Service.
+    /// </summary>
+    public async Task<bool> UpdateBusinessAsync(UpdateBusinessUserDto business)
+    {
+        try
+        {
+            var response = await httpClient.PostAsJsonAsync($"/api/business/{business.Id}/update", business);
+
+            if (response.StatusCode != HttpStatusCode.Accepted)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                logger.LogError("❌ Business update failed: {StatusCode} | {Error}", response.StatusCode, error);
+                throw new BusinessUserCreationFailedException("Business update failed in Business Service.");
+            }
+
+            return true;
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Network error updating business at {Url}", httpClient.BaseAddress);
+            return false;
+        }
+        catch (BusinessUserCreationFailedException)
+        {
+            throw; // allow upper layers to handle domain exception
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error updating business for user: {Username}", business.Name);
+            return false;
+        }
+    }
 }

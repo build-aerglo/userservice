@@ -105,7 +105,7 @@ public class BusinessRepRepositoryTests
         var businessRep = new BusinessRep(Guid.NewGuid(), user.Id, "Old Branch", "Old Location");
         await _repository.AddAsync(businessRep);
 
-        businessRep.UpdateBranch("New Branch", "New Location");
+        businessRep.UpdateBusiness("New Branch", "New Location");
         await _repository.UpdateAsync(businessRep);
 
         var updated = await _repository.GetByIdAsync(businessRep.Id);
