@@ -265,6 +265,17 @@ public class UserService(
                 userId = result.UserId;
                 break;
             }
+             case "business_user":
+            {
+                var result = await businessRepRepository.GetByIdAsync(id);
+                if (result is null)
+                    throw new UserNotFoundException(id);
+
+                await businessRepRepository.DeleteAsync(id);
+                userId = result.UserId;
+                break;
+            }
+            
 
             default:
                 throw new UserTypeNotFoundException($"User Type {type} must be a valid user type");

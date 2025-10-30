@@ -1,4 +1,4 @@
-using Moq;
+﻿using Moq;
 using UserService.Application.DTOs;
 using UserService.Application.Interfaces;
 using UserService.Domain.Entities;
@@ -804,6 +804,25 @@ public class UserServiceTests
 
         // Assert
         _mockSupportUserProfileRepository.Verify(r => r.DeleteAsync(profileId), Times.Once);
+        _mockUserRepository.Verify(r => r.DeleteAsync(userId), Times.Once);
+    }
+    
+    [Test]
+    public async Task DeleteUserAsync_ShouldDeleteBusinessUser_WhenExists()
+    {
+        // Arrange
+        var profileId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var profile = new BusinessRep(profileId, userId, "branch address", "branch name");
+
+       _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(profileId))
+            .ReturnsAsync(profile);
+
+        // Act
+        await _service.DeleteUserAsync(profileId, "business_user");
+
+        // Assert
+        _mockBusinessRepRepository.Verify(r => r.DeleteAsync(profileId), Times.Once);
         _mockUserRepository.Verify(r => r.DeleteAsync(userId), Times.Once);
     }
 
