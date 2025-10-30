@@ -149,4 +149,44 @@ public class BusinessRepRepositoryTests
         Assert.That(results.Any(r => r.BranchName == "Branch 1"), Is.True);
         Assert.That(results.Any(r => r.BranchName == "Branch 2"), Is.True);
     }
+
+    // ✅ Test: Update with User details (Integration test pattern)
+    [Test]
+    public async Task UpdateAsync_WithUserDetails_ShouldModifyBothUserAndBusinessRep()
+    {
+        // ARRANGE
+        var user = new User("rep_full_update", "rep_full@biz.com", "6666666666", "business_user", "Initial Address");
+        await _userRepository.AddAsync(user);
+
+        var businessId = Guid.NewGuid();
+        var businessRep = new BusinessRep(businessId, user.Id, "Initial Branch", "Initial Branch Address");
+        await _repository.AddAsync(businessRep);
+
+        // ACT - Update user details
+        user.Update("updated_rep@biz.com", "7777777777", "Updated Address");
+        await _userRepository.UpdateAsync(user);
+
+        // ACT - Update business rep details
+        businessRep.UpdateBranch("Updated Branch", "Updated Branch Address");
+        await _repository.UpdateAsync(businessRep);
+
+        // ASSERT - Verify both updates
+        var updatedUser = await _userRepository.GetByIdAsync(user.Id);
+        var updatedBusinessRep = await _repository.GetByIdAsync(businessRep.Id);
+
+        Assert.Multiple(() =>
+        {
+            // User assertions
+            Assert.That(updatedUser, Is.Not.Null);
+            Assert.That(updatedUser!.Email, Is.EqualTo("updated_rep@biz.com"));
+            Assert.That(updatedUser.Phone, Is.EqualTo("7777777777"));
+            Assert.That(updatedUser.Address, Is.EqualTo("Updated Address"));
+
+            // BusinessRep assertions
+            Assert.That(updatedBusinessRep, Is.Not.Null);
+            Assert.That(updatedBusinessRep!.BranchName, Is.EqualTo("Updated Branch"));
+            Assert.That(updatedBusinessRep.BranchAddress, Is.EqualTo("Updated Branch Address"));
+            Assert.That(updatedBusinessRep.UserId, Is.EqualTo(user.Id));
+        });
+    }
 }
