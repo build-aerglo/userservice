@@ -107,7 +107,7 @@ public class SupportUserProfileRepositoryTests
         // Wait a bit to ensure timestamp difference
         await Task.Delay(100);
         
-        supportProfile.Touch();
+        supportProfile.UpdateTimestamp();
         await _repository.UpdateAsync(supportProfile);
 
         var updated = await _repository.GetByIdAsync(supportProfile.Id);
@@ -197,13 +197,13 @@ public class SupportUserProfileRepositoryTests
 
             // Act - First update
             await Task.Delay(100);
-            supportProfile.Touch();
+            supportProfile.UpdateTimestamp();
             await _repository.UpdateAsync(supportProfile);
             var firstUpdate = await _repository.GetByIdAsync(supportProfile.Id);
 
             // Act - Second update
             await Task.Delay(100);
-            supportProfile.Touch();
+            supportProfile.UpdateTimestamp();
             await _repository.UpdateAsync(supportProfile);
             var secondUpdate = await _repository.GetByIdAsync(supportProfile.Id);
 
@@ -227,7 +227,7 @@ public class SupportUserProfileRepositoryTests
 
         // Act
         await Task.Delay(100); // ensure UpdatedAt will be different
-        supportProfile.Touch();
+        supportProfile.UpdateTimestamp();
         await _repository.UpdateAsync(supportProfile);
 
         // Assert
@@ -272,7 +272,7 @@ public class SupportUserProfileRepositoryTests
                 tasks.Add(Task.Run(async () =>
                 {
                     await Task.Delay(10);
-                    supportProfile.Touch();
+                    supportProfile.UpdateTimestamp();
                     await _repository.UpdateAsync(supportProfile);
                 }));
             }

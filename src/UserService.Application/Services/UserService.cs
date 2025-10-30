@@ -135,7 +135,7 @@ public class UserService(
         await userRepository.UpdateAsync(user);
 
         // Update support profile timestamp
-        supportProfile.Touch();
+        supportProfile.UpdateTimestamp();
         await supportUserProfileRepository.UpdateAsync(supportProfile);
 
         // Verify update
