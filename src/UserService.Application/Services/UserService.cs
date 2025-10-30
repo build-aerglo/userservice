@@ -247,5 +247,97 @@ public class UserService(
         );
     }
 
+    public async Task UpdateBusinessAccount(UpdateBusinessUserDto dto)
+    {
+        // confirm business guid exists
+        var savedBusiness = await businessRepRepository.GetByIdAsync(dto.Id);
+        if (savedBusiness == null)
+            throw new BusinessNotFoundException(dto.Id);
+        
+        // get user
+        var user = await userRepository.GetByIdAsync(savedBusiness.UserId);
+        if(user is null)
+            throw new UserNotFoundException(savedBusiness.UserId);
+        
+        // update business user on business service with business guid
+        var isUpdated = await businessServiceClient.UpdateBusinessAsync(dto);
+        if (!isUpdated) 
+            throw new BusinessNotUpdatedException($"Business with id {dto.Id} could not be updated..");
+        
+        // update user with user id
+        user.Update(dto.Email, dto.Phone, dto.Address);
+        await userRepository.UpdateAsync(user);
+        
+        // update business user on user service
+        savedBusiness.UpdateBusiness(dto.BranchName, dto.BranchAddress);
+        await businessRepRepository.UpdateAsync(savedBusiness);
 
+    }
+    
+    // public async Task DeleteEndUserAsync(Guid id)
+    // {
+    //     var result = await endUserProfileRepository.GetByIdAsync(id);
+    //     if(result is null)
+    //         throw new UserNotFoundException(id);
+    //
+    //     await endUserProfileRepository.DeleteAsync(id);
+    // }
+    //
+    // public async Task DeleteSupportUserAsync(Guid id)
+    // {
+    //     var result = await supportUserProfileRepository.GetByIdAsync(id);
+    //     if(result is null)
+    //         throw new UserNotFoundException(id);
+    //     
+    //     await supportUserProfileRepository.DeleteAsync(id);
+    // }
+    
+    public async Task DeleteUserAsync(Guid id, string type)
+    {
+        Guid userId = Guid.Empty;
+
+        switch (type.ToLowerInvariant())
+        {
+            case "end_user":
+            {
+                var result = await endUserProfileRepository.GetByIdAsync(id);
+                if (result is null)
+                    throw new UserNotFoundException(id);
+
+                await endUserProfileRepository.DeleteAsync(id);
+                userId = result.UserId;
+                break;
+            }
+
+            case "support_user":
+            {
+                var result = await supportUserProfileRepository.GetByIdAsync(id);
+                if (result is null)
+                    throw new UserNotFoundException(id);
+
+                await supportUserProfileRepository.DeleteAsync(id);
+                userId = result.UserId;
+                break;
+            }
+             case "business_user":
+            {
+                var result = await businessRepRepository.GetByIdAsync(id);
+                if (result is null)
+                    throw new UserNotFoundException(id);
+
+                await businessRepRepository.DeleteAsync(id);
+                userId = result.UserId;
+                break;
+            }
+            
+
+            default:
+                throw new UserTypeNotFoundException($"User Type {type} must be a valid user type");
+        }
+        
+        if (userId != Guid.Empty)
+        {
+            await userRepository.DeleteAsync(userId);
+        }
+    }
 }
