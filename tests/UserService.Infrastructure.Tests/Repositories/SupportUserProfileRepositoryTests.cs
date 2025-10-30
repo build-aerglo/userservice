@@ -107,7 +107,7 @@ public class SupportUserProfileRepositoryTests
         // Wait a bit to ensure timestamp difference
         await Task.Delay(100);
         
-        supportProfile.Touch();
+        supportProfile.UpdateTimestamp();
         await _repository.UpdateAsync(supportProfile);
 
         var updated = await _repository.GetByIdAsync(supportProfile.Id);
@@ -181,4 +181,107 @@ public class SupportUserProfileRepositoryTests
         var result = await _repository.GetByIdAsync(supportProfile.Id);
         Assert.That(result, Is.Null, "Support profile should be cascade deleted when user is deleted");
     }
+
+    //✅ Test: Update with multiple field changes
+    [Test]
+    public async Task UpdateAsync_ShouldPersistMultipleTimestampUpdates()
+        {
+            // Arrange
+            var user = new User("multi_update", "multi@support.com", "1111111111", "support_user", "Multi St");
+            await _userRepository.AddAsync(user);
+
+            var supportProfile = new SupportUserProfile(user.Id);
+            await _repository.AddAsync(supportProfile);
+
+            var originalUpdatedAt = supportProfile.UpdatedAt;
+
+            // Act - First update
+            await Task.Delay(100);
+            supportProfile.UpdateTimestamp();
+            await _repository.UpdateAsync(supportProfile);
+            var firstUpdate = await _repository.GetByIdAsync(supportProfile.Id);
+
+            // Act - Second update
+            await Task.Delay(100);
+            supportProfile.UpdateTimestamp();
+            await _repository.UpdateAsync(supportProfile);
+            var secondUpdate = await _repository.GetByIdAsync(supportProfile.Id);
+
+            // Assert
+            Assert.That(firstUpdate!.UpdatedAt, Is.GreaterThan(originalUpdatedAt));
+            Assert.That(secondUpdate!.UpdatedAt, Is.GreaterThan(firstUpdate.UpdatedAt));
+        }
+
+    // ✅ Test: Verify UpdateAsync doesn't modify CreatedAt
+    [Test]
+    public async Task UpdateAsync_ShouldNotModifyCreatedAt()
+    {
+        // Arrange
+        var user = new User("created_check", "created@support.com", "2222222222", "support_user", "Created St");
+        await _userRepository.AddAsync(user);
+
+        var supportProfile = new SupportUserProfile(user.Id);
+        await _repository.AddAsync(supportProfile);
+
+        var originalCreatedAt = supportProfile.CreatedAt;
+
+        // Act
+        await Task.Delay(100); // ensure UpdatedAt will be different
+        supportProfile.UpdateTimestamp();
+        await _repository.UpdateAsync(supportProfile);
+
+        // Assert
+        var updated = await _repository.GetByIdAsync(supportProfile.Id);
+
+        // Round both times to milliseconds to avoid precision mismatch
+        DateTime RoundMs(DateTime dt) => new DateTime(dt.Ticks - (dt.Ticks % TimeSpan.TicksPerMillisecond), dt.Kind);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(RoundMs(updated!.CreatedAt), Is.EqualTo(RoundMs(originalCreatedAt)));
+            Assert.That(RoundMs(updated.UpdatedAt), Is.GreaterThan(RoundMs(originalCreatedAt)));
+        });
+    }
+
+    // ✅ Test: Update non-existent profile should not throw exception
+    [Test]
+        public async Task UpdateAsync_WithNonExistentId_ShouldNotThrowException()
+        {
+            // Arrange
+            var nonExistentProfile = new SupportUserProfile(Guid.NewGuid());
+
+            // Act & Assert
+            Assert.DoesNotThrowAsync(async () => await _repository.UpdateAsync(nonExistentProfile));
+        }
+
+        // ✅ Test: Concurrent updates maintain data integrity
+        [Test]
+        public async Task UpdateAsync_ConcurrentUpdates_ShouldMaintainDataIntegrity()
+        {
+            // Arrange
+            var user = new User("concurrent_test", "concurrent@support.com", "3333333333", "support_user", "Concurrent St");
+            await _userRepository.AddAsync(user);
+
+            var supportProfile = new SupportUserProfile(user.Id);
+            await _repository.AddAsync(supportProfile);
+
+            // Act - Simulate concurrent updates
+            var tasks = new List<Task>();
+            for (int i = 0; i < 5; i++)
+            {
+                tasks.Add(Task.Run(async () =>
+                {
+                    await Task.Delay(10);
+                    supportProfile.UpdateTimestamp();
+                    await _repository.UpdateAsync(supportProfile);
+                }));
+            }
+
+            await Task.WhenAll(tasks);
+
+            // Assert
+            var result = await _repository.GetByIdAsync(supportProfile.Id);
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result!.UserId, Is.EqualTo(user.Id));
+        }
 }
