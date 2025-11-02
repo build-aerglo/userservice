@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using UserService.Application.DTOs;
 using UserService.Application.Interfaces;
 using UserService.Domain.Entities;
@@ -11,7 +12,9 @@ public class UserService(
     IBusinessRepRepository businessRepRepository,
     IBusinessServiceClient businessServiceClient,
     ISupportUserProfileRepository supportUserProfileRepository,
-    IEndUserProfileRepository endUserProfileRepository
+    IEndUserProfileRepository endUserProfileRepository,
+    IAuth0ManagementService _auth0,
+    IConfiguration _config
 ) : IUserService
 {
 
@@ -22,6 +25,8 @@ public class UserService(
         var businessExists = await businessServiceClient.BusinessExistsAsync(dto.BusinessId);
         if (!businessExists)
             throw new BusinessNotFoundException(dto.BusinessId);
+        
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, _config["Auth0:Roles:BusinessUser"]);
 
         // ✅ 2. Create the user entity
         var user = new User(
@@ -29,7 +34,8 @@ public class UserService(
             email: dto.Email,
             phone: dto.Phone,
             userType: "business_user",
-            address: dto.Address
+            address: dto.Address,
+            auth0UserId
         );
         // ✅ 3. Save user
         await userRepository.AddAsync(user);
@@ -65,6 +71,7 @@ public class UserService(
             Address: user.Address,
             BranchName: businessRep.BranchName,
             BranchAddress: businessRep.BranchAddress,
+            Auth0UserId: auth0UserId,
             CreatedAt: user.CreatedAt
         );
     }
@@ -76,7 +83,7 @@ public class UserService(
         var user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             throw new SubBusinessUserNotFoundException(userId);
-
+        
         //Get existing business rep record
         var businessRep = await businessRepRepository.GetByUserIdAsync(userId);
         if (businessRep is null)
@@ -111,6 +118,7 @@ public class UserService(
             Address: updatedUser.Address,
             BranchName: updatedBusinessRep.BranchName,
             BranchAddress: updatedBusinessRep.BranchAddress,
+            Auth0UserId: string.Empty,
             CreatedAt: updatedUser.CreatedAt
         );
     }
@@ -120,18 +128,21 @@ public class UserService(
 
     public async Task<SupportUserResponseDto> CreateSupportUserAsync(CreateSupportUserDto dto)
     {
+        // validate email address
+        if (await userRepository.EmailExistsAsync(dto.Email))
+            throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
+        
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, _config["Auth0:Roles:SupportUser"]);
+        
         // ✅ 1. Create the user entity with support_user type
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
             userType: "support_user",
-            address: dto.Address
+            address: dto.Address,
+            auth0UserId:auth0UserId
         );
-        
-        // validate email address
-        if (await userRepository.EmailExistsAsync(dto.Email))
-            throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
 
         // ✅ 2. Save user
         await userRepository.AddAsync(user);
@@ -159,6 +170,7 @@ public class UserService(
             Email: user.Email,
             Phone: user.Phone,
             Address: user.Address,
+            Auth0UserId: auth0UserId,
             CreatedAt: user.CreatedAt
         );
     }
@@ -172,9 +184,11 @@ public class UserService(
         var businessId = await businessServiceClient.CreateBusinessAsync(userPayload);
         if (businessId == null || businessId == Guid.Empty)
             throw new BusinessUserCreationFailedException("Business creation failed: BusinessId is missing from services.");
+        
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(userPayload.Email, userPayload.Name, _config["Auth0:Roles:BusinessUser"]);
 
         // save user
-        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, userPayload.UserType, userPayload.Address);
+        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, userPayload.UserType, userPayload.Address,auth0UserId);
         await userRepository.AddAsync(user);
 
         // confirm save
@@ -203,6 +217,8 @@ public class UserService(
         // ✅ 1. Validate email uniqueness
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
+        
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, _config["Auth0:Roles:EndUser"]);
 
         // ✅ 2. Create user entity
         var user = new User(
@@ -210,7 +226,8 @@ public class UserService(
             email: dto.Email,
             phone: dto.Phone,
             userType: "end_user",
-            address: dto.Address
+            address: dto.Address,
+            auth0UserId
         );
 
         // ✅ 3. Save user
@@ -243,6 +260,7 @@ public class UserService(
             Phone: user.Phone,
             Address: user.Address,
             SocialMedia: endUserProfile.SocialMedia,
+            Auth0UserId:auth0UserId,
             CreatedAt: user.CreatedAt
         );
     }
