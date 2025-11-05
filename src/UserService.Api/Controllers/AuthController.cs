@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserService.Application.DTOs;
@@ -12,7 +13,6 @@ public class AuthController(
     IRefreshTokenCookieService refreshCookie)
     : ControllerBase
 {
-    // ✅ User login with Auth0, sets HttpOnly refresh cookie
     [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest dto)
@@ -28,9 +28,11 @@ public class AuthController(
         {
             access_token = token.Access_Token,
             id_token = token.Id_Token,
-            expires_in = token.Expires_In
+            expires_in = token.Expires_In,
+            roles = token.Roles // ✅ include roles in response
         });
     }
+
 
     // ✅ Refresh silently (SPA uses this when access token expires)
     [AllowAnonymous]

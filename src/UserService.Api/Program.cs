@@ -77,8 +77,9 @@ builder.Services
 
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            RoleClaimType = "permissions", // OR "roles" depending on how Auth0 sends role claims
+            RoleClaimType = "https://user-service.aerglotechnology.com/roles"
         };
+
 
         options.Events = new JwtBearerEvents
         {
