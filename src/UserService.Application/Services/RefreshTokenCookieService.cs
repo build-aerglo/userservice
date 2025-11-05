@@ -12,9 +12,9 @@ public class RefreshTokenCookieService : IRefreshTokenCookieService
         {
             HttpOnly = true,
             Secure = true,
-            SameSite = SameSiteMode.Strict,
-            Path = "/api/auth/refresh",
-            MaxAge = TimeSpan.FromDays(30)
+            SameSite = SameSiteMode.None, // ✅ Required for SPA + localhost
+            Path = "/",                   // ✅ Send cookie to all API endpoints
+            Expires = DateTimeOffset.UtcNow.AddDays(30)
         });
     }
 
@@ -27,8 +27,9 @@ public class RefreshTokenCookieService : IRefreshTokenCookieService
         {
             HttpOnly = true,
             Secure = true,
-            SameSite = SameSiteMode.Strict,
-            Path = "/api/auth/refresh"
+            SameSite = SameSiteMode.None,
+            Path = "/"
         });
     }
 }
+

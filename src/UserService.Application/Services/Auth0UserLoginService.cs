@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using UserService.Application.DTOs;
+using UserService.Domain.Exceptions;
 
 namespace UserService.Application.Services;
 
@@ -18,36 +19,34 @@ public class Auth0UserLoginService(HttpClient httpClient, IConfiguration config)
             audience = config["Auth0:Audience"],
             client_id = config["Auth0:ClientId"],
             client_secret = config["Auth0:ClientSecret"],
-            realm = config["Auth0:DbConnection"], 
+            realm = config["Auth0:DbConnection"],
             scope = "openid profile email offline_access"
         };
-        
+
         var response = await httpClient.PostAsJsonAsync(
-         //   $"https://dev-jx8cz5q0wcoddune.us.auth0.com/oauth/token", body);
-        $"https://{config["Auth0:Domain"]}/oauth/token", body);
+            $"https://{config["Auth0:Domain"]}/oauth/token", body
+        );
 
-
-        response.EnsureSuccessStatusCode();
+        // ✅ If login fails, throw custom exception
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<Auth0ErrorResponse>();
+            throw new AuthLoginFailedException(error?.Error, error?.Error_Description);
+        }
 
         var token = await response.Content.ReadFromJsonAsync<TokenResponse>()
                     ?? throw new Exception("Auth0 login failed");
 
-        //  Decode the ID token to extract roles
+        // ✅ Decode ID token & extract roles
         var handler = new JwtSecurityTokenHandler();
         var jwt = handler.ReadJwtToken(token.Id_Token);
 
-        var rolesClaimKey = $"{config["Auth0:Audience"]}/roles"; // custom namespace
+        var rolesClaimKey = $"{config["Auth0:Audience"]}/roles";
 
         if (jwt.Payload.TryGetValue(rolesClaimKey, out var rolesObj) &&
             rolesObj is JsonElement json && json.ValueKind == JsonValueKind.Array)
         {
-            token.Roles = json.EnumerateArray()
-                .Select(r => r.GetString()!)
-                .ToList();
-        }
-        else
-        {
-            token.Roles = new List<string>();
+            token.Roles = json.EnumerateArray().Select(r => r.GetString()!).ToList();
         }
 
         return token;

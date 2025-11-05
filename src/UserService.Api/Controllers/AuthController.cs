@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserService.Application.DTOs;
 using UserService.Application.Services;
+using UserService.Domain.Exceptions;
 
 namespace UserService.Api.Controllers;
 
@@ -17,24 +18,45 @@ public class AuthController(
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest dto)
     {
-        var token = await auth0Login.LoginAsync(dto.Email, dto.Password);
-
-        if (token.Refresh_Token == null)
-            return Unauthorized("Auth0 did not return refresh token");
-
-        refreshCookie.SetRefreshToken(Response, token.Refresh_Token);
-
-        return Ok(new
+        try
         {
-            access_token = token.Access_Token,
-            id_token = token.Id_Token,
-            expires_in = token.Expires_In,
-            roles = token.Roles // ✅ include roles in response
-        });
+            var token = await auth0Login.LoginAsync(dto.Email, dto.Password);
+
+            if (token.Refresh_Token == null)
+                return Unauthorized(new { error = "Refresh token not returned. Check Auth0 config." });
+
+            refreshCookie.SetRefreshToken(Response, token.Refresh_Token);
+
+            return Ok(new
+            {
+                access_token = token.Access_Token,
+                id_token = token.Id_Token,
+                expires_in = token.Expires_In,
+                roles = token.Roles
+            });
+        }
+        catch (AuthLoginFailedException ex)
+        {
+            // Login failed — return clean error to UI
+            return Unauthorized(new
+            {
+                error = "invalid_credentials",
+                message = ex.Message // "Wrong email or password"
+            });
+        }
+        catch (Exception ex)
+        {
+            //  Unexpected error 
+            return StatusCode(500, new
+            {
+                error = "server_error",
+                message = "Unexpected error occurred during login."
+            });
+        }
     }
 
 
-    // ✅ Refresh silently (SPA uses this when access token expires)
+    // Refresh silently (SPA uses this when access token expires)
     [AllowAnonymous]
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh()
@@ -57,8 +79,8 @@ public class AuthController(
         });
     }
 
-    // ✅ Logout - clear cookie & revoke token in Auth0 (optional but recommended)
-    [Authorize]
+    //  Logout - clear cookie & revoke token in Auth0 (optional but recommended)
+    [AllowAnonymous]
     [HttpPost("logout")]
     public IActionResult Logout()
     {
