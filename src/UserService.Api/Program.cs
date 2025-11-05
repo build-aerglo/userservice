@@ -64,6 +64,25 @@ builder.Services.Configure<CookiePolicyOptions>(options =>
     options.Secure = CookieSecurePolicy.Always;
 });
 
+// ---------- CORS ----------
+var allowedOrigins = new[]
+{
+    "https://web-client-zeta-six.vercel.app", 
+    "http://localhost:5173",                  
+    "http://localhost:3000"
+};
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendPolicy", policy =>
+    {
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials(); // Required for refresh token cookies
+    });
+});
+
 // ---------- Auth0 JWT Auth ----------
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -79,7 +98,6 @@ builder.Services
         {
             RoleClaimType = "https://user-service.aerglotechnology.com/roles"
         };
-
 
         options.Events = new JwtBearerEvents
         {
@@ -141,8 +159,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Order is important: CORS before cookies/auth
+app.UseCors("FrontendPolicy");
 app.UseCookiePolicy();
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
 app.Run();
