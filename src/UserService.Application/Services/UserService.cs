@@ -64,4 +64,18 @@ public class UserService(
             CreatedAt: user.CreatedAt
         );
     }
+
+    public async Task<SettingsDto> GetSettingsAsync(Guid userId)
+    {
+        var settings = await userRepository.GetSettingsByUserIdAsync(userId);
+
+        if (settings == null)
+            throw new Exception("Settings not found");
+
+        return new SettingsDto(
+            settings.UserId,
+            settings.NotificationPreferences,
+            settings.DarkMode
+        );
+    }
 }

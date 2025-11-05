@@ -61,4 +61,19 @@ public class UserRepository : IUserRepository
         using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, new { Id = id });
     }
+    
+    public async Task<Settings?> GetSettingsByUserIdAsync(Guid userId)
+    {
+        const string query = @"
+        SELECT 
+            user_id AS UserId,
+            notification_preferences AS NotificationPreferences, -- JSONB column
+            dark_mode AS DarkMode
+        FROM user_settings
+        WHERE user_id = @UserId
+    ";
+
+        using var con = new NpgsqlConnection(_connectionString);
+        return await con.QuerySingleOrDefaultAsync<Settings>(query, new { UserId = userId });
+    }
 }

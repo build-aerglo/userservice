@@ -38,4 +38,12 @@ public class UserController(IUserService service, ILogger<UserController> logger
             return StatusCode(500, new { error = "Internal server error occurred." });
         }
     }
+    
+    [HttpGet("settings")]
+    public async Task<IActionResult> UserSettings([FromQuery] Guid userId)
+    {
+        var result = await service.GetSettingsAsync(userId);
+        return Ok(result);
+    }
+
 }

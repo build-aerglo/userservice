@@ -6,5 +6,6 @@ namespace UserService.Application.Services
     public interface IUserService
     {
 		Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto);
+        Task<SettingsDto> GetSettingsAsync(Guid userId);
     }
 }
