@@ -98,4 +98,21 @@ public class BusinessRepRepository : IBusinessRepRepository
         await using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, new { Id = id });
     }
+    
+    /// <summary>
+    /// Gets the parent/first business rep for a business (earliest created_at).
+    /// This is the rep who has authority to modify business-level settings (DnD, ReviewsPrivate).
+    /// </summary>
+    public async Task<BusinessRep?> GetParentRepByBusinessIdAsync(Guid businessId)
+    {
+        const string sql = @"
+            SELECT * 
+            FROM business_reps 
+            WHERE business_id = @BusinessId
+            ORDER BY created_at ASC
+            LIMIT 1;";
+
+        await using var conn = CreateConnection();
+        return await conn.QueryFirstOrDefaultAsync<BusinessRep>(sql, new { BusinessId = businessId });
+    }
 }
