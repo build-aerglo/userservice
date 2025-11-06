@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserService.Application.DTOs;
 using UserService.Application.Services;
@@ -9,6 +10,8 @@ namespace UserService.Api.Controllers;
 [Route("api/[controller]")]
 public class UserController(IUserService service, ILogger<UserController> logger) : ControllerBase
 {
+    // BUSINESS USER creates sub-business users
+    [Authorize(Roles = "business_user")]
     [HttpPost("sub-business")]
     public async Task<IActionResult> CreateSubBusinessUser([FromBody] CreateSubBusinessUserDto dto)
     {
@@ -18,29 +21,45 @@ public class UserController(IUserService service, ILogger<UserController> logger
         try
         {
             var result = await service.CreateSubBusinessUserAsync(dto);
-            
-            var location = Url.Action("Get", "User", new { id = result.UserId });
-            return Created(location ?? string.Empty, result);
+
+            return Created("", new 
+            {
+                result.UserId,
+                result.BusinessId,
+                result.BusinessRepId,
+                result.Username,
+                result.Email,
+                result.Phone,
+                result.Address,
+                result.BranchName,
+                result.BranchAddress,
+                result.CreatedAt,
+                result.Auth0UserId   // ✅ return Auth0 ID
+            });
         }
-        catch (BusinessNotFoundException ex)
-        {
-            logger.LogWarning(ex, "Business not found: {BusinessId}", dto.BusinessId);
-            return NotFound(new { error = ex.Message });
-        }
-        catch (UserCreationFailedException ex)
-        {
-            logger.LogError(ex, "User creation failed: {Username}", dto.Username);
-            return StatusCode(500, new { error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Unexpected error creating sub-business user");
-            return StatusCode(500, new { error = "Internal server error occurred." });
-        }
+        catch (BusinessNotFoundException ex) { return NotFound(new { error = ex.Message }); }
+        catch (UserCreationFailedException ex) { return StatusCode(500, new { error = ex.Message }); }
     }
-    
-    // Support User Routes 
-	[HttpPost("support")]
+
+    [Authorize(Roles = "business_user")]
+    [HttpPut("sub-business/{userId:guid}")]
+    public async Task<IActionResult> UpdateSubBusinessUser(Guid userId, [FromBody] UpdateSubBusinessUserDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var result = await service.UpdateSubBusinessUserAsync(userId, dto);
+            return Ok(result);
+        }
+        catch (SubBusinessUserNotFoundException ex) { return NotFound(new { error = ex.Message }); }
+        catch (SubBusinessUserUpdateFailedException ex) { return StatusCode(500, new { error = ex.Message }); }
+    }
+
+    // SUPPORT ADMIN creates support users
+    [Authorize(Roles = "support_user")]
+    [HttpPost("support")]
     public async Task<IActionResult> CreateSupportUser([FromBody] CreateSupportUserDto dto)
     {
         if (!ModelState.IsValid)
@@ -49,50 +68,48 @@ public class UserController(IUserService service, ILogger<UserController> logger
         try
         {
             var result = await service.CreateSupportUserAsync(dto);
-            
-            var location = Url.Action("Get", "User", new { id = result.UserId });
-            return Created(location ?? string.Empty, result);
+
+            return Created("", new
+            {
+                result.UserId,
+                result.Email,
+                result.Username,
+                result.SupportUserProfileId,
+                result.CreatedAt,
+                result.Auth0UserId  // ✅ return Auth0 ID
+            });
         }
-        catch (DuplicateUserEmailException ex)
-        {
-            logger.LogError(ex, "Email already exist: {Email}", dto.Email);
-            return StatusCode(500, new { error = ex.Message });
-        }
-        catch (UserCreationFailedException ex)
-        {
-            logger.LogError(ex, "Support user creation failed: {Username}", dto.Username);
-            return StatusCode(500, new { error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Unexpected error creating support user");
-            return StatusCode(500, new { error = "Internal server error occurred." });
-        }
+        catch (DuplicateUserEmailException ex) { return Conflict(new { error = ex.Message }); }
+        catch (UserCreationFailedException ex) { return StatusCode(500, new { error = ex.Message }); }
     }
-    
-    [HttpPost("create-business-user")]
+
+    // PUBLIC business registration
+    [AllowAnonymous]
+    [HttpPost("business")]
     public async Task<IActionResult> CreateBusinessUser([FromBody] BusinessUserDto dto)
     {
         var (user, businessId, business) = await service.RegisterBusinessAccountAsync(dto);
 
-        return CreatedAtAction(
-            nameof(CreateBusinessUser),
-            new { id = businessId },
-            new
-            {
-                User = user,
-                BusinessId = businessId,
-                Business = business
-            }
-        );
+        return Created("", new
+        {
+            user.Id,
+            user.Email,
+            businessId,
+            business,
+            user.Auth0UserId  // ✅ return Auth0 ID
+        });
     }
-    
-    [HttpGet("get-business-rep-user/{id:guid}")]
+
+    [Authorize(Roles = "business_user,support_user")]
+    [HttpGet("business/{id:guid}")]
     public async Task<IActionResult> GetBusinessUser(Guid id)
     {
         var result = await service.GetBusinessRepByIdAsync(id);
         return result is not null ? Ok(result) : NotFound();
     }
+
+    // PUBLIC end-user sign-up
+    [AllowAnonymous]
     
     // ---------------------- END USER ---------------------- 
     [HttpPost("end-user")]
@@ -105,24 +122,20 @@ public class UserController(IUserService service, ILogger<UserController> logger
         {
             var result = await service.CreateEndUserAsync(dto);
 
-            var location = Url.Action("Get", "User", new { id = result.UserId });
-            return Created(location ?? string.Empty, result);
+            return Created("", new
+            {
+                result.UserId,
+                result.Username,
+                result.Email,
+                result.Phone,
+                result.Address,
+                result.SocialMedia,
+                result.CreatedAt,
+                result.Auth0UserId  // ✅ return Auth0 ID
+            });
         }
-        catch (DuplicateUserEmailException ex)
-        {
-            logger.LogError(ex, "Email already exists: {Email}", dto.Email);
-            return Conflict(new { error = ex.Message });
-        }
-        catch (UserCreationFailedException ex)
-        {
-            logger.LogError(ex, "End user creation failed: {Username}", dto.Username);
-            return StatusCode(500, new { error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Unexpected error creating end user");
-            return StatusCode(500, new { error = "Internal server error occurred." });
-        }
+        catch (DuplicateUserEmailException ex) { return Conflict(new { error = ex.Message }); }
+        catch (UserCreationFailedException ex) { return StatusCode(500, new { error = ex.Message }); }
     }
     
     [HttpPatch("update-business-user")]

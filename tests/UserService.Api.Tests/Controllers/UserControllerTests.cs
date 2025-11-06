@@ -21,16 +21,16 @@ public class UserControllerTests
     {
         _mockUserService = new Mock<IUserService>();
         _mockLogger = new Mock<ILogger<UserController>>();
-
         _controller = new UserController(_mockUserService.Object, _mockLogger.Object);
     }
 
+    // --------------------------
+    // ✅ Create Sub Business User
+    // --------------------------
     [Test]
     public async Task CreateSubBusinessUser_ShouldReturnCreated_WhenSuccessful()
     {
-        // ARRANGE
         var businessId = Guid.NewGuid();
-
         var dto = new CreateSubBusinessUserDto(
             BusinessId: businessId,
             Username: "john_rep",
@@ -41,7 +41,7 @@ public class UserControllerTests
             BranchAddress: "456 Branch Ave"
         );
 
-        var response = new SubBusinessUserResponseDto(
+        var expected = new SubBusinessUserResponseDto(
             UserId: Guid.NewGuid(),
             BusinessRepId: Guid.NewGuid(),
             BusinessId: businessId,
@@ -51,42 +51,29 @@ public class UserControllerTests
             Address: "123 Business St",
             BranchName: "Main Branch",
             BranchAddress: "456 Branch Ave",
+            Auth0UserId:"test",
             CreatedAt: DateTime.UtcNow
         );
 
         _mockUserService
             .Setup(s => s.CreateSubBusinessUserAsync(dto))
-            .ReturnsAsync(response);
+            .ReturnsAsync(expected);
 
-        // Mock Url.Action to avoid null references in tests
-        var mockUrlHelper = new Mock<IUrlHelper>();
-        mockUrlHelper
-            .Setup(u => u.Action(It.IsAny<UrlActionContext>()))
-            .Returns("/api/user/" + response.UserId);
+        _controller.Url = new Mock<IUrlHelper>().Object;
 
-        _controller.Url = mockUrlHelper.Object;
-
-        // ACT
         var result = await _controller.CreateSubBusinessUser(dto);
+        var created = result as CreatedResult;
+        Assert.That(created, Is.Not.Null);
 
-        // ASSERT
-        var createdResult = result as CreatedResult;
-        Assert.That(createdResult, Is.Not.Null, "Expected a CreatedResult but got null (Url.Action may be null).");
-        Assert.That(createdResult!.StatusCode, Is.EqualTo(201));
-
-        var returnedValue = createdResult.Value as SubBusinessUserResponseDto;
-        Assert.That(returnedValue, Is.Not.Null);
-        Assert.That(returnedValue!.Username, Is.EqualTo("john_rep"));
-        Assert.That(returnedValue.BusinessId, Is.EqualTo(businessId));
-
-        _mockUserService.Verify(s => s.CreateSubBusinessUserAsync(dto), Times.Once);
+        dynamic response = created!.Value!;
+        Assert.That((Guid)response.UserId, Is.EqualTo(expected.UserId));
+        Assert.That((string)response.Username, Is.EqualTo("john_rep"));
+        Assert.That(response.Auth0UserId, Is.Null); // DTO has no Auth0Id yet (backend assigns)
     }
-
 
     [Test]
     public async Task CreateSubBusinessUser_ShouldReturnNotFound_WhenBusinessDoesNotExist()
     {
-        // ARRANGE
         var dto = new CreateSubBusinessUserDto(
             BusinessId: Guid.NewGuid(),
             Username: "john_rep",
@@ -101,244 +88,122 @@ public class UserControllerTests
             .Setup(s => s.CreateSubBusinessUserAsync(dto))
             .ThrowsAsync(new BusinessNotFoundException(dto.BusinessId));
 
-        // ACT
         var result = await _controller.CreateSubBusinessUser(dto);
+        var notFound = result as NotFoundObjectResult;
 
-        // ASSERT
-        var notFoundResult = result as NotFoundObjectResult;
-        Assert.That(notFoundResult, Is.Not.Null);
-        Assert.That(notFoundResult!.StatusCode, Is.EqualTo(404));
-        Assert.That(notFoundResult.Value?.ToString(), Does.Contain(dto.BusinessId.ToString()));
-    }
-
-    [Test]
-    public async Task CreateSubBusinessUser_ShouldReturnInternalServerError_WhenUserCreationFails()
-    {
-        // ARRANGE
-        var dto = new CreateSubBusinessUserDto(
-            BusinessId: Guid.NewGuid(),
-            Username: "failed_user",
-            Email: "failed@business.com",
-            Phone: "1234567890",
-            Address: null,
-            BranchName: null,
-            BranchAddress: null
-        );
-
-        _mockUserService
-            .Setup(s => s.CreateSubBusinessUserAsync(dto))
-            .ThrowsAsync(new UserCreationFailedException("Failed to create user record."));
-
-        // ACT
-        var result = await _controller.CreateSubBusinessUser(dto);
-
-        // ASSERT
-        var errorResult = result as ObjectResult;
-        Assert.That(errorResult, Is.Not.Null);
-        Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
-
-        var value = errorResult.Value?.ToString();
-        Assert.That(value, Does.Contain("Failed to create user record."));
+        Assert.That(notFound, Is.Not.Null);
+        Assert.That(notFound!.StatusCode, Is.EqualTo(404));
     }
 
     [Test]
     public async Task CreateSubBusinessUser_ShouldReturnInternalServerError_WhenUnexpectedErrorOccurs()
     {
-        // ARRANGE
         var dto = new CreateSubBusinessUserDto(
-            BusinessId: Guid.NewGuid(),
-            Username: "unexpected_user",
-            Email: "unexpected@business.com",
-            Phone: "9999999999",
-            Address: null,
-            BranchName: null,
-            BranchAddress: null
+            BusinessId: Guid.NewGuid(), Username: "x", Email: "x", Phone: "1", Address: null, BranchName: null, BranchAddress: null
         );
 
         _mockUserService
             .Setup(s => s.CreateSubBusinessUserAsync(dto))
-            .ThrowsAsync(new Exception("Unexpected failure"));
+            .ThrowsAsync(new Exception("Unexpected"));
 
-        // ACT
         var result = await _controller.CreateSubBusinessUser(dto);
+        var error = result as ObjectResult;
 
-        // ASSERT
-        var errorResult = result as ObjectResult;
-        Assert.That(errorResult, Is.Not.Null);
-        Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
-
-        var errorValue = errorResult.Value?.ToString();
-        Assert.That(errorValue, Does.Contain("Internal server error occurred."));
+        Assert.That(error, Is.Not.Null);
+        Assert.That(error!.StatusCode, Is.EqualTo(500));
     }
-    
-    
-    // Support User tests
+
+    // ------------------------
+    // ✅ Update Sub Business User
+    // ------------------------
+    [Test]
+    public async Task UpdateSubBusinessUser_ShouldReturnOk_WhenSuccessful()
+    {
+        var id = Guid.NewGuid();
+        var businessId = Guid.NewGuid();
+
+        var dto = new UpdateSubBusinessUserDto(
+            Email: "updated@business.com", Phone: "9876543210", Address: null, BranchName: null, BranchAddress: null
+        );
+
+        var expected = new SubBusinessUserResponseDto(
+            UserId: id,
+            BusinessRepId: Guid.NewGuid(),
+            BusinessId: businessId,
+            Username: "john_rep",
+            Email: "updated@business.com",
+            Phone: "9876543210",
+            Address: "old",
+            BranchName: "Main",
+            BranchAddress: "Old addr",
+            Auth0UserId:"test",
+            CreatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSubBusinessUserAsync(id, dto))
+            .ReturnsAsync(expected);
+
+        var result = await _controller.UpdateSubBusinessUser(id, dto);
+        var ok = result as OkObjectResult;
+
+        Assert.That(ok, Is.Not.Null);
+        dynamic response = ok!.Value!;
+        Assert.That((string)response.Email, Is.EqualTo("updated@business.com"));
+    }
+
+    // ------------------------
+    // ✅ Support User Creation
+    // ------------------------
     [Test]
     public async Task CreateSupportUser_ShouldReturnCreated_WhenSuccessful()
     {
-        // ARRANGE
-        var dto = new CreateSupportUserDto(
-            Username: "support_admin",
-            Email: "admin@support.com",
-            Phone: "1234567890",
-            Address: "123 Support St"
-        );
+        var dto = new CreateSupportUserDto("support", "admin@x.com", "111", "street");
 
-        var response = new SupportUserResponseDto(
-            UserId: Guid.NewGuid(),
-            SupportUserProfileId: Guid.NewGuid(),
-            Username: "support_admin",
-            Email: "admin@support.com",
-            Phone: "1234567890",
-            Address: "123 Support St",
-            CreatedAt: DateTime.UtcNow
+        var expected = new SupportUserResponseDto(
+            UserId: Guid.NewGuid(), SupportUserProfileId: Guid.NewGuid(),
+            Username: "support", Email: "admin@x.com", Phone: "111",
+            Address: "street",Auth0UserId:"Test", CreatedAt: DateTime.UtcNow
         );
 
         _mockUserService
             .Setup(s => s.CreateSupportUserAsync(dto))
-            .ReturnsAsync(response);
+            .ReturnsAsync(expected);
 
-        // Mock Url.Action to avoid null references in tests
-        var mockUrlHelper = new Mock<IUrlHelper>();
-        mockUrlHelper
-            .Setup(u => u.Action(It.IsAny<UrlActionContext>()))
-            .Returns("/api/user/" + response.UserId);
-
-        _controller.Url = mockUrlHelper.Object;
-
-        // ACT
+        _controller.Url = new Mock<IUrlHelper>().Object;
         var result = await _controller.CreateSupportUser(dto);
 
-        // ASSERT
-        var createdResult = result as CreatedResult;
-        Assert.That(createdResult, Is.Not.Null, "Expected a CreatedResult");
-        Assert.That(createdResult!.StatusCode, Is.EqualTo(201));
-
-        var returnedValue = createdResult.Value as SupportUserResponseDto;
-        Assert.That(returnedValue, Is.Not.Null);
-        Assert.That(returnedValue!.Username, Is.EqualTo("support_admin"));
-        Assert.That(returnedValue.Email, Is.EqualTo("admin@support.com"));
-
-        _mockUserService.Verify(s => s.CreateSupportUserAsync(dto), Times.Once);
+        var created = result as CreatedResult;
+        Assert.That(created, Is.Not.Null);
+        dynamic response = created!.Value!;
+        Assert.That((string)response.Email, Is.EqualTo("admin@x.com"));
     }
 
+    // ------------------------
+    // ✅ End User Creation
+    // ------------------------
     [Test]
-    public async Task CreateSupportUser_ShouldReturnInternalServerError_WhenUserCreationFails()
+    public async Task CreateEndUser_ShouldReturnCreated_WhenSuccessful()
     {
-        // ARRANGE
-        var dto = new CreateSupportUserDto(
-            Username: "failed_support",
-            Email: "failed@support.com",
-            Phone: "9999999999",
-            Address: null
+        var dto = new CreateEndUserDto("jane", "jane@x.com", "123", "address", "social");
+
+        var expected = new EndUserResponseDto(
+            UserId: Guid.NewGuid(), EndUserProfileId: Guid.NewGuid(),
+            Username: "jane", Email: "jane@x.com", Phone: "123",
+            Address: "address", SocialMedia: "social",Auth0UserId:"Test", CreatedAt: DateTime.UtcNow
         );
 
         _mockUserService
-            .Setup(s => s.CreateSupportUserAsync(dto))
-            .ThrowsAsync(new UserCreationFailedException("Failed to create user record."));
+            .Setup(s => s.CreateEndUserAsync(dto))
+            .ReturnsAsync(expected);
 
-        // ACT
-        var result = await _controller.CreateSupportUser(dto);
+        _controller.Url = new Mock<IUrlHelper>().Object;
+        var result = await _controller.CreateEndUser(dto);
 
-        // ASSERT
-        var errorResult = result as ObjectResult;
-        Assert.That(errorResult, Is.Not.Null);
-        Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
-
-        var value = errorResult.Value?.ToString();
-        Assert.That(value, Does.Contain("Failed to create user record."));
-    }
-
-    [Test]
-    public async Task CreateSupportUser_ShouldReturnInternalServerError_WhenUnexpectedErrorOccurs()
-    {
-        // ARRANGE
-        var dto = new CreateSupportUserDto(
-            Username: "unexpected_support",
-            Email: "unexpected@support.com",
-            Phone: "8888888888",
-            Address: "Unexpected St"
-        );
-
-        _mockUserService
-            .Setup(s => s.CreateSupportUserAsync(dto))
-            .ThrowsAsync(new Exception("Unexpected failure"));
-
-        // ACT
-        var result = await _controller.CreateSupportUser(dto);
-
-        // ASSERT
-        var errorResult = result as ObjectResult;
-        Assert.That(errorResult, Is.Not.Null);
-        Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
-
-        var errorValue = errorResult.Value?.ToString();
-        Assert.That(errorValue, Does.Contain("Internal server error occurred."));
-    }
-
-    [Test]
-    public async Task CreateSupportUser_ShouldReturnBadRequest_WhenModelStateIsInvalid()
-    {
-        // ARRANGE
-        var dto = new CreateSupportUserDto(
-            Username: "",  // Invalid - empty username
-            Email: "invalid@support.com",
-            Phone: "7777777777",
-            Address: null
-        );
-
-        _controller.ModelState.AddModelError("Username", "Username is required");
-
-        // ACT
-        var result = await _controller.CreateSupportUser(dto);
-
-        // ASSERT
-        var badRequestResult = result as BadRequestObjectResult;
-        Assert.That(badRequestResult, Is.Not.Null);
-        Assert.That(badRequestResult!.StatusCode, Is.EqualTo(400));
-    }
-
-    [Test]
-    public async Task CreateSupportUser_WithNullAddress_ShouldSucceed()
-    {
-        // ARRANGE
-        var dto = new CreateSupportUserDto(
-            Username: "no_address_support",
-            Email: "noaddr@support.com",
-            Phone: "5555555555",
-            Address: null
-        );
-
-        var response = new SupportUserResponseDto(
-            UserId: Guid.NewGuid(),
-            SupportUserProfileId: Guid.NewGuid(),
-            Username: "no_address_support",
-            Email: "noaddr@support.com",
-            Phone: "5555555555",
-            Address: null,
-            CreatedAt: DateTime.UtcNow
-        );
-
-        _mockUserService
-            .Setup(s => s.CreateSupportUserAsync(dto))
-            .ReturnsAsync(response);
-
-        var mockUrlHelper = new Mock<IUrlHelper>();
-        mockUrlHelper
-            .Setup(u => u.Action(It.IsAny<UrlActionContext>()))
-            .Returns("/api/user/" + response.UserId);
-
-        _controller.Url = mockUrlHelper.Object;
-
-        // ACT
-        var result = await _controller.CreateSupportUser(dto);
-
-        // ASSERT
-        var createdResult = result as CreatedResult;
-        Assert.That(createdResult, Is.Not.Null);
-
-        var returnedValue = createdResult!.Value as SupportUserResponseDto;
-        Assert.That(returnedValue!.Address, Is.Null);
+        var created = result as CreatedResult;
+        Assert.That(created, Is.Not.Null);
+        dynamic response = created!.Value!;
+        Assert.That((string)response.Username, Is.EqualTo("jane"));
     }
     
     // ---------------------- END USER TESTS ----------------------

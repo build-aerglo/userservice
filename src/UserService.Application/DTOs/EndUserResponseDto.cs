@@ -8,5 +8,6 @@ public record EndUserResponseDto(
     string Phone,
     string? Address,
     string? SocialMedia,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string Auth0UserId
 );
