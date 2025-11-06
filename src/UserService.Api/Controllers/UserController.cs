@@ -45,5 +45,11 @@ public class UserController(IUserService service, ILogger<UserController> logger
         var result = await service.GetSettingsAsync(userId);
         return Ok(result);
     }
+    [HttpPost("settings")]
+    public async Task<IActionResult> SetUserSettings([FromBody] SettingsDto dto)
+    {
+        var updatedSettings = await service.SetSettingsAsync(dto);
+        return Ok(updatedSettings);
+    }
 
 }

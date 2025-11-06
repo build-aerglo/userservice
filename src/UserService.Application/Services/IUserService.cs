@@ -7,5 +7,6 @@ namespace UserService.Application.Services
     {
 		Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto);
         Task<SettingsDto> GetSettingsAsync(Guid userId);
+        Task<SettingsDto> SetSettingsAsync(SettingsDto dto);
     }
 }
