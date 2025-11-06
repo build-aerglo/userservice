@@ -37,7 +37,7 @@ public class BusinessRep
     }
 
     // Method to update branch information
-    public void UpdateBranch(string? branchName, string? branchAddress)
+    public void UpdateBusiness(string? branchName, string? branchAddress)
     {
         if (!string.IsNullOrEmpty(branchName)) BranchName = branchName;
         if (!string.IsNullOrEmpty(branchAddress)) BranchAddress = branchAddress;

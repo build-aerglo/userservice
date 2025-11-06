@@ -110,6 +110,8 @@ public class UserController(IUserService service, ILogger<UserController> logger
 
     // PUBLIC end-user sign-up
     [AllowAnonymous]
+    
+    // ---------------------- END USER ---------------------- 
     [HttpPost("end-user")]
     public async Task<IActionResult> CreateEndUser([FromBody] CreateEndUserDto dto)
     {
@@ -134,5 +136,52 @@ public class UserController(IUserService service, ILogger<UserController> logger
         }
         catch (DuplicateUserEmailException ex) { return Conflict(new { error = ex.Message }); }
         catch (UserCreationFailedException ex) { return StatusCode(500, new { error = ex.Message }); }
+    }
+    
+    [HttpPatch("update-business-user")]
+    public async Task<IActionResult> UpdateBusinessUser([FromQuery] UpdateBusinessUserDto dto)
+    {
+        
+        try
+        {
+            await service.UpdateBusinessAccount(dto);
+            return NoContent();
+        }
+        catch (BusinessNotFoundException ex)
+        {
+            logger.LogError(ex, "Business Not Found: {Id}", dto.Id);
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (UserNotFoundException ex)
+        {
+            logger.LogError(ex, "User Not Found");
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (BusinessNotUpdatedException ex)
+        {
+            logger.LogError(ex, "Unexpected error when updating business");
+            return StatusCode(500, new { error = "Internal server error occurred." });
+        }
+    }
+    
+    [HttpDelete("{id:guid}/delete")]
+    public async Task<IActionResult> DeleteUser(Guid id, [FromBody] string type)
+    {
+        
+        try
+        {
+            await service.DeleteUserAsync(id, type);
+            return Ok();
+        }
+        catch (UserNotFoundException ex)
+        {
+            logger.LogError(ex, "User Not Found");
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (UserTypeNotFoundException ex)
+        {
+            logger.LogError(ex, "User Type Error");
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 }
