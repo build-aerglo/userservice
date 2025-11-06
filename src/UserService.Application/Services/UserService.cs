@@ -220,24 +220,6 @@ public class UserService(
 
     }
     
-    // public async Task DeleteEndUserAsync(Guid id)
-    // {
-    //     var result = await endUserProfileRepository.GetByIdAsync(id);
-    //     if(result is null)
-    //         throw new UserNotFoundException(id);
-    //
-    //     await endUserProfileRepository.DeleteAsync(id);
-    // }
-    //
-    // public async Task DeleteSupportUserAsync(Guid id)
-    // {
-    //     var result = await supportUserProfileRepository.GetByIdAsync(id);
-    //     if(result is null)
-    //         throw new UserNotFoundException(id);
-    //     
-    //     await supportUserProfileRepository.DeleteAsync(id);
-    // }
-    
     public async Task DeleteUserAsync(Guid id, string type)
     {
         Guid userId = Guid.Empty;
