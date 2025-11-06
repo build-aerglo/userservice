@@ -94,7 +94,7 @@ public class UserController(IUserService service, ILogger<UserController> logger
         return result is not null ? Ok(result) : NotFound();
     }
     
-    // ---------------------- END USER ----------------------
+    // ---------------------- END USER ---------------------- 
     [HttpPost("end-user")]
     public async Task<IActionResult> CreateEndUser([FromBody] CreateEndUserDto dto)
     {
