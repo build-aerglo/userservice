@@ -18,6 +18,10 @@ public class UserService(
 ) : IUserService
 {
 
+public async Task<User?> GetUserByIdAsync(Guid userId)
+{
+    return await userRepository.GetByIdAsync(userId);
+}
 	//Sub business user services
     public async Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto)
     {

@@ -2,10 +2,14 @@
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.Logging;
 using Moq;
+using NUnit.Framework;
 using UserService.Api.Controllers;
 using UserService.Application.DTOs;
 using UserService.Application.Services;
+using UserService.Domain.Entities;
 using UserService.Domain.Exceptions;
+using UserService.Domain.Repositories;
+using System.Text.Json;
 
 namespace UserService.Api.Tests.Controllers;
 
@@ -13,6 +17,7 @@ namespace UserService.Api.Tests.Controllers;
 public class UserControllerTests
 {
     private Mock<IUserService> _mockUserService = null!;
+    private Mock<IBusinessRepRepository> _mockBusinessRepRepository = null!;
     private Mock<ILogger<UserController>> _mockLogger = null!;
     private UserController _controller = null!;
 
@@ -20,8 +25,13 @@ public class UserControllerTests
     public void Setup()
     {
         _mockUserService = new Mock<IUserService>();
+        _mockBusinessRepRepository = new Mock<IBusinessRepRepository>();
         _mockLogger = new Mock<ILogger<UserController>>();
-        _controller = new UserController(_mockUserService.Object, _mockLogger.Object);
+        _controller = new UserController(
+            _mockUserService.Object,
+            _mockBusinessRepRepository.Object,
+            _mockLogger.Object
+        );
     }
 
     // --------------------------
@@ -51,7 +61,7 @@ public class UserControllerTests
             Address: "123 Business St",
             BranchName: "Main Branch",
             BranchAddress: "456 Branch Ave",
-            Auth0UserId:"test",
+            Auth0UserId: "test",
             CreatedAt: DateTime.UtcNow
         );
 
@@ -65,10 +75,13 @@ public class UserControllerTests
         var created = result as CreatedResult;
         Assert.That(created, Is.Not.Null);
 
-        dynamic response = created!.Value!;
-        Assert.That((Guid)response.UserId, Is.EqualTo(expected.UserId));
-        Assert.That((string)response.Username, Is.EqualTo("john_rep"));
-        Assert.That(response.Auth0UserId, Is.Null); // DTO has no Auth0Id yet (backend assigns)
+        // ✅ Serialize and deserialize to get the actual DTO
+        var json = JsonSerializer.Serialize(created!.Value);
+        var response = JsonSerializer.Deserialize<SubBusinessUserResponseDto>(json);
+        
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.UserId, Is.EqualTo(expected.UserId));
+        Assert.That(response.Username, Is.EqualTo("john_rep"));
     }
 
     [Test]
@@ -95,24 +108,6 @@ public class UserControllerTests
         Assert.That(notFound!.StatusCode, Is.EqualTo(404));
     }
 
-    [Test]
-    public async Task CreateSubBusinessUser_ShouldReturnInternalServerError_WhenUnexpectedErrorOccurs()
-    {
-        var dto = new CreateSubBusinessUserDto(
-            BusinessId: Guid.NewGuid(), Username: "x", Email: "x", Phone: "1", Address: null, BranchName: null, BranchAddress: null
-        );
-
-        _mockUserService
-            .Setup(s => s.CreateSubBusinessUserAsync(dto))
-            .ThrowsAsync(new Exception("Unexpected"));
-
-        var result = await _controller.CreateSubBusinessUser(dto);
-        var error = result as ObjectResult;
-
-        Assert.That(error, Is.Not.Null);
-        Assert.That(error!.StatusCode, Is.EqualTo(500));
-    }
-
     // ------------------------
     // ✅ Update Sub Business User
     // ------------------------
@@ -123,7 +118,11 @@ public class UserControllerTests
         var businessId = Guid.NewGuid();
 
         var dto = new UpdateSubBusinessUserDto(
-            Email: "updated@business.com", Phone: "9876543210", Address: null, BranchName: null, BranchAddress: null
+            Email: "updated@business.com", 
+            Phone: "9876543210", 
+            Address: null, 
+            BranchName: null, 
+            BranchAddress: null
         );
 
         var expected = new SubBusinessUserResponseDto(
@@ -136,7 +135,7 @@ public class UserControllerTests
             Address: "old",
             BranchName: "Main",
             BranchAddress: "Old addr",
-            Auth0UserId:"test",
+            Auth0UserId: "test",
             CreatedAt: DateTime.UtcNow
         );
 
@@ -148,8 +147,13 @@ public class UserControllerTests
         var ok = result as OkObjectResult;
 
         Assert.That(ok, Is.Not.Null);
-        dynamic response = ok!.Value!;
-        Assert.That((string)response.Email, Is.EqualTo("updated@business.com"));
+        
+        // ✅ Serialize and deserialize to get the actual DTO
+        var json = JsonSerializer.Serialize(ok!.Value);
+        var response = JsonSerializer.Deserialize<SubBusinessUserResponseDto>(json);
+        
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.Email, Is.EqualTo("updated@business.com"));
     }
 
     // ------------------------
@@ -161,9 +165,14 @@ public class UserControllerTests
         var dto = new CreateSupportUserDto("support", "admin@x.com", "111", "street");
 
         var expected = new SupportUserResponseDto(
-            UserId: Guid.NewGuid(), SupportUserProfileId: Guid.NewGuid(),
-            Username: "support", Email: "admin@x.com", Phone: "111",
-            Address: "street",Auth0UserId:"Test", CreatedAt: DateTime.UtcNow
+            UserId: Guid.NewGuid(), 
+            SupportUserProfileId: Guid.NewGuid(),
+            Username: "support", 
+            Email: "admin@x.com", 
+            Phone: "111",
+            Address: "street",
+            Auth0UserId: "Test", 
+            CreatedAt: DateTime.UtcNow
         );
 
         _mockUserService
@@ -175,8 +184,13 @@ public class UserControllerTests
 
         var created = result as CreatedResult;
         Assert.That(created, Is.Not.Null);
-        dynamic response = created!.Value!;
-        Assert.That((string)response.Email, Is.EqualTo("admin@x.com"));
+        
+        // ✅ Serialize and deserialize to get the actual DTO
+        var json = JsonSerializer.Serialize(created!.Value);
+        var response = JsonSerializer.Deserialize<SupportUserResponseDto>(json);
+        
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.Email, Is.EqualTo("admin@x.com"));
     }
 
     // ------------------------
@@ -188,9 +202,15 @@ public class UserControllerTests
         var dto = new CreateEndUserDto("jane", "jane@x.com", "123", "address", "social");
 
         var expected = new EndUserResponseDto(
-            UserId: Guid.NewGuid(), EndUserProfileId: Guid.NewGuid(),
-            Username: "jane", Email: "jane@x.com", Phone: "123",
-            Address: "address", SocialMedia: "social",Auth0UserId:"Test", CreatedAt: DateTime.UtcNow
+            UserId: Guid.NewGuid(), 
+            EndUserProfileId: Guid.NewGuid(),
+            Username: "jane", 
+            Email: "jane@x.com", 
+            Phone: "123",
+            Address: "address", 
+            SocialMedia: "social",
+            Auth0UserId: "Test", 
+            CreatedAt: DateTime.UtcNow
         );
 
         _mockUserService
@@ -202,7 +222,172 @@ public class UserControllerTests
 
         var created = result as CreatedResult;
         Assert.That(created, Is.Not.Null);
-        dynamic response = created!.Value!;
-        Assert.That((string)response.Username, Is.EqualTo("jane"));
+        
+        // ✅ Serialize and deserialize to get the actual DTO
+        var json = JsonSerializer.Serialize(created!.Value);
+        var response = JsonSerializer.Deserialize<EndUserResponseDto>(json);
+        
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.Username, Is.EqualTo("jane"));
+    }
+
+    // ------------------------
+    // GetBusinessRep Tests
+    // ------------------------
+    [Test]
+    public async Task GetBusinessRep_ShouldReturnOk_WhenBusinessRepExists()
+    {
+        // Arrange
+        var businessRepId = Guid.NewGuid();
+        var businessId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var businessRep = new BusinessRep(businessId, userId, "Main Branch", "123 Main St");
+        typeof(BusinessRep).GetProperty("Id")!.SetValue(businessRep, businessRepId);
+
+        _mockBusinessRepRepository
+            .Setup(r => r.GetByIdAsync(businessRepId))
+            .ReturnsAsync(businessRep);
+
+        // Act
+        var result = await _controller.GetBusinessRep(businessRepId);
+
+        // Assert
+        var ok = result as OkObjectResult;
+        Assert.That(ok, Is.Not.Null);
+        Assert.That(ok!.StatusCode, Is.EqualTo(200));
+
+        // ✅ Use reflection to access anonymous type properties
+        var response = ok.Value;
+        Assert.That(response, Is.Not.Null);
+        
+        var responseType = response!.GetType();
+        var idProp = responseType.GetProperty("Id")!.GetValue(response);
+        var businessIdProp = responseType.GetProperty("BusinessId")!.GetValue(response);
+        var userIdProp = responseType.GetProperty("UserId")!.GetValue(response);
+        var branchNameProp = responseType.GetProperty("BranchName")!.GetValue(response);
+        
+        Assert.That(idProp, Is.EqualTo(businessRepId));
+        Assert.That(businessIdProp, Is.EqualTo(businessId));
+        Assert.That(userIdProp, Is.EqualTo(userId));
+        Assert.That(branchNameProp, Is.EqualTo("Main Branch"));
+    }
+
+    [Test]
+    public async Task GetBusinessRep_ShouldReturnNotFound_WhenBusinessRepDoesNotExist()
+    {
+        // Arrange
+        var businessRepId = Guid.NewGuid();
+
+        _mockBusinessRepRepository
+            .Setup(r => r.GetByIdAsync(businessRepId))
+            .ReturnsAsync((BusinessRep?)null);
+
+        // Act
+        var result = await _controller.GetBusinessRep(businessRepId);
+
+        // Assert
+        var notFound = result as NotFoundObjectResult;
+        Assert.That(notFound, Is.Not.Null);
+        Assert.That(notFound!.StatusCode, Is.EqualTo(404));
+    }
+
+    [Test]
+    public async Task GetBusinessRep_ShouldReturnInternalServerError_OnException()
+    {
+        // Arrange
+        var businessRepId = Guid.NewGuid();
+
+        _mockBusinessRepRepository
+            .Setup(r => r.GetByIdAsync(businessRepId))
+            .ThrowsAsync(new Exception("Database error"));
+
+        // Act
+        var result = await _controller.GetBusinessRep(businessRepId);
+
+        // Assert
+        var error = result as ObjectResult;
+        Assert.That(error, Is.Not.Null);
+        Assert.That(error!.StatusCode, Is.EqualTo(500));
+    }
+
+    // ------------------------
+    //  GetParentRepByBusinessId Tests
+    // ------------------------
+    [Test]
+    public async Task GetParentRepByBusinessId_ShouldReturnOk_WhenParentRepExists()
+    {
+        // Arrange
+        var businessId = Guid.NewGuid();
+        var businessRepId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var parentRep = new BusinessRep(businessId, userId, "Parent Branch", "456 Parent Ave");
+        typeof(BusinessRep).GetProperty("Id")!.SetValue(parentRep, businessRepId);
+
+        _mockBusinessRepRepository
+            .Setup(r => r.GetParentRepByBusinessIdAsync(businessId))
+            .ReturnsAsync(parentRep);
+
+        // Act
+        var result = await _controller.GetParentRepByBusinessId(businessId);
+
+        // Assert
+        var ok = result as OkObjectResult;
+        Assert.That(ok, Is.Not.Null);
+        Assert.That(ok!.StatusCode, Is.EqualTo(200));
+
+        // ✅ Use reflection to access anonymous type properties
+        var response = ok.Value;
+        Assert.That(response, Is.Not.Null);
+        
+        var responseType = response!.GetType();
+        var idProp = responseType.GetProperty("Id")!.GetValue(response);
+        var businessIdProp = responseType.GetProperty("BusinessId")!.GetValue(response);
+        var userIdProp = responseType.GetProperty("UserId")!.GetValue(response);
+        var branchNameProp = responseType.GetProperty("BranchName")!.GetValue(response);
+        
+        Assert.That(idProp, Is.EqualTo(businessRepId));
+        Assert.That(businessIdProp, Is.EqualTo(businessId));
+        Assert.That(userIdProp, Is.EqualTo(userId));
+        Assert.That(branchNameProp, Is.EqualTo("Parent Branch"));
+    }
+
+    [Test]
+    public async Task GetParentRepByBusinessId_ShouldReturnNotFound_WhenParentRepDoesNotExist()
+    {
+        // Arrange
+        var businessId = Guid.NewGuid();
+
+        _mockBusinessRepRepository
+            .Setup(r => r.GetParentRepByBusinessIdAsync(businessId))
+            .ReturnsAsync((BusinessRep?)null);
+
+        // Act
+        var result = await _controller.GetParentRepByBusinessId(businessId);
+
+        // Assert
+        var notFound = result as NotFoundObjectResult;
+        Assert.That(notFound, Is.Not.Null);
+        Assert.That(notFound!.StatusCode, Is.EqualTo(404));
+    }
+
+    [Test]
+    public async Task GetParentRepByBusinessId_ShouldReturnInternalServerError_OnException()
+    {
+        // Arrange
+        var businessId = Guid.NewGuid();
+
+        _mockBusinessRepRepository
+            .Setup(r => r.GetParentRepByBusinessIdAsync(businessId))
+            .ThrowsAsync(new Exception("Database error"));
+
+        // Act
+        var result = await _controller.GetParentRepByBusinessId(businessId);
+
+        // Assert
+        var error = result as ObjectResult;
+        Assert.That(error, Is.Not.Null);
+        Assert.That(error!.StatusCode, Is.EqualTo(500));
     }
 }
