@@ -37,4 +37,10 @@ public interface IBusinessRepRepository
     /// Deletes a business representative record by ID.
     /// </summary>
     Task DeleteAsync(Guid id);
+    
+    /// <summary>
+    /// Gets the parent/first business rep for a business (earliest created_at).
+    /// Used for settings authorization - only parent rep can modify business-level settings.
+    /// </summary>
+    Task<BusinessRep?> GetParentRepByBusinessIdAsync(Guid businessId);
 }
