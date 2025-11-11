@@ -124,7 +124,7 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
             result.DarkMode
         );
     }
-}
+
 
     public async Task<SubBusinessUserResponseDto> UpdateSubBusinessUserAsync(Guid userId, UpdateSubBusinessUserDto dto)
     {
