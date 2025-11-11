@@ -72,7 +72,7 @@ var allowedOrigins = new[]
     "http://localhost:5173", 
     "https://clereview-dev.vercel.app",
     "http://localhost:3000",
-    "http://localhost:30001"
+    "http://localhost:3001"
 };
 
 builder.Services.AddCors(options =>
