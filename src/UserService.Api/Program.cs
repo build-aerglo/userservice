@@ -1,4 +1,8 @@
+using System.Net;
+using System.Net.Security;
+using System.Security.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using UserService.Application.Interfaces;
 using UserService.Application.Services;
@@ -8,33 +12,80 @@ using UserService.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// -------------------------------
-// 🔧 SERVICE CONFIGURATION
-// -------------------------------
-
-// 1️⃣ Add Controllers (instead of minimal APIs)
+// MVC
 builder.Services.AddControllers();
 
-// 2️⃣ Register Dapper Repositories + Application Services
+// TLS for macOS + Auth0 issue
+ServicePointManager.SecurityProtocol =
+    SecurityProtocolType.Tls12 | SecurityProtocolType.Tls13;
+
+// ---------- Database Repos ----------
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IBusinessRepRepository, BusinessRepRepository>();
+builder.Services.AddScoped<ISupportUserProfileRepository, SupportUserProfileRepository>();
+builder.Services.AddScoped<IEndUserProfileRepository, EndUserProfileRepository>();
+
+// ---------- Auth0 Login HTTP Client (TLS forced) ----------
+builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(client =>
+{
+    client.DefaultRequestVersion = HttpVersion.Version11;
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    return new SocketsHttpHandler
+    {
+        SslOptions = new SslClientAuthenticationOptions
+        {
+            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+        }
+    };
+});
+
+// Refresh cookie service
+builder.Services.AddScoped<IRefreshTokenCookieService, RefreshTokenCookieService>();
+
+// ---------- Domain Services ----------
 builder.Services.AddScoped<IUserService, UserService.Application.Services.UserService>();
 
-// 3️⃣ Register HttpClient for Business Service
+// Business service client
 builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(client =>
 {
-    var baseUrl = builder.Configuration["Services:BusinessServiceBaseUrl"];
-    if (string.IsNullOrWhiteSpace(baseUrl))
-        throw new InvalidOperationException("Missing configuration: Services:BusinessServiceBaseUrl");
-
-    client.BaseAddress = new Uri(baseUrl);
-
-    // Optional: Set defaults like timeout or headers
-    client.Timeout = TimeSpan.FromSeconds(10);
+    client.BaseAddress = new Uri(builder.Configuration["Services:BusinessServiceBaseUrl"]);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
-// 4️⃣ Configure Auth0 Authentication
+// Auth0 Management API
+builder.Services.AddHttpClient<IAuth0ManagementService, Auth0ManagementService>();
+
+// ---------- Cookie policy (needed for refresh cookie) ----------
+builder.Services.Configure<CookiePolicyOptions>(options =>
+{
+    options.MinimumSameSitePolicy = SameSiteMode.None;
+    options.Secure = CookieSecurePolicy.Always;
+});
+
+// ---------- CORS ----------
+var allowedOrigins = new[]
+{
+    "https://web-client-zeta-six.vercel.app", 
+    "https://clereview.vercel.app",
+    "http://localhost:5173", 
+    "https://clereview-dev.vercel.app",
+    "http://localhost:3000"
+};
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendPolicy", policy =>
+    {
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials(); // Required for refresh token cookies
+    });
+});
+
+// ---------- Auth0 JWT Auth ----------
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -45,34 +96,40 @@ builder.Services
         options.Authority = $"https://{domain}/";
         options.Audience = audience;
 
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            RoleClaimType = "https://user-service.aerglotechnology.com/roles"
+        };
+
         options.Events = new JwtBearerEvents
         {
-            OnAuthenticationFailed = context =>
+            OnAuthenticationFailed = ctx =>
             {
-                Console.WriteLine("❌ Authentication failed: " + context.Exception.Message);
+                Console.WriteLine("❌ Token auth failed: " + ctx.Exception.Message);
                 return Task.CompletedTask;
             },
-            OnTokenValidated = context =>
+            OnTokenValidated = ctx =>
             {
-                Console.WriteLine("✅ Token validated successfully");
+                Console.WriteLine("✅ Token validated");
                 return Task.CompletedTask;
             }
         };
     });
 
-// 5️⃣ Authorization
-builder.Services.AddAuthorization();
+// ---------- Authorization Policies ----------
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("BusinessOnly", p => p.RequireRole("business_user"));
+    options.AddPolicy("SupportOnly", p => p.RequireRole("support_user"));
+    options.AddPolicy("EndUserOnly", p => p.RequireRole("end_user"));
+    options.AddPolicy("BizOrSupport", p => p.RequireRole("business_user", "support_user"));
+});
 
-// 6️⃣ Swagger with JWT Support
+// ---------- Swagger + JWT ----------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "User Service API",
-        Version = "v1",
-        Description = "User Service Microservice implemented with DDD"
-    });
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "User Service API", Version = "v1" });
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -80,8 +137,7 @@ builder.Services.AddSwaggerGen(options =>
         Type = SecuritySchemeType.Http,
         Scheme = "bearer",
         BearerFormat = "JWT",
-        In = ParameterLocation.Header,
-        Description = "Enter 'Bearer' [space] and then your Auth0 access token.\n\nExample: Bearer eyJhbGciOiJIUzI1NiIs..."
+        In = ParameterLocation.Header
     });
 
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -89,41 +145,27 @@ builder.Services.AddSwaggerGen(options =>
         {
             new OpenApiSecurityScheme
             {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
             },
             Array.Empty<string>()
         }
     });
 });
 
-// -------------------------------
-// 🚀 BUILD APP
-// -------------------------------
+// Build
 var app = builder.Build();
 
-// ✅ Dapper naming convention fix
-Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
-
-// 🔒 HTTPS
-app.UseHttpsRedirection();
-
-// 1️⃣ Swagger setup
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-// 2️⃣ Authentication + Authorization
-app.UseAuthentication();    
+// Order is important: CORS before cookies/auth
+app.UseCors("FrontendPolicy");
+app.UseCookiePolicy();
+app.UseAuthentication();
 app.UseAuthorization();
 
-// 3️⃣ Map Controllers
 app.MapControllers();
-
-// -------------------------------
 app.Run();

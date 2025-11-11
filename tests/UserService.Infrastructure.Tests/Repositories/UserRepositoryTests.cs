@@ -54,7 +54,7 @@ public class UserRepositoryTests
     public async Task AddAsync_ShouldInsertUser_AndGetById_ShouldReturnUser()
     {
         // Arrange
-        var user = new User("test_user", "test_user@domain.com", "1234567890", "business_user", "123 Test Street");
+        var user = new User("test_user", "test_user@domain.com", "1234567890", "business_user", "123 Test Street","test");
 
         // Act
         await _repository.AddAsync(user);
@@ -72,8 +72,8 @@ public class UserRepositoryTests
     public async Task GetAllAsync_ShouldReturnUsers_WhenUsersExist()
     {
         // Arrange
-        var user1 = new User("user1", "user1@domain.com", "1111111111", "business_user", "Address 1");
-        var user2 = new User("user2", "user2@domain.com", "2222222222", "business_user", "Address 2");
+        var user1 = new User("user1", "user1@domain.com", "1111111111", "business_user", "Address 1","test");
+        var user2 = new User("user2", "user2@domain.com", "2222222222", "business_user", "Address 2","test");
 
         await _repository.AddAsync(user1);
         await _repository.AddAsync(user2);
@@ -92,7 +92,7 @@ public class UserRepositoryTests
     public async Task DeleteAsync_ShouldRemoveUser()
     {
         // Arrange
-        var user = new User("delete_user", "delete@domain.com", "4444444444", "business_user", "Delete Address");
+        var user = new User("delete_user", "delete@domain.com", "4444444444", "business_user", "Delete Address","test");
         await _repository.AddAsync(user);
 
         // Act
