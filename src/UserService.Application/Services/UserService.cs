@@ -81,6 +81,7 @@ public class UserService(
             settings = await userRepository.UpdateSettingsAsync(defaultSettings);
         }
 
+        
 
         return new SettingsDto(
             settings.UserId,
