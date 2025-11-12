@@ -79,7 +79,7 @@ builder.Services.AddCors(options =>
         policy
             .SetIsOriginAllowed(origin =>
             {
-                // ✅ Allow any localhost (any port)
+                // ✅ Allow any localhost (any port) 
                 if (origin.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase))
                     return true;
 
