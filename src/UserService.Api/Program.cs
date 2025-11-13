@@ -65,30 +65,15 @@ builder.Services.Configure<CookiePolicyOptions>(options =>
 });
 
 // ---------- CORS ----------
-var allowedOrigins = new[]
-{
-    "https://web-client-zeta-six.vercel.app", 
-    "https://clereview-dev.vercel.app",
-    "https://clereview.vercel.app"
-};
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
         policy
-            .SetIsOriginAllowed(origin =>
-            {
-                // ✅ Allow any localhost (any port) 
-                if (origin.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase))
-                    return true;
-
-                // ✅ Allow configured production domains
-                return allowedOrigins.Contains(origin);
-            })
+            .SetIsOriginAllowed(_ => true)   
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowCredentials();         
     });
 });
 
