@@ -26,17 +26,18 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
     public async Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto)
     {
         // ✅ 1. Check if the target business exists via BusinessService API
-        var businessExists = await businessServiceClient.BusinessExistsAsync(dto.BusinessId);
-        if (!businessExists)
-            throw new BusinessNotFoundException(dto.BusinessId);
+       // var businessExists = await businessServiceClient.BusinessExistsAsync(dto.BusinessId);
+      //  if (!businessExists)
+         //   throw new BusinessNotFoundException(dto.BusinessId);
         
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, _config["Auth0:Roles:BusinessUser"]);
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password,_config["Auth0:Roles:BusinessUser"]);
 
         // ✅ 2. Create the user entity
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
+            password: dto.Password,
             userType: "business_user",
             address: dto.Address,
             auth0UserId
@@ -136,13 +137,14 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
         
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, _config["Auth0:Roles:SupportUser"]);
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password,_config["Auth0:Roles:SupportUser"]);
         
         // ✅ 1. Create the user entity with support_user type
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
+            password:dto.Password,
             userType: "support_user",
             address: dto.Address,
             auth0UserId:auth0UserId
@@ -189,10 +191,10 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         if (businessId == null || businessId == Guid.Empty)
             throw new BusinessUserCreationFailedException("Business creation failed: BusinessId is missing from services.");
         
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(userPayload.Email, userPayload.Name, _config["Auth0:Roles:BusinessUser"]);
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(userPayload.Email, userPayload.Name, userPayload.Password,_config["Auth0:Roles:BusinessUser"]);
 
         // save user
-        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, userPayload.UserType, userPayload.Address,auth0UserId);
+        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, userPayload.Password, userPayload.UserType, userPayload.Address,auth0UserId);
         await userRepository.AddAsync(user);
 
         // confirm save
@@ -222,13 +224,14 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
         
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, _config["Auth0:Roles:EndUser"]);
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password,_config["Auth0:Roles:EndUser"]);
 
         // ✅ 2. Create user entity
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
+            password:dto.Password,
             userType: "end_user",
             address: dto.Address,
             auth0UserId

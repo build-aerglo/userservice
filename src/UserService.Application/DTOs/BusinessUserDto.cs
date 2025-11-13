@@ -5,6 +5,7 @@ namespace UserService.Application.DTOs;
 public record BusinessUserDto(
     string Name,
     string Email,
+    string Password,
     string Phone,
     string UserType,
     string? Address,
@@ -14,7 +15,7 @@ public record BusinessUserDto(
     List<string> CategoryIds
 )
 {
-    public BusinessUserDto() : this("", "", "", "", null, null, null, null, new List<string>()) { }
+    public BusinessUserDto() : this("", "", "", "", "",  null, null, null, null, new List<string>()) { }
 };
 
 public record BusinessFetchResponseDto
