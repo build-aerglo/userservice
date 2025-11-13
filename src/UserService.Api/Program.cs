@@ -68,21 +68,27 @@ builder.Services.Configure<CookiePolicyOptions>(options =>
 var allowedOrigins = new[]
 {
     "https://web-client-zeta-six.vercel.app", 
-    "https://clereview.vercel.app",
-    "http://localhost:5173", 
     "https://clereview-dev.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:3001"
+    "https://clereview.vercel.app"
 };
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials(); // Required for refresh token cookies
+        policy
+            .SetIsOriginAllowed(origin =>
+            {
+                // ✅ Allow any localhost (any port) 
+                if (origin.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                // ✅ Allow configured production domains
+                return allowedOrigins.Contains(origin);
+            })
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
