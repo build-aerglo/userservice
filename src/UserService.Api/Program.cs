@@ -147,17 +147,18 @@ builder.Services.AddSwaggerGen(options =>
 // Build
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+
 
 // Order is important: CORS before cookies/auth
 app.UseCors("FrontendPolicy");
 app.UseCookiePolicy();
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseDefaultFiles(); 
+app.UseStaticFiles();  
 
 app.MapControllers();
 app.Run();
