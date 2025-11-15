@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using UserService.Application.DTOs;
 using UserService.Application.Interfaces;
+using UserService.Application.Services.Auth0;
 using UserService.Domain.Entities;
 using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
@@ -25,10 +26,10 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
 	//Sub business user services
     public async Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto)
     {
-        // ✅ 1. Check if the target business exists via BusinessService API
-       // var businessExists = await businessServiceClient.BusinessExistsAsync(dto.BusinessId);
-      //  if (!businessExists)
-         //   throw new BusinessNotFoundException(dto.BusinessId);
+        // 1. Check if the target business exists via BusinessService API
+        var businessExists = await businessServiceClient.BusinessExistsAsync(dto.BusinessId);
+       if (!businessExists) 
+            throw new BusinessNotFoundException(dto.BusinessId);
         
         var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password,_config["Auth0:Roles:BusinessUser"]);
 

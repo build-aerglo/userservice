@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
+using UserService.Application.Services.Auth0;
 
 namespace UserService.Application.Services;
 
@@ -17,7 +18,7 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
         {
             client_id = config["Auth0:ClientId"],
             client_secret = config["Auth0:ClientSecret"],
-            audience = "https://dev-jx8cz5q0wcoddune.us.auth0.com/api/v2/",
+            audience = config["Auth0:ManagementAudience"],
             grant_type = "client_credentials"
         };
 

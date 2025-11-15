@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using UserService.Application.Interfaces;
 using UserService.Application.Services;
+using UserService.Application.Services.Auth0;
 using UserService.Domain.Repositories;
 using UserService.Infrastructure.Clients;
 using UserService.Infrastructure.Repositories;

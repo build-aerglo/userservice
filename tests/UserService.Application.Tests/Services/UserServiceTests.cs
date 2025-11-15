@@ -6,6 +6,7 @@ using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
 using Microsoft.Extensions.Configuration;
 using UserService.Application.Services;
+using UserService.Application.Services.Auth0;
 
 namespace UserService.Application.Tests.Services;
 

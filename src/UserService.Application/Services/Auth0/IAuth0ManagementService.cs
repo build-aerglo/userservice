@@ -1,4 +1,4 @@
-namespace UserService.Application.Services;
+namespace UserService.Application.Services.Auth0;
 
 public interface IAuth0ManagementService
 {

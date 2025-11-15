@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserService.Application.DTOs;
 using UserService.Application.Services;
+using UserService.Application.Services.Auth0;
 using UserService.Domain.Exceptions;
 
 namespace UserService.Api.Controllers;
