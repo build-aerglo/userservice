@@ -82,6 +82,51 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         );
     }
 
+    public async Task<SettingsDto> GetSettingsAsync(Guid userId)
+    {
+        var settings = await userRepository.GetSettingsByUserIdAsync(userId);
+
+        if (settings == null)
+        {
+            var defaultSettings = new Settings(
+                userId: userId,
+                notificationPreferences: new List<string>(), // or maybe ["email"]
+                darkMode: false
+            );
+
+            // Save the new default settings
+            settings = await userRepository.UpdateSettingsAsync(defaultSettings);
+        }
+
+        
+
+        return new SettingsDto(
+            settings.UserId,
+            settings.NotificationPreferences,
+            settings.DarkMode
+        );
+    }
+    public async Task<SettingsDto> SetSettingsAsync(SettingsDto dto)
+    {
+        var savedUser = await userRepository.GetByIdAsync(dto.UserId);
+        if (savedUser is null)
+            throw new Exception("No user found!!!");
+        var settings = new Settings
+        (
+            userId: savedUser.Id,
+            notificationPreferences: dto.NotificationPreferences,
+            darkMode: dto.DarkMode
+        );
+
+        var result = await userRepository.UpdateSettingsAsync(settings);
+
+        return new SettingsDto(
+            result.UserId,
+            result.NotificationPreferences,
+            result.DarkMode
+        );
+    }
+
 
     public async Task<SubBusinessUserResponseDto> UpdateSubBusinessUserAsync(Guid userId, UpdateSubBusinessUserDto dto)
     {

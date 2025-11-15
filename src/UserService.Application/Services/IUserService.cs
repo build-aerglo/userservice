@@ -7,6 +7,8 @@ namespace UserService.Application.Services
     {
 		// Business Rep Services interfaces
 		Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto);
+        Task<SettingsDto> GetSettingsAsync(Guid userId);
+        Task<SettingsDto> SetSettingsAsync(SettingsDto dto);
 		Task<SubBusinessUserResponseDto> UpdateSubBusinessUserAsync(Guid userId, UpdateSubBusinessUserDto dto);
 		//Support user Services  interfaces
 		Task<SupportUserResponseDto> CreateSupportUserAsync(CreateSupportUserDto dto);
