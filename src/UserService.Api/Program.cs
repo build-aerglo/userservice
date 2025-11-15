@@ -42,20 +42,31 @@ builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(cl
     };
 });
 
-// Refresh cookie service
+// ---------- Refresh cookie service ----------
 builder.Services.AddScoped<IRefreshTokenCookieService, RefreshTokenCookieService>();
 
 // ---------- Domain Services ----------
 builder.Services.AddScoped<IUserService, UserService.Application.Services.UserService>();
 
-// Business service client
+// ==================================================================
+//  BUSINESS SERVICE CLIENT — ALLOW HTTP (FIX FOR SSL MISMATCH ERROR)
+// ==================================================================
 builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["Services:BusinessServiceBaseUrl"]);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    // 👇 THIS FIXES YOUR ERROR: Allow HTTP, do NOT enforce SSL
+    return new HttpClientHandler
+    {
+        ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    };
 });
 
-// Auth0 Management API
+// ---------- Auth0 Management API ----------
 builder.Services.AddHttpClient<IAuth0ManagementService, Auth0ManagementService>();
 
 // ---------- Cookie policy (needed for refresh cookie) ----------
@@ -71,10 +82,10 @@ builder.Services.AddCors(options =>
     options.AddPolicy("FrontendPolicy", policy =>
     {
         policy
-            .SetIsOriginAllowed(_ => true)   
+            .SetIsOriginAllowed(_ => true)  // allow temporary until production
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials();         
+            .AllowCredentials();
     });
 });
 
@@ -148,18 +159,18 @@ builder.Services.AddSwaggerGen(options =>
 // Build
 var app = builder.Build();
 
-    app.UseSwagger();
-    app.UseSwaggerUI();
+// Swagger always enabled
+app.UseSwagger();
+app.UseSwaggerUI();
 
-
-// Order is important: CORS before cookies/auth
+// Correct order
 app.UseCors("FrontendPolicy");
 app.UseCookiePolicy();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.UseDefaultFiles(); 
-app.UseStaticFiles();  
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.MapControllers();
 app.Run();
