@@ -59,7 +59,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     }
 
     // SUPPORT ADMIN creates support users
-    [Authorize(Roles = "support_user")]
+    //[Authorize(Roles = "support_user")]
     [HttpPost("support")]
     public async Task<IActionResult> CreateSupportUser([FromBody] CreateSupportUserDto dto)
     {

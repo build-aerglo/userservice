@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using UserService.Application.DTOs;
 using UserService.Domain.Exceptions;
 
-namespace UserService.Application.Services;
+namespace UserService.Application.Services.Auth0;
 
 public class Auth0UserLoginService(HttpClient httpClient, IConfiguration config) : IAuth0UserLoginService
 {

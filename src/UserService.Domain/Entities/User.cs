@@ -4,6 +4,7 @@ public class User
 {
     public Guid Id { get; private set; }
     public string Username { get; private set; } = default!;
+    public string Password { get; private set; } = default!;
     public string Email { get; private set; } = default!;
     public string Phone { get; private set; } = default!;
     public string UserType { get; private set; } = default!;
@@ -18,12 +19,13 @@ public class User
     protected User() { }
 
     // ✅ Domain-level constructor (for creating new users in code)
-    public User(string username, string email, string phone, string userType, string? address,string auth0UserId)
+    public User(string username, string email, string phone, string password,string userType, string? address,string auth0UserId)
     {
         Id = Guid.NewGuid();
         Username = username;
         Email = email;
         Phone = phone;
+        Password = password;
         UserType = userType;
         Address = address;
         JoinDate = DateTime.UtcNow;

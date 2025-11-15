@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using UserService.Application.Interfaces;
 using UserService.Application.Services;
+using UserService.Application.Services.Auth0;
 using UserService.Domain.Repositories;
 using UserService.Infrastructure.Clients;
 using UserService.Infrastructure.Repositories;
@@ -65,23 +66,15 @@ builder.Services.Configure<CookiePolicyOptions>(options =>
 });
 
 // ---------- CORS ----------
-var allowedOrigins = new[]
-{
-    "https://web-client-zeta-six.vercel.app", 
-    "https://clereview.vercel.app",
-    "http://localhost:5173", 
-    "https://clereview-dev.vercel.app",
-    "http://localhost:3000"
-};
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials(); // Required for refresh token cookies
+        policy
+            .SetIsOriginAllowed(_ => true)   
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();         
     });
 });
 
@@ -155,17 +148,18 @@ builder.Services.AddSwaggerGen(options =>
 // Build
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+
 
 // Order is important: CORS before cookies/auth
 app.UseCors("FrontendPolicy");
 app.UseCookiePolicy();
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseDefaultFiles(); 
+app.UseStaticFiles();  
 
 app.MapControllers();
 app.Run();
