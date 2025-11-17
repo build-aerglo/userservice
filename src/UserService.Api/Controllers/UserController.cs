@@ -240,4 +240,17 @@ public async Task<IActionResult> IsSupportUser(Guid userId)
         return StatusCode(500, new { error = "Internal server error" });
     }
 }
+[HttpGet("settings")]
+public async Task<IActionResult> UserSettings([FromQuery] Guid userId)
+{
+    var result = await service.GetSettingsAsync(userId);
+    return Ok(result);
+}
+[HttpPost("settings")]
+public async Task<IActionResult> SetUserSettings([FromBody] SettingsDto dto)
+{
+    var updatedSettings = await service.SetSettingsAsync(dto);
+    return Ok(updatedSettings);
+}
+
 }

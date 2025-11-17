@@ -69,4 +69,42 @@ public class UserRepository : IUserRepository
         using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, new { Id = id });
     }
+    
+    public async Task<Settings?> GetSettingsByUserIdAsync(Guid userId)
+    {
+        const string query = @"
+        SELECT 
+            user_id AS UserId,
+            notification_preferences AS NotificationPreferences, -- JSONB column
+            dark_mode AS DarkMode
+        FROM user_settings
+        WHERE user_id = @UserId
+    ";
+
+        using var con = new NpgsqlConnection(_connectionString);
+        return await con.QuerySingleOrDefaultAsync<Settings>(query, new { UserId = userId });
+    }
+    public async Task<Settings> UpdateSettingsAsync(Settings settings)
+    {
+        const string query = @"
+            INSERT INTO user_settings (user_id, notification_preferences, dark_mode)
+            VALUES (@UserId, to_jsonb(@NotificationPreferences::jsonb), @DarkMode)
+            ON CONFLICT (user_id)
+            DO UPDATE SET
+                notification_preferences = EXCLUDED.notification_preferences,
+                dark_mode = EXCLUDED.dark_mode
+            RETURNING user_id, notification_preferences, dark_mode;
+        ";
+
+        using var connection = CreateConnection();
+
+        var updated = await connection.QuerySingleAsync<Settings>(query, new
+        {
+            settings.UserId,
+            NotificationPreferences = settings.NotificationPreferences,
+            settings.DarkMode
+        });
+
+        return updated;
+    }
 }

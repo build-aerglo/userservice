@@ -9,7 +9,7 @@ var config = new ConfigurationBuilder()
     .Build();
 
 var connectionString = config.GetConnectionString("PostgresConnection")
-                       ?? "Host=localhost;Port=5432;Database=reviewapp;Username=prnzdiamond;Password=diamond;Include Error Detail=true;";
+                       ?? "Host=localhost;Port=5432;Database=ReviewApp;Username=postgres;Password=Postgress234;Include Error Detail=true;";
 
 Console.ForegroundColor = ConsoleColor.Yellow;
 Console.WriteLine("🚀 Starting database migration...");
