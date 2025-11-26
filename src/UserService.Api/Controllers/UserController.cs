@@ -89,15 +89,15 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     [HttpPost("business")]
     public async Task<IActionResult> CreateBusinessUser([FromBody] BusinessUserDto dto)
     {
-        var (user, businessId, business) = await service.RegisterBusinessAccountAsync(dto);
+        var data = await service.RegisterBusinessAccountAsync(dto);
 
         return Created("", new
         {
-            user.Id,
-            user.Email,
-            businessId,
-            business,
-            user.Auth0UserId  // ✅ return Auth0 ID
+            data.UserDto.Id,
+            data.UserDto.Email,
+            data.BusinessId,
+            data.BusinessRep,
+            data.UserDto.Auth0UserId  // ✅ return Auth0 ID
         });
     }
 

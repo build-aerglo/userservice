@@ -5,6 +5,7 @@ using UserService.Application.Services.Auth0;
 using UserService.Domain.Entities;
 using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
+using Dapr.Client;
 
 namespace UserService.Application.Services;
 
@@ -15,7 +16,8 @@ public class UserService(
     ISupportUserProfileRepository supportUserProfileRepository,
     IEndUserProfileRepository endUserProfileRepository,
     IAuth0ManagementService _auth0,
-    IConfiguration _config
+    IConfiguration _config,
+    DaprClient _daprClient
 ) : IUserService
 {
 
@@ -185,7 +187,7 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
 
 	//Business User Services
     
-    public async Task<(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload)
+    public async Task<BusinessSubPubDto> RegisterBusinessAccountAsync(BusinessUserDto userPayload)
     {   
         // fetch business
         var businessId = await businessServiceClient.CreateBusinessAsync(userPayload);
@@ -213,7 +215,27 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         if (savedBusiness == null)
             throw new BusinessUserCreationFailedException("Failed to create business record.");
 
-        return (user, businessId.Value, businessRep);
+
+        var pubsub = new BusinessSubPubDto();
+        pubsub.BusinessId = businessId.Value;
+        pubsub.UserDto = user;
+        pubsub.BusinessRep = businessRep;
+        
+        try
+        {
+        await _daprClient.PublishEventAsync(
+            "pubsub", // Dapr component name
+            "business-created", // Topic name
+            pubsub);
+        Console.WriteLine($"Published to Dapr: {pubsub}");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Failed to publish to Dapr: {e}");
+            throw;
+        }
+        
+        return pubsub;
     }
     
     public async Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id)

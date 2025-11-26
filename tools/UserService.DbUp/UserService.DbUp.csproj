@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="Dapr.AspNetCore" Version="1.16.1" />
       <PackageReference Include="dbup" Version="5.0.41" />
       <PackageReference Include="DbUp.Downgrade.PostgreSQL" Version="2.5.0" />
       <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.0-rc.1.25451.107" />

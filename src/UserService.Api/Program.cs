@@ -42,6 +42,10 @@ builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(cl
     };
 });
 
+// Add Dapr
+builder.Services.AddDaprClient();
+builder.Services.AddControllers().AddDapr();
+
 // ---------- Refresh cookie service ----------
 builder.Services.AddScoped<IRefreshTokenCookieService, RefreshTokenCookieService>();
 
