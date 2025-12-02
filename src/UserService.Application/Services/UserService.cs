@@ -273,5 +273,27 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         );
     }
 
+    public async Task UpdateBusinessProfile(BusinessUpdateRequest request)
+    {
+        //0. Check if the user exist
+        var user = await userRepository.GetByIdAsync(request.UserId);
+        if (user is null)
+            throw new BusinessUserNotFoundException(request.UserId);
+        
+        // 1. Check if the target business exists via BusinessService API
+        var businessExists = await businessServiceClient.BusinessExistsAsync(request.Id);
+        if (!businessExists) 
+            throw new BusinessNotFoundException(request.Id);
+        
+        // 2. Update Business first - just to make sure
+        var businessUpdated = await businessServiceClient.UpdateBusinessAsync(request);
+        if (!businessUpdated) 
+            throw new BusinessNotUpdatedException("Error updating business via business client");
+        
+        // 3. Update user
+        user.UpdateProfile(request.Name, request.Phone, request.Address);
+        await userRepository.UpdateAsync(user);
+    }
+
 
 }

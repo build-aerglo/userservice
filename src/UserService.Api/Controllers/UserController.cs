@@ -240,4 +240,33 @@ public async Task<IActionResult> IsSupportUser(Guid userId)
         return StatusCode(500, new { error = "Internal server error" });
     }
 }
+
+/// <summary>
+/// Update Business Profile.
+/// </summary>
+[AllowAnonymous]
+[HttpPost("update-business-profile")]
+public async Task<IActionResult> UpdateBusinessProfile(BusinessUpdateRequest dto)
+{
+    try
+    {
+        await service.UpdateBusinessProfile(dto);
+        return Ok();
+    }
+    catch (BusinessNotFoundException ex)
+    {
+        logger.LogWarning(ex, "Business not found: {Message}", ex.Message);
+        return StatusCode(400, new { error = "Business not found" });
+    }
+    catch (BusinessNotUpdatedException ex)
+    {
+        logger.LogWarning(ex, "Error updating Business.");
+        return StatusCode(500, new { error = "Internal server error" });
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Error occured: {ex}.", ex);
+        return StatusCode(500, new { error = "An error occured" });
+    }
+}
 }

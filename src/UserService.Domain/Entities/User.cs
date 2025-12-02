@@ -41,4 +41,12 @@ public class User
         if (!string.IsNullOrEmpty(address)) Address = address;
         UpdatedAt = DateTime.UtcNow;
     }
+    
+    public void UpdateProfile(string? name, string? phone, string? address)
+    {
+        if (!string.IsNullOrEmpty(name)) Username = name;
+        if (!string.IsNullOrEmpty(phone)) Phone = phone;
+        if (!string.IsNullOrEmpty(address)) Address = address;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

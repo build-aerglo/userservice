@@ -19,4 +19,11 @@ public interface IBusinessServiceClient
     // Create a new business
     //
     Task<Guid?> CreateBusinessAsync(BusinessUserDto business);
+    
+    /// <summary>
+    /// Updates a business
+    /// </summary>
+    Task<bool> UpdateBusinessAsync(BusinessUpdateRequest business);
+    
+    
 }

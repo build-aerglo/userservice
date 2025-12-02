@@ -19,6 +19,9 @@ namespace UserService.Application.Services
 		Task<EndUserResponseDto> CreateEndUserAsync(CreateEndUserDto dto);
 
 	 	Task<User?> GetUserByIdAsync(Guid userId);
+	    
+	    // Update business profile
+	    Task UpdateBusinessProfile(BusinessUpdateRequest request);
 
     }
 }

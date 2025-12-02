@@ -92,4 +92,40 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
     {
         public Guid Id { get; set; }
     }
+    
+    /// <summary>
+    /// Checks if a business exists in the Business Service by ID.
+    /// </summary>
+    public async Task<bool> UpdateBusinessAsync(BusinessUpdateRequest request)
+    {
+        try
+        {
+            var response = await httpClient.PostAsJsonAsync("/api/businesses/update-business", request);
+
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                logger.LogInformation("✅ Business Updated Successfully.");
+                return true;
+            }
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                logger.LogWarning("❌ Business {BusinessId} not found.", request.Id);
+                return false;
+            }
+
+            logger.LogWarning("⚠️ Unexpected response from Business Service: {StatusCode}", response.StatusCode);
+            return false;
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Network error updating business {BusinessId}.", request.Id);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error updating for {BusinessId}.", request.Id);
+            return false;
+        }
+    }
 }

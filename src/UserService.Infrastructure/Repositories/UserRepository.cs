@@ -55,6 +55,7 @@ public class UserRepository : IUserRepository
             UPDATE users
             SET email = @Email,
                 phone = @Phone,
+                username = @Username,
                 address = @Address,
                 updated_at = @UpdatedAt
             WHERE id = @Id;";
