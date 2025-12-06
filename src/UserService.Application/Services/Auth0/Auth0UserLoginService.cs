@@ -4,10 +4,11 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using UserService.Application.DTOs;
 using UserService.Domain.Exceptions;
+using UserService.Domain.Repositories;
 
 namespace UserService.Application.Services.Auth0;
 
-public class Auth0UserLoginService(HttpClient httpClient, IConfiguration config) : IAuth0UserLoginService
+public class Auth0UserLoginService(HttpClient httpClient, IConfiguration config, IUserRepository rep) : IAuth0UserLoginService
 {
     public async Task<TokenResponse> LoginAsync(string email, string password)
     {
@@ -48,7 +49,10 @@ public class Auth0UserLoginService(HttpClient httpClient, IConfiguration config)
         {
             token.Roles = json.EnumerateArray().Select(r => r.GetString()!).ToList();
         }
-
+        
+        var id = await rep.GetUserOrBusinessIdByEmailAsync(email);
+        
+        token.Id = id;
         return token;
     }
 
