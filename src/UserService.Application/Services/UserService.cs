@@ -215,6 +215,22 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
 
         return (user, businessId.Value, businessRep);
     }
+
+    // public async Task<object?> GetBusinessAccountAsync(Guid id)
+    // {
+    //     // 1. Get business id
+    //     // var id = await userRepository.GetUserOrBusinessIdByEmailAsync(email);
+    //     // if (id == null)
+    //     //     throw new Exception(); // fix this later
+    //     
+    //     // 2. Get business rep
+    //     var savedBusiness = await businessRepRepository.GetByBusinessIdAsync()
+    //     
+    //     // 2. Get user details
+    //     var savedUser = await userRepository.GetByIdAsync(savedBusiness.UserId);
+    //     if (savedUser == null)
+    //         throw new UserCreationFailedException("Failed to create user record.");
+    // };
     
     public async Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id)
         => await businessRepRepository.GetByIdAsync(id);

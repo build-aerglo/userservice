@@ -33,7 +33,8 @@ public class AuthController(
                 access_token = token.Access_Token,
                 id_token = token.Id_Token,
                 expires_in = token.Expires_In,
-                roles = token.Roles
+                roles = token.Roles,
+                id = token.Id
             });
         }
         catch (AuthLoginFailedException ex)
