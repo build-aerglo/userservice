@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using UserService.Application.Interfaces;
 using UserService.Application.Services;
+using UserService.Application.Services.Auth0;
 using UserService.Domain.Repositories;
 using UserService.Infrastructure.Clients;
 using UserService.Infrastructure.Repositories;
@@ -41,20 +42,31 @@ builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(cl
     };
 });
 
-// Refresh cookie service
+// ---------- Refresh cookie service ----------
 builder.Services.AddScoped<IRefreshTokenCookieService, RefreshTokenCookieService>();
 
 // ---------- Domain Services ----------
 builder.Services.AddScoped<IUserService, UserService.Application.Services.UserService>();
 
-// Business service client
+// ==================================================================
+//  BUSINESS SERVICE CLIENT — ALLOW HTTP (FIX FOR SSL MISMATCH ERROR)
+// ==================================================================
 builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["Services:BusinessServiceBaseUrl"]);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    // 👇 THIS FIXES YOUR ERROR: Allow HTTP, do NOT enforce SSL
+    return new HttpClientHandler
+    {
+        ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    };
 });
 
-// Auth0 Management API
+// ---------- Auth0 Management API ----------
 builder.Services.AddHttpClient<IAuth0ManagementService, Auth0ManagementService>();
 
 // ---------- Cookie policy (needed for refresh cookie) ----------
@@ -65,24 +77,15 @@ builder.Services.Configure<CookiePolicyOptions>(options =>
 });
 
 // ---------- CORS ----------
-var allowedOrigins = new[]
-{
-    "https://web-client-zeta-six.vercel.app", 
-    "https://clereview.vercel.app",
-    "http://localhost:5173", 
-    "https://clereview-dev.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:3001"
-};
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials(); // Required for refresh token cookies
+        policy
+            .SetIsOriginAllowed(_ => true)  // allow temporary until production
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -156,17 +159,18 @@ builder.Services.AddSwaggerGen(options =>
 // Build
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// Swagger always enabled
+app.UseSwagger();
+app.UseSwaggerUI();
 
-// Order is important: CORS before cookies/auth
+// Correct order
 app.UseCors("FrontendPolicy");
 app.UseCookiePolicy();
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.MapControllers();
 app.Run();

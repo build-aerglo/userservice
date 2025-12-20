@@ -45,6 +45,7 @@ public class UserControllerTests
             BusinessId: businessId,
             Username: "john_rep",
             Email: "john@business.com",
+            Password:"123456",
             Phone: "1234567890",
             Address: "123 Business St",
             BranchName: "Main Branch",
@@ -92,6 +93,7 @@ public class UserControllerTests
             Username: "john_rep",
             Email: "john@business.com",
             Phone: "1234567890",
+            Password:"123456",
             Address: null,
             BranchName: null,
             BranchAddress: null
@@ -162,7 +164,7 @@ public class UserControllerTests
     [Test]
     public async Task CreateSupportUser_ShouldReturnCreated_WhenSuccessful()
     {
-        var dto = new CreateSupportUserDto("support", "admin@x.com", "111", "street");
+        var dto = new CreateSupportUserDto("support", "admin@x.com", "test","111", "street");
 
         var expected = new SupportUserResponseDto(
             UserId: Guid.NewGuid(), 
@@ -199,7 +201,7 @@ public class UserControllerTests
     [Test]
     public async Task CreateEndUser_ShouldReturnCreated_WhenSuccessful()
     {
-        var dto = new CreateEndUserDto("jane", "jane@x.com", "123", "address", "social");
+        var dto = new CreateEndUserDto("jane", "jane@x.com", "123456","123", "address", "social");
 
         var expected = new EndUserResponseDto(
             UserId: Guid.NewGuid(), 

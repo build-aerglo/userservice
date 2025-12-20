@@ -62,7 +62,7 @@ public class BusinessRepRepositoryTests
     public async Task AddAsync_ShouldInsertAndRetrieveBusinessRep()
     {
         // Arrange
-        var user = new User("rep_add", "rep_add@biz.com", "1234567890", "business_user", "123 Main St","test");
+        var user = new User("rep_add", "rep_add@biz.com", "1234567890", "123456","business_user", "123 Main St","test");
         await _userRepository.AddAsync(user);
 
         var businessId = Guid.NewGuid(); // Mocked business id (validated by BusinessService in reality)
@@ -83,7 +83,7 @@ public class BusinessRepRepositoryTests
     [Test]
     public async Task GetByUserIdAsync_ShouldReturnBusinessRep_WhenExists()
     {
-        var user = new User("rep_user", "rep_user@biz.com", "3333333333", "business_user", "User St","test");
+        var user = new User("rep_user", "rep_user@biz.com", "3333333333", "123456","business_user", "User St","test");
         await _userRepository.AddAsync(user);
 
         var businessRep = new BusinessRep(Guid.NewGuid(), user.Id, "Branch X", "Street X");
@@ -100,7 +100,7 @@ public class BusinessRepRepositoryTests
     [Test]
     public async Task UpdateAsync_ShouldModifyBranchInfo()
     {
-        var user = new User("rep_update", "rep_update@biz.com", "4444444444", "business_user", "Addr","test");
+        var user = new User("rep_update", "rep_update@biz.com", "4444444444", "123456","business_user", "Addr","test");
         await _userRepository.AddAsync(user);
 
         var businessRep = new BusinessRep(Guid.NewGuid(), user.Id, "Old Branch", "Old Location");
@@ -118,7 +118,7 @@ public class BusinessRepRepositoryTests
     [Test]
     public async Task DeleteAsync_ShouldRemoveBusinessRep()
     {
-        var user = new User("rep_delete", "rep_delete@biz.com", "5555555555", "business_user", "Addr D","test");
+        var user = new User("rep_delete", "rep_delete@biz.com", "5555555555", "123456","business_user", "Addr D","test");
         await _userRepository.AddAsync(user);
 
         var businessRep = new BusinessRep(Guid.NewGuid(), user.Id, "Del Branch", "Del Address");
@@ -136,8 +136,8 @@ public class BusinessRepRepositoryTests
     {
         var businessId = Guid.NewGuid();
 
-        var user1 = new User("rep1", "rep1@biz.com", "1111111111", "business_user", "Addr1","test");
-        var user2 = new User("rep2", "rep2@biz.com", "2222222222", "business_user", "Addr2","test");
+        var user1 = new User("rep1", "rep1@biz.com", "1111111111", "123456","business_user", "Addr1","test");
+        var user2 = new User("rep2", "rep2@biz.com", "2222222222", "123456","business_user", "Addr2","test");
         await _userRepository.AddAsync(user1);
         await _userRepository.AddAsync(user2);
 
@@ -156,7 +156,7 @@ public class BusinessRepRepositoryTests
     public async Task UpdateAsync_WithUserDetails_ShouldModifyBothUserAndBusinessRep()
     {
         // ARRANGE
-        var user = new User("rep_full_update", "rep_full@biz.com", "6666666666", "business_user", "Initial Address","test");
+        var user = new User("rep_full_update", "rep_full@biz.com", "6666666666","123456", "business_user", "Initial Address","test");
         await _userRepository.AddAsync(user);
 
         var businessId = Guid.NewGuid();
@@ -198,9 +198,9 @@ public class BusinessRepRepositoryTests
         // Arrange
         var businessId = Guid.NewGuid();
 
-        var user1 = new User("parent_rep", "parent@biz.com", "1111111111", "business_user", "Addr1", "test");
-        var user2 = new User("child_rep1", "child1@biz.com", "2222222222", "business_user", "Addr2", "test");
-        var user3 = new User("child_rep2", "child2@biz.com", "3333333333", "business_user", "Addr3", "test");
+        var user1 = new User("parent_rep", "parent@biz.com", "1111111111", "123456","business_user", "Addr1", "test");
+        var user2 = new User("child_rep2", "child2@biz.com", "3333333333", "123456","business_user", "Addr3", "test");
+        var user3 = new User("child_rep2", "child2@biz.com", "3333333333", "123456","business_user", "Addr3", "test");
         
         await _userRepository.AddAsync(user1);
         await _userRepository.AddAsync(user2);
@@ -247,7 +247,7 @@ public class BusinessRepRepositoryTests
     {
         // Arrange
         var businessId = Guid.NewGuid();
-        var user = new User("only_rep", "only@biz.com", "9999999999", "business_user", "Only Addr", "test");
+        var user = new User("only_rep", "only@biz.com", "9999999999", "12345","business_user", "Only Addr", "test");
         await _userRepository.AddAsync(user);
 
         var businessRep = new BusinessRep(businessId, user.Id, "Only Branch", "Only Location");

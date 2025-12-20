@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserService.Application.DTOs;
 using UserService.Application.Services;
+using UserService.Application.Services.Auth0;
 using UserService.Domain.Exceptions;
 
 namespace UserService.Api.Controllers;
@@ -32,7 +33,8 @@ public class AuthController(
                 access_token = token.Access_Token,
                 id_token = token.Id_Token,
                 expires_in = token.Expires_In,
-                roles = token.Roles
+                roles = token.Roles,
+                id = token.Id
             });
         }
         catch (AuthLoginFailedException ex)

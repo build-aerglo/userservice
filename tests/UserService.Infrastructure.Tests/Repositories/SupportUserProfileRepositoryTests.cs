@@ -61,7 +61,8 @@ public class SupportUserProfileRepositoryTests
     public async Task AddAsync_ShouldInsertAndRetrieveSupportUserProfile()
     {
         // Arrange
-        var user = new User("support_add", "support_add@admin.com", "1234567890", "support_user", "123 Admin St","test");
+        var user = new User("support_user", "test@test.com","support_user@admin.com", "3333333333", "support_user", "User St","test");
+
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
@@ -80,7 +81,7 @@ public class SupportUserProfileRepositoryTests
     [Test]
     public async Task GetByUserIdAsync_ShouldReturnSupportProfile_WhenExists()
     {
-        var user = new User("support_user", "support_user@admin.com", "3333333333", "support_user", "User St","test");
+        var user = new User("support_user", "test@test.com","support_user@admin.com", "3333333333", "support_user", "User St","test");
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
@@ -96,7 +97,7 @@ public class SupportUserProfileRepositoryTests
     [Test]
     public async Task UpdateAsync_ShouldModifyTimestamp()
     {
-        var user = new User("support_update", "support_update@admin.com", "4444444444", "support_user", "Addr","test");
+        var user = new User("support_update", "test@test.com","support_update@admin.com", "4444444444", "support_user", "Addr","test");
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
@@ -118,7 +119,7 @@ public class SupportUserProfileRepositoryTests
     [Test]
     public async Task DeleteAsync_ShouldRemoveSupportProfile()
     {
-        var user = new User("support_delete", "support_delete@admin.com", "5555555555", "support_user", "Addr D","test");
+        var user = new User("support_delete", "test@test.com","support_delete@admin.com", "5555555555", "support_user", "Addr D","test");
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
@@ -134,8 +135,8 @@ public class SupportUserProfileRepositoryTests
     [Test]
     public async Task GetAllAsync_ShouldReturnAllSupportProfiles()
     {
-        var user1 = new User("support1", "support1@admin.com", "1111111111", "support_user", "Addr1","test");
-        var user2 = new User("support2", "support2@admin.com", "2222222222", "support_user", "Addr2","test");
+        var user1 = new User("support1","test@test.com", "support1@admin.com", "1111111111", "support_user", "Addr1","test");
+        var user2 = new User("support2", "test@test.com","support2@admin.com", "2222222222", "support_user", "Addr2","test");
         await _userRepository.AddAsync(user1);
         await _userRepository.AddAsync(user2);
 
@@ -169,7 +170,7 @@ public class SupportUserProfileRepositoryTests
     [Test]
     public async Task DeleteUser_ShouldCascadeDeleteSupportProfile()
     {
-        var user = new User("cascade_test", "cascade@admin.com", "6666666666", "support_user", "Cascade St","test");
+        var user = new User("cascade_test","test@test.com", "cascade@admin.com", "6666666666", "support_user", "Cascade St","test");
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
