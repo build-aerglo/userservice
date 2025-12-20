@@ -289,5 +289,31 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         );
     }
 
+    public async Task<EndUserResponseDto?> GetEndUserProfileByIdAsync(Guid id)
+    {
+        // ✅ 1. Get end user profile by ID
+        var endUserProfile = await endUserProfileRepository.GetByIdAsync(id);
+        if (endUserProfile is null)
+            return null;
+
+        // ✅ 2. Get associated user
+        var user = await userRepository.GetByIdAsync(endUserProfile.UserId);
+        if (user is null)
+            return null;
+
+        // ✅ 3. Map to response DTO
+        return new EndUserResponseDto(
+            UserId: user.Id,
+            EndUserProfileId: endUserProfile.Id,
+            Username: user.Username,
+            Email: user.Email,
+            Phone: user.Phone,
+            Address: user.Address,
+            SocialMedia: endUserProfile.SocialMedia,
+            Auth0UserId: user.Auth0UserId,
+            CreatedAt: user.CreatedAt
+        );
+    }
+
 
 }

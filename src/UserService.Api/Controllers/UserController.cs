@@ -137,7 +137,13 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         catch (UserCreationFailedException ex) { return StatusCode(500, new { error = ex.Message }); }
     }
 
-
+    [Authorize(Roles = "end_user,support_user")]
+    [HttpGet("end-user/{id:guid}")]
+    public async Task<IActionResult> GetEndUserProfile(Guid id)
+    {
+        var result = await service.GetEndUserProfileByIdAsync(id);
+        return result is not null ? Ok(result) : NotFound();
+    }
 
     // ========== NEW: Business Rep Endpoints for Settings Authorization ==========
     

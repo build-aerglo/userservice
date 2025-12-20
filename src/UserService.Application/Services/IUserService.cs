@@ -18,6 +18,8 @@ namespace UserService.Application.Services
 
 		Task<EndUserResponseDto> CreateEndUserAsync(CreateEndUserDto dto);
 
+		Task<EndUserResponseDto?> GetEndUserProfileByIdAsync(Guid id);
+
 	 	Task<User?> GetUserByIdAsync(Guid userId);
 	    
 	    // Task<object?> GetBusinessAccountAsync(string email);
