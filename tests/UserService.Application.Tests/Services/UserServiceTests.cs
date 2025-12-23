@@ -18,6 +18,7 @@ public class UserServiceTests
     private Mock<IBusinessServiceClient> _mockBusinessServiceClient = null!;
     private Mock<ISupportUserProfileRepository> _mockSupportUserProfileRepository = null!;
     private Mock<IEndUserProfileRepository> _mockEndUserProfileRepository = null!;
+    private Mock<IUserSettingsRepository> _mockUserSettingsRepository = null!;
     private Mock<IAuth0ManagementService> _mockAuth0 = null!;
     private Mock<IConfiguration> _mockConfig = null!;
     private Application.Services.UserService _service = null!;
@@ -30,6 +31,7 @@ public class UserServiceTests
         _mockBusinessServiceClient = new Mock<IBusinessServiceClient>();
         _mockSupportUserProfileRepository = new Mock<ISupportUserProfileRepository>();
         _mockEndUserProfileRepository = new Mock<IEndUserProfileRepository>();
+        _mockUserSettingsRepository = new Mock<IUserSettingsRepository>();
         _mockAuth0 = new Mock<IAuth0ManagementService>();
         _mockConfig = new Mock<IConfiguration>();
 
@@ -54,6 +56,7 @@ public class UserServiceTests
             _mockBusinessServiceClient.Object,
             _mockSupportUserProfileRepository.Object,
             _mockEndUserProfileRepository.Object,
+            _mockUserSettingsRepository.Object,
             _mockAuth0.Object,
             _mockConfig.Object
         );
@@ -192,5 +195,299 @@ public class UserServiceTests
         var result = await _service.CreateEndUserAsync(dto);
 
         Assert.That(result.Email, Is.EqualTo("jane@test.com"));
+    }
+    [Test]
+    public async Task GetEndUserProfileDetailAsync_ShouldReturnCompleteProfile_WhenUserExists()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var user = new User("john_doe", "john@example.com", "1234567890", "password", "end_user", "123 Main St", "auth0|123");
+        var profile = new EndUserProfile(userId, "instagram.com/johndoe");
+        var settings = new UserSettings(userId);
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
+        _mockEndUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(profile);
+        _mockUserSettingsRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(settings);
+
+        // Act
+        var result = await _service.GetEndUserProfileDetailAsync(userId);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.UserId, Is.EqualTo(user.Id));
+        Assert.That(result.Username, Is.EqualTo("john_doe"));
+        Assert.That(result.Email, Is.EqualTo("john@example.com"));
+        Assert.That(result.Phone, Is.EqualTo("1234567890"));
+        Assert.That(result.SocialMedia, Is.EqualTo("instagram.com/johndoe"));
+        Assert.That(result.DarkMode, Is.False);
+        Assert.That(result.NotificationPreferences.EmailNotifications, Is.True);
+    }
+
+    [Test]
+    public async Task GetEndUserProfileDetailAsync_ShouldAutoCreateSettings_WhenSettingsMissing()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var user = new User("john_doe", "john@example.com", "1234567890", "password", "end_user", "123 Main St", "auth0|123");
+        var profile = new EndUserProfile(userId, "instagram.com/johndoe");
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
+        _mockEndUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(profile);
+        _mockUserSettingsRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync((UserSettings?)null);
+        _mockUserSettingsRepository.Setup(r => r.AddAsync(It.IsAny<UserSettings>())).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _service.GetEndUserProfileDetailAsync(userId);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        _mockUserSettingsRepository.Verify(r => r.AddAsync(It.Is<UserSettings>(s => s.UserId == userId)), Times.Once);
+        Assert.That(result.NotificationPreferences.EmailNotifications, Is.True);
+        Assert.That(result.NotificationPreferences.PushNotifications, Is.True);
+        Assert.That(result.DarkMode, Is.False);
+    }
+
+    [Test]
+    public void GetEndUserProfileDetailAsync_ShouldThrowException_WhenUserNotFound()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync((User?)null);
+
+        // Act & Assert
+        Assert.ThrowsAsync<EndUserNotFoundException>(() => _service.GetEndUserProfileDetailAsync(userId));
+    }
+
+    [Test]
+    public void GetEndUserProfileDetailAsync_ShouldThrowException_WhenUserIsNotEndUser()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var user = new User("business_user", "business@example.com", "1234567890", "password", "business_user", "123 Main St", "auth0|123");
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
+
+        // Act & Assert
+        Assert.ThrowsAsync<EndUserNotFoundException>(() => _service.GetEndUserProfileDetailAsync(userId));
+    }
+
+    [Test]
+    public void GetEndUserProfileDetailAsync_ShouldThrowException_WhenProfileNotFound()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var user = new User("john_doe", "john@example.com", "1234567890", "password", "end_user", "123 Main St", "auth0|123");
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
+        _mockEndUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync((EndUserProfile?)null);
+
+        // Act & Assert
+        Assert.ThrowsAsync<EndUserNotFoundException>(() => _service.GetEndUserProfileDetailAsync(userId));
+    }
+
+    // ========================================================================
+    // UPDATE ENDPOINT SERVICE TESTS
+    // ========================================================================
+
+    [Test]
+    public async Task UpdateEndUserProfileAsync_ShouldUpdateAllFields_WhenAllProvided()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var user = new User("john_doe", "john@example.com", "1234567890", "password", "end_user", "123 Main St", "auth0|123");
+        var profile = new EndUserProfile(userId, "instagram.com/johndoe");
+        var settings = new UserSettings(userId);
+
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: "Lizzy",
+            Phone: "9876543210",
+            Address: "456 New Street",
+            SocialMedia: "twitter.com/johndoe",
+            NotificationPreferences: new NotificationPreferencesDto(
+                EmailNotifications: false,
+                SmsNotifications: true,
+                PushNotifications: false,
+                MarketingEmails: true
+            ),
+            DarkMode: true
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
+        _mockEndUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(profile);
+        _mockUserSettingsRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(settings);
+        _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockEndUserProfileRepository.Setup(r => r.UpdateAsync(It.IsAny<EndUserProfile>())).Returns(Task.CompletedTask);
+        _mockUserSettingsRepository.Setup(r => r.UpdateAsync(It.IsAny<UserSettings>())).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _service.UpdateEndUserProfileAsync(userId, updateDto);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        _mockUserRepository.Verify(r => r.UpdateAsync(It.IsAny<User>()), Times.Once);
+        _mockEndUserProfileRepository.Verify(r => r.UpdateAsync(It.IsAny<EndUserProfile>()), Times.Once);
+        _mockUserSettingsRepository.Verify(r => r.UpdateAsync(It.IsAny<UserSettings>()), Times.Once);
+    }
+
+    [Test]
+    public async Task UpdateEndUserProfileAsync_ShouldUpdateOnlyProvidedFields()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var user = new User("john_doe", "john@example.com", "1234567890", "password", "end_user", "123 Main St", "auth0|123");
+        var profile = new EndUserProfile(userId, "instagram.com/johndoe");
+        var settings = new UserSettings(userId);
+
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: null,
+            Phone: null,
+            Address: null,
+            SocialMedia: null,
+            NotificationPreferences: null,
+            DarkMode: true  // Only updating dark mode
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
+        _mockEndUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(profile);
+        _mockUserSettingsRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(settings);
+        _mockUserSettingsRepository.Setup(r => r.UpdateAsync(It.IsAny<UserSettings>())).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _service.UpdateEndUserProfileAsync(userId, updateDto);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        _mockUserRepository.Verify(r => r.UpdateAsync(It.IsAny<User>()), Times.Never); // Should not update user
+        _mockEndUserProfileRepository.Verify(r => r.UpdateAsync(It.IsAny<EndUserProfile>()), Times.Never); // Should not update profile
+        _mockUserSettingsRepository.Verify(r => r.UpdateAsync(It.IsAny<UserSettings>()), Times.Once); // Should only update settings
+    }
+
+    [Test]
+    public async Task UpdateEndUserProfileAsync_ShouldAutoCreateSettings_WhenMissing()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var user = new User("john_doe", "john@example.com", "1234567890", "password", "end_user", "123 Main St", "auth0|123");
+        var profile = new EndUserProfile(userId, "instagram.com/johndoe");
+
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: "Lizzy",
+            Phone: "9876543210",
+            Address: null,
+            SocialMedia: null,
+            NotificationPreferences: null,
+            DarkMode: true
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
+        _mockEndUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(profile);
+        _mockUserSettingsRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync((UserSettings?)null);
+        _mockUserSettingsRepository.Setup(r => r.AddAsync(It.IsAny<UserSettings>())).Returns(Task.CompletedTask);
+        _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockUserSettingsRepository.Setup(r => r.UpdateAsync(It.IsAny<UserSettings>())).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _service.UpdateEndUserProfileAsync(userId, updateDto);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        _mockUserSettingsRepository.Verify(r => r.AddAsync(It.Is<UserSettings>(s => s.UserId == userId)), Times.Once);
+    }
+
+    [Test]
+    public void UpdateEndUserProfileAsync_ShouldThrowException_WhenUserNotFound()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: "Lizzy",
+            Phone: "9876543210",
+            Address: null,
+            SocialMedia: null,
+            NotificationPreferences: null,
+            DarkMode: null
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync((User?)null);
+
+        // Act & Assert
+        Assert.ThrowsAsync<EndUserNotFoundException>(() => _service.UpdateEndUserProfileAsync(userId, updateDto));
+    }
+
+    [Test]
+    public void UpdateEndUserProfileAsync_ShouldThrowException_WhenUserIsNotEndUser()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var user = new User("support_user", "support@example.com", "1234567890", "password", "support_user", "123 Main St", "auth0|123");
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: "Lizzy",
+            Phone: "9876543210",
+            Address: null,
+            SocialMedia: null,
+            NotificationPreferences: null,
+            DarkMode: null
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
+
+        // Act & Assert
+        Assert.ThrowsAsync<EndUserNotFoundException>(() => _service.UpdateEndUserProfileAsync(userId, updateDto));
+    }
+
+    [Test]
+    public void UpdateEndUserProfileAsync_ShouldThrowException_WhenProfileNotFound()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var user = new User("john_doe", "john@example.com", "1234567890", "password", "end_user", "123 Main St", "auth0|123");
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: "Lizzy",
+            Phone: "9876543210",
+            Address: null,
+            SocialMedia: null,
+            NotificationPreferences: null,
+            DarkMode: null
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
+        _mockEndUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync((EndUserProfile?)null);
+
+        // Act & Assert
+        Assert.ThrowsAsync<EndUserNotFoundException>(() => _service.UpdateEndUserProfileAsync(userId, updateDto));
+    }
+
+    [Test]
+    public async Task UpdateEndUserProfileAsync_ShouldNotUpdateUser_WhenNoUserFieldsProvided()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var user = new User("john_doe", "john@example.com", "1234567890", "password", "end_user", "123 Main St", "auth0|123");
+        var profile = new EndUserProfile(userId, "instagram.com/johndoe");
+        var settings = new UserSettings(userId);
+
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: null,
+            Phone: null,
+            Address: null,
+            SocialMedia: "twitter.com/johndoe",
+            NotificationPreferences: null,
+            DarkMode: true
+        );
+
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
+        _mockEndUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(profile);
+        _mockUserSettingsRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(settings);
+        _mockEndUserProfileRepository.Setup(r => r.UpdateAsync(It.IsAny<EndUserProfile>())).Returns(Task.CompletedTask);
+        _mockUserSettingsRepository.Setup(r => r.UpdateAsync(It.IsAny<UserSettings>())).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _service.UpdateEndUserProfileAsync(userId, updateDto);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        _mockUserRepository.Verify(r => r.UpdateAsync(It.IsAny<User>()), Times.Never);
+        _mockEndUserProfileRepository.Verify(r => r.UpdateAsync(It.IsAny<EndUserProfile>()), Times.Once);
+        _mockUserSettingsRepository.Verify(r => r.UpdateAsync(It.IsAny<UserSettings>()), Times.Once);
     }
 }

@@ -24,7 +24,7 @@ public record CreateSubBusinessUserDto(
     string Phone,             
     string? Address,         
     string? BranchName,
-    string Password,
+    string? Password,
     string? BranchAddress     
 );
 

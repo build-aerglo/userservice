@@ -177,11 +177,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
-
-    /// <summary>
-    /// Gets the parent business rep for a business (first rep created).
-    /// Used by BusinessService to authorize business-level settings changes.
-    /// </summary>
+    
     [AllowAnonymous]
     [HttpGet("business-rep/parent/{businessId:guid}")]
     public async Task<IActionResult> GetParentRepByBusinessId(Guid businessId)
@@ -213,10 +209,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
-    /// <summary>
-    /// Checks if a user is a support user.
-    /// Used by BusinessService to authorize support-only operations like extending DnD mode.
-    /// </summary>
+    
     [AllowAnonymous]
     [HttpGet("support-user/{userId:guid}/exists")]
     public async Task<IActionResult> IsSupportUser(Guid userId)
@@ -241,26 +234,22 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
-    [Authorize(Roles = "end_user,support_user")]
+    
+    [AllowAnonymous]
     [HttpGet("end-user/{userId:guid}/profile")]
-    [ProducesResponseType(typeof(EndUserProfileDetailDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetEndUserProfileDetail(Guid userId)
     {
         try
         {
-            var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var userRoles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
-            
-            if (!userRoles.Contains("support_user") && currentUserId != userId.ToString())
-            {
-                logger.LogWarning("User {CurrentUserId} attempted to access profile of user {RequestedUserId}", 
-                    currentUserId, userId);
-                return Forbid();
-            }
+            // var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            // var userRoles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
+            //
+            // if (!userRoles.Contains("support_user") && currentUserId != userId.ToString())
+            // {
+            //     logger.LogWarning("User {CurrentUserId} attempted to access profile of user {RequestedUserId}", 
+            //         currentUserId, userId);
+            //     return Forbid();
+            // }
 
             logger.LogInformation("Fetching end user profile for user {UserId}", userId);
             
@@ -280,35 +269,30 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         }
     }
     
-    [Authorize(Roles = "end_user,support_user")]
+    // [Authorize(Roles = "end_user,support_user")]
+    [AllowAnonymous]
     [HttpPut("end-user/{userId:guid}/profile")]
-    [ProducesResponseType(typeof(EndUserProfileDetailDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> UpdateEndUserProfileDetail(
         Guid userId, 
         [FromBody] UpdateEndUserProfileDto dto)
     {
-        if (!ModelState.IsValid)
-        {
-            logger.LogWarning("Invalid model state for updating user {UserId} profile", userId);
-            return BadRequest(ModelState);
-        }
+        // if (!ModelState.IsValid)
+        // {
+        //     logger.LogWarning("Invalid model state for updating user {UserId} profile", userId);
+        //     return BadRequest(ModelState);
+        // }
 
         try
         {
             var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var userRoles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
             
-            if (!userRoles.Contains("support_user") && currentUserId != userId.ToString())
-            {
-                logger.LogWarning("User {CurrentUserId} attempted to update profile of user {RequestedUserId}", 
-                    currentUserId, userId);
-                return Forbid();
-            }
+            // if (!userRoles.Contains("support_user") && currentUserId != userId.ToString())
+            // {
+            //     logger.LogWarning("User {CurrentUserId} attempted to update profile of user {RequestedUserId}", 
+            //         currentUserId, userId);
+            //     return Forbid();
+            // }
 
             logger.LogInformation("Updating end user profile for user {UserId}", userId);
             
