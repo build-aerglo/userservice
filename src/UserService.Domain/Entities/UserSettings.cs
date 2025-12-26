@@ -13,8 +13,7 @@ public class UserSettings
     {
         NotificationPreferences = "{}";
     }
-
-    // Domain constructor - creates default settings for a user
+    
     public UserSettings(Guid userId)
     {
         UserId = userId;
@@ -22,7 +21,6 @@ public class UserSettings
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
         
-        // Set default notification preferences
         var defaultPrefs = new NotificationPreferencesModel
         {
             EmailNotifications = true,
@@ -33,7 +31,6 @@ public class UserSettings
         NotificationPreferences = JsonSerializer.Serialize(defaultPrefs);
     }
 
-    // Method to update settings
     public void UpdateSettings(bool? darkMode = null, NotificationPreferencesModel? notificationPrefs = null)
     {
         if (darkMode.HasValue) 
@@ -45,7 +42,6 @@ public class UserSettings
         UpdatedAt = DateTime.UtcNow;
     }
 
-    // Helper method to get typed notification preferences
     public NotificationPreferencesModel GetNotificationPreferences()
     {
         try
@@ -60,9 +56,6 @@ public class UserSettings
     }
 }
 
-/// <summary>
-/// Model for the JSONB notification_preferences column
-/// </summary>
 public class NotificationPreferencesModel
 {
     public bool EmailNotifications { get; set; } = true;

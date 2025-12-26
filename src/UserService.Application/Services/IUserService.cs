@@ -23,8 +23,5 @@ namespace UserService.Application.Services
 
 	 	Task<User?> GetUserByIdAsync(Guid userId);
 	    
-	    
-	    
-	    // Task<object?> GetBusinessAccountAsync(string email);
     }
 }

@@ -7,5 +7,4 @@ public interface IUserSettingsRepository
     Task<UserSettings?> GetByUserIdAsync(Guid userId);
     Task AddAsync(UserSettings userSettings);
     Task UpdateAsync(UserSettings userSettings);
-    Task DeleteAsync(Guid userId);
 }
