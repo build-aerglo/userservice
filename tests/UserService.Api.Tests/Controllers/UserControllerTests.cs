@@ -392,4 +392,455 @@ public class UserControllerTests
         Assert.That(error, Is.Not.Null);
         Assert.That(error!.StatusCode, Is.EqualTo(500));
     }
+    
+    public async Task GetEndUserProfileDetail_ShouldReturnOk_WhenUserExists()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var expectedDto = new EndUserProfileDetailDto(
+            UserId: userId,
+            Username: "john_doe",
+            Email: "john@example.com",
+            Phone: "1234567890",
+            Address: "123 Main St",
+            JoinDate: DateTime.UtcNow.AddDays(-30),
+            EndUserProfileId: Guid.NewGuid(),
+            SocialMedia: "instagram.com/johndoe",
+            NotificationPreferences: new NotificationPreferencesDto(
+                EmailNotifications: true,
+                SmsNotifications: false,
+                PushNotifications: true,
+                MarketingEmails: false
+            ),
+            DarkMode: false,
+            CreatedAt: DateTime.UtcNow.AddDays(-30),
+            UpdatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.GetEndUserProfileDetailAsync(userId))
+            .ReturnsAsync(expectedDto);
+
+        // Act
+        var result = await _controller.GetEndUserProfileDetail(userId);
+
+        // Assert
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        Assert.That(okResult!.StatusCode, Is.EqualTo(200));
+
+        var json = JsonSerializer.Serialize(okResult.Value);
+        var response = JsonSerializer.Deserialize<EndUserProfileDetailDto>(json);
+
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.UserId, Is.EqualTo(userId));
+        Assert.That(response.Username, Is.EqualTo("john_doe"));
+        Assert.That(response.Email, Is.EqualTo("john@example.com"));
+        Assert.That(response.Phone, Is.EqualTo("1234567890"));
+        Assert.That(response.SocialMedia, Is.EqualTo("instagram.com/johndoe"));
+        Assert.That(response.NotificationPreferences.EmailNotifications, Is.True);
+        Assert.That(response.NotificationPreferences.PushNotifications, Is.True);
+        Assert.That(response.DarkMode, Is.False);
+    }
+
+    [Test]
+    public async Task GetEndUserProfileDetail_ShouldReturnNotFound_WhenUserDoesNotExist()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+
+        _mockUserService
+            .Setup(s => s.GetEndUserProfileDetailAsync(userId))
+            .ThrowsAsync(new EndUserNotFoundException(userId));
+
+        // Act
+        var result = await _controller.GetEndUserProfileDetail(userId);
+
+        // Assert
+        var notFoundResult = result as NotFoundObjectResult;
+        Assert.That(notFoundResult, Is.Not.Null);
+        Assert.That(notFoundResult!.StatusCode, Is.EqualTo(404));
+
+        // Verify error message
+        var json = JsonSerializer.Serialize(notFoundResult.Value);
+        var response = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.ContainsKey("error"), Is.True);
+        Assert.That(response["error"], Does.Contain("not found"));
+    }
+
+    [Test]
+    public async Task GetEndUserProfileDetail_ShouldReturnNotFound_WhenUserIsNotEndUser()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+
+        _mockUserService
+            .Setup(s => s.GetEndUserProfileDetailAsync(userId))
+            .ThrowsAsync(new EndUserNotFoundException(userId));
+
+        // Act
+        var result = await _controller.GetEndUserProfileDetail(userId);
+
+        // Assert
+        var notFoundResult = result as NotFoundObjectResult;
+        Assert.That(notFoundResult, Is.Not.Null);
+        Assert.That(notFoundResult!.StatusCode, Is.EqualTo(404));
+    }
+
+    [Test]
+    public async Task GetEndUserProfileDetail_ShouldReturnInternalServerError_OnUnexpectedException()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+
+        _mockUserService
+            .Setup(s => s.GetEndUserProfileDetailAsync(userId))
+            .ThrowsAsync(new Exception("Database connection failed"));
+
+        // Act
+        var result = await _controller.GetEndUserProfileDetail(userId);
+
+        // Assert
+        var errorResult = result as ObjectResult;
+        Assert.That(errorResult, Is.Not.Null);
+        Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
+
+        var json = JsonSerializer.Serialize(errorResult.Value);
+        var response = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.ContainsKey("error"), Is.True);
+        Assert.That(response["error"], Is.EqualTo("Internal server error"));
+    }
+
+    [Test]
+    public async Task GetEndUserProfileDetail_ShouldCallServiceOnce()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var expectedDto = new EndUserProfileDetailDto(
+            UserId: userId,
+            Username: "test_user",
+            Email: "test@example.com",
+            Phone: "1234567890",
+            Address: "Test Address",
+            JoinDate: DateTime.UtcNow,
+            EndUserProfileId: Guid.NewGuid(),
+            SocialMedia: null,
+            NotificationPreferences: new NotificationPreferencesDto(true, false, true, false),
+            DarkMode: false,
+            CreatedAt: DateTime.UtcNow,
+            UpdatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.GetEndUserProfileDetailAsync(userId))
+            .ReturnsAsync(expectedDto);
+
+        // Act
+        await _controller.GetEndUserProfileDetail(userId);
+
+        // Assert
+        _mockUserService.Verify(s => s.GetEndUserProfileDetailAsync(userId), Times.Once);
+    }
+
+    // ========================================================================
+    // PUT ENDPOINT TESTS
+    // ========================================================================
+
+    [Test]
+    public async Task UpdateEndUserProfileDetail_ShouldReturnOk_WhenUpdateSuccessful()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: "Lizzy",
+            Phone: "9876543210",
+            Address: "456 New Street",
+            SocialMedia: "twitter.com/johndoe",
+            NotificationPreferences: new NotificationPreferencesDto(
+                EmailNotifications: true,
+                SmsNotifications: true,
+                PushNotifications: false,
+                MarketingEmails: true
+            ),
+            DarkMode: true
+        );
+
+        var expectedResponse = new EndUserProfileDetailDto(
+            UserId: userId,
+            Username: "john_doe",
+            Email: "john@example.com",
+            Phone: "9876543210",
+            Address: "456 New Street",
+            JoinDate: DateTime.UtcNow.AddDays(-30),
+            EndUserProfileId: Guid.NewGuid(),
+            SocialMedia: "twitter.com/johndoe",
+            NotificationPreferences: new NotificationPreferencesDto(
+                EmailNotifications: true,
+                SmsNotifications: true,
+                PushNotifications: false,
+                MarketingEmails: true
+            ),
+            DarkMode: true,
+            CreatedAt: DateTime.UtcNow.AddDays(-30),
+            UpdatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
+
+        // Assert
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        Assert.That(okResult!.StatusCode, Is.EqualTo(200));
+
+        var json = JsonSerializer.Serialize(okResult.Value);
+        var response = JsonSerializer.Deserialize<EndUserProfileDetailDto>(json);
+
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.UserId, Is.EqualTo(userId));
+        Assert.That(response.Phone, Is.EqualTo("9876543210"));
+        Assert.That(response.Address, Is.EqualTo("456 New Street"));
+        Assert.That(response.SocialMedia, Is.EqualTo("twitter.com/johndoe"));
+        Assert.That(response.NotificationPreferences.SmsNotifications, Is.True);
+        Assert.That(response.DarkMode, Is.True);
+    }
+
+    [Test]
+    public async Task UpdateEndUserProfileDetail_ShouldReturnOk_WhenPartialUpdate()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: null,
+            Phone: null,
+            Address: null,
+            SocialMedia: null,
+            NotificationPreferences: null,
+            DarkMode: true  // Only updating dark mode
+        );
+
+        var expectedResponse = new EndUserProfileDetailDto(
+            UserId: userId,
+            Username: "john_doe",
+            Email: "john@example.com",
+            Phone: "1234567890",
+            Address: "123 Main St",
+            JoinDate: DateTime.UtcNow.AddDays(-30),
+            EndUserProfileId: Guid.NewGuid(),
+            SocialMedia: "instagram.com/johndoe",
+            NotificationPreferences: new NotificationPreferencesDto(true, false, true, false),
+            DarkMode: true,
+            CreatedAt: DateTime.UtcNow.AddDays(-30),
+            UpdatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
+
+        // Assert
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var json = JsonSerializer.Serialize(okResult.Value);
+        var response = JsonSerializer.Deserialize<EndUserProfileDetailDto>(json);
+
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.DarkMode, Is.True);
+        Assert.That(response.Phone, Is.EqualTo("1234567890")); // Unchanged
+    }
+
+    [Test]
+    public async Task UpdateEndUserProfileDetail_ShouldReturnNotFound_WhenUserDoesNotExist()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: "Lizzy",
+            Phone: "9876543210",
+            Address: null,
+            SocialMedia: null,
+            NotificationPreferences: null,
+            DarkMode: null
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
+            .ThrowsAsync(new EndUserNotFoundException(userId));
+
+        // Act
+        var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
+
+        // Assert
+        var notFoundResult = result as NotFoundObjectResult;
+        Assert.That(notFoundResult, Is.Not.Null);
+        Assert.That(notFoundResult!.StatusCode, Is.EqualTo(404));
+    }
+
+    [Test]
+    public async Task UpdateEndUserProfileDetail_ShouldReturnBadRequest_WhenModelStateInvalid()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: null,
+            Phone: null,
+            Address: null,
+            SocialMedia: null,
+            NotificationPreferences: null,
+            DarkMode: null
+        );
+
+        _controller.ModelState.AddModelError("Phone", "Invalid phone format");
+
+        // Act
+        var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
+
+        // Assert
+        var badRequestResult = result as BadRequestObjectResult;
+        Assert.That(badRequestResult, Is.Not.Null);
+        Assert.That(badRequestResult!.StatusCode, Is.EqualTo(400));
+    }
+
+    [Test]
+    public async Task UpdateEndUserProfileDetail_ShouldReturnInternalServerError_OnUnexpectedException()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: "Lizzy",
+            Phone: "9876543210",
+            Address: null,
+            SocialMedia: null,
+            NotificationPreferences: null,
+            DarkMode: null
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
+            .ThrowsAsync(new Exception("Database connection failed"));
+
+        // Act
+        var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
+
+        // Assert
+        var errorResult = result as ObjectResult;
+        Assert.That(errorResult, Is.Not.Null);
+        Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
+    }
+
+    [Test]
+    public async Task UpdateEndUserProfileDetail_ShouldCallServiceOnce()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: "Lizzy",
+            Phone: "9876543210",
+            Address: "New Address",
+            SocialMedia: "twitter.com/test",
+            NotificationPreferences: new NotificationPreferencesDto(true, true, false, false),
+            DarkMode: true
+        );
+
+        var expectedResponse = new EndUserProfileDetailDto(
+            UserId: userId,
+            Username: "test",
+            Email: "test@example.com",
+            Phone: "9876543210",
+            Address: "New Address",
+            JoinDate: DateTime.UtcNow,
+            EndUserProfileId: Guid.NewGuid(),
+            SocialMedia: "twitter.com/test",
+            NotificationPreferences: new NotificationPreferencesDto(true, true, false, false),
+            DarkMode: true,
+            CreatedAt: DateTime.UtcNow,
+            UpdatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        await _controller.UpdateEndUserProfileDetail(userId, updateDto);
+
+        // Assert
+        _mockUserService.Verify(s => s.UpdateEndUserProfileAsync(userId, updateDto), Times.Once);
+    }
+
+    [Test]
+    public async Task UpdateEndUserProfileDetail_ShouldUpdateOnlyNotificationPreferences()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var updateDto = new UpdateEndUserProfileDto(
+            Username: null,
+            Phone: null,
+            Address: null,
+            SocialMedia: null,
+            NotificationPreferences: new NotificationPreferencesDto(
+                EmailNotifications: false,
+                SmsNotifications: true,
+                PushNotifications: false,
+                MarketingEmails: true
+            ),
+            DarkMode: null
+        );
+
+        var expectedResponse = new EndUserProfileDetailDto(
+            UserId: userId,
+            Username: "john_doe",
+            Email: "john@example.com",
+            Phone: "1234567890",
+            Address: "123 Main St",
+            JoinDate: DateTime.UtcNow.AddDays(-30),
+            EndUserProfileId: Guid.NewGuid(),
+            SocialMedia: "instagram.com/johndoe",
+            NotificationPreferences: new NotificationPreferencesDto(
+                EmailNotifications: false,
+                SmsNotifications: true,
+                PushNotifications: false,
+                MarketingEmails: true
+            ),
+            DarkMode: false,
+            CreatedAt: DateTime.UtcNow.AddDays(-30),
+            UpdatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
+
+        // Assert
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var json = JsonSerializer.Serialize(okResult.Value);
+        var response = JsonSerializer.Deserialize<EndUserProfileDetailDto>(json);
+
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.NotificationPreferences.EmailNotifications, Is.False);
+        Assert.That(response.NotificationPreferences.SmsNotifications, Is.True);
+        Assert.That(response.NotificationPreferences.MarketingEmails, Is.True);
+        Assert.That(response.Phone, Is.EqualTo("1234567890")); // Unchanged
+        Assert.That(response.DarkMode, Is.False); // Unchanged
+    }
+
+
+
+
+
 }

@@ -14,6 +14,7 @@ public class UserService(
     IBusinessServiceClient businessServiceClient,
     ISupportUserProfileRepository supportUserProfileRepository,
     IEndUserProfileRepository endUserProfileRepository,
+    IUserSettingsRepository userSettingsRepository,
     IAuth0ManagementService _auth0,
     IConfiguration _config
 ) : IUserService
@@ -215,22 +216,6 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
 
         return (user, businessId.Value, businessRep);
     }
-
-    // public async Task<object?> GetBusinessAccountAsync(Guid id)
-    // {
-    //     // 1. Get business id
-    //     // var id = await userRepository.GetUserOrBusinessIdByEmailAsync(email);
-    //     // if (id == null)
-    //     //     throw new Exception(); // fix this later
-    //     
-    //     // 2. Get business rep
-    //     var savedBusiness = await businessRepRepository.GetByBusinessIdAsync()
-    //     
-    //     // 2. Get user details
-    //     var savedUser = await userRepository.GetByIdAsync(savedBusiness.UserId);
-    //     if (savedUser == null)
-    //         throw new UserCreationFailedException("Failed to create user record.");
-    // };
     
     public async Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id)
         => await businessRepRepository.GetByIdAsync(id);
@@ -288,6 +273,134 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
             CreatedAt: user.CreatedAt
         );
     }
+    
+    public async Task<EndUserProfileDetailDto> GetEndUserProfileDetailAsync(Guid userId)
+    {
+        // 1. Get the user
+        var user = await userRepository.GetByIdAsync(userId);
+        if (user is null)
+            throw new EndUserNotFoundException(userId);
+
+        // 2. Verify this is an end user
+        if (user.UserType != "end_user")
+            throw new EndUserNotFoundException(userId);
+
+        // 3. Get the end user profile
+        var profile = await endUserProfileRepository.GetByUserIdAsync(userId);
+        if (profile is null)
+            throw new EndUserNotFoundException(userId);
+
+        // 4. Get user settings (create default if doesn't exist)
+        var settings = await userSettingsRepository.GetByUserIdAsync(userId);
+        if (settings is null)
+        {
+            // Create default settings for this user
+            settings = new UserSettings(userId);
+            await userSettingsRepository.AddAsync(settings);
+        }
+
+        // 5. Parse notification preferences from JSONB
+        var notificationPrefs = settings.GetNotificationPreferences();
+
+        // 6. Map to DTO
+        return new EndUserProfileDetailDto(
+            UserId: user.Id,
+            Username: user.Username,
+            Email: user.Email,
+            Phone: user.Phone,
+            Address: user.Address,
+            JoinDate: user.JoinDate,
+        
+            EndUserProfileId: profile.Id,
+            SocialMedia: profile.SocialMedia,
+        
+            NotificationPreferences: new NotificationPreferencesDto(
+                EmailNotifications: notificationPrefs.EmailNotifications,
+                SmsNotifications: notificationPrefs.SmsNotifications,
+                PushNotifications: notificationPrefs.PushNotifications,
+                MarketingEmails: notificationPrefs.MarketingEmails
+            ),
+            DarkMode: settings.DarkMode,
+        
+            CreatedAt: user.CreatedAt,
+            UpdatedAt: settings.UpdatedAt
+        );
+    }
+
+    public async Task<EndUserProfileDetailDto> UpdateEndUserProfileAsync(Guid userId, UpdateEndUserProfileDto dto)
+    {
+        // 1. Get the user
+        var user = await userRepository.GetByIdAsync(userId);
+        if (user is null)
+            throw new EndUserNotFoundException(userId);
+
+        // 2. Verify this is an end user
+        if (user.UserType != "end_user")
+            throw new EndUserNotFoundException(userId);
+
+        // 3. Get the end user profile
+        var profile = await endUserProfileRepository.GetByUserIdAsync(userId);
+        if (profile is null)
+            throw new EndUserNotFoundException(userId);
+
+        // 4. Get user settings (create if doesn't exist)
+        var settings = await userSettingsRepository.GetByUserIdAsync(userId);
+        if (settings is null)
+        {
+            settings = new UserSettings(userId);
+            await userSettingsRepository.AddAsync(settings);
+        }
+
+        // 5. Update user basic info (if provided)
+        if (!string.IsNullOrWhiteSpace(dto.Username) || 
+            !string.IsNullOrWhiteSpace(dto.Phone) || 
+            dto.Address != null)
+        {
+            user.Update(
+                email: null, // Email cannot be updated via this endpoint
+                phone: dto.Phone,
+                address: dto.Address
+            );
+            
+            // Update username separately if needed (User entity might not have this in Update method)
+            // If username update is needed, you may need to add it to the User.Update method
+            await userRepository.UpdateAsync(user);
+        }
+
+        // 6. Update end user profile (if provided)
+        if (dto.SocialMedia != null)
+        {
+            profile.UpdateSocialMedia(dto.SocialMedia);
+            await endUserProfileRepository.UpdateAsync(profile);
+        }
+
+        // 7. Update user settings (if provided)
+        if (dto.NotificationPreferences != null || dto.DarkMode.HasValue)
+        {
+            NotificationPreferencesModel? notifPrefs = null;
+            
+            if (dto.NotificationPreferences != null)
+            {
+                notifPrefs = new NotificationPreferencesModel
+                {
+                    EmailNotifications = dto.NotificationPreferences.EmailNotifications,
+                    SmsNotifications = dto.NotificationPreferences.SmsNotifications,
+                    PushNotifications = dto.NotificationPreferences.PushNotifications,
+                    MarketingEmails = dto.NotificationPreferences.MarketingEmails
+                };
+            }
+            
+            settings.UpdateSettings(
+                darkMode: dto.DarkMode,
+                notificationPrefs: notifPrefs
+            );
+            await userSettingsRepository.UpdateAsync(settings);
+        }
+
+        // 8. Fetch and return updated profile
+        return await GetEndUserProfileDetailAsync(userId);
+    }
+
 
 
 }

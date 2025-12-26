@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserService.Application.DTOs;
@@ -108,8 +109,8 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         var result = await service.GetBusinessRepByIdAsync(id);
         return result is not null ? Ok(result) : NotFound();
     }
-
-    // PUBLIC end-user sign-up
+    
+    
     [AllowAnonymous]
     [HttpPost("end-user")]
     public async Task<IActionResult> CreateEndUser([FromBody] CreateEndUserDto dto)
@@ -138,13 +139,6 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     }
 
 
-
-    // ========== NEW: Business Rep Endpoints for Settings Authorization ==========
-    
-    /// <summary>
-    /// Gets a business rep by ID.
-    /// Used by BusinessService to check authorization for settings.
-    /// </summary>
     [AllowAnonymous]
     [HttpGet("business-rep/{businessRepId:guid}")]
     public async Task<IActionResult> GetBusinessRep(Guid businessRepId)
@@ -176,11 +170,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
-
-    /// <summary>
-    /// Gets the parent business rep for a business (first rep created).
-    /// Used by BusinessService to authorize business-level settings changes.
-    /// </summary>
+    
     [AllowAnonymous]
     [HttpGet("business-rep/parent/{businessId:guid}")]
     public async Task<IActionResult> GetParentRepByBusinessId(Guid businessId)
@@ -212,32 +202,88 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
-/// <summary>
-/// Checks if a user is a support user.
-/// Used by BusinessService to authorize support-only operations like extending DnD mode.
-/// </summary>
-[AllowAnonymous]
-[HttpGet("support-user/{userId:guid}/exists")]
-public async Task<IActionResult> IsSupportUser(Guid userId)
-{
-    try
+    
+    [AllowAnonymous]
+    [HttpGet("support-user/{userId:guid}/exists")]
+    public async Task<IActionResult> IsSupportUser(Guid userId)
     {
-        var user = await service.GetUserByIdAsync(userId);
-        
-        if (user == null)
+        try
         {
-            return NotFound(new { error = $"User {userId} not found" });
+            var user = await service.GetUserByIdAsync(userId);
+            
+            if (user == null)
+            {
+                return NotFound(new { error = $"User {userId} not found" });
+            }
+
+            // Check if user type is support_user
+            var isSupportUser = user.UserType == "support_user";
+
+            return Ok(new { IsSupportUser = isSupportUser });
         }
-
-        // Check if user type is support_user
-        var isSupportUser = user.UserType == "support_user";
-
-        return Ok(new { IsSupportUser = isSupportUser });
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error checking if user {UserId} is support user", userId);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
     }
-    catch (Exception ex)
+    
+    [AllowAnonymous]
+    [HttpGet("end-user/{userId:guid}/profile")]
+    public async Task<IActionResult> GetEndUserProfileDetail(Guid userId)
     {
-        logger.LogError(ex, "Error checking if user {UserId} is support user", userId);
-        return StatusCode(500, new { error = "Internal server error" });
+        try
+        {
+            logger.LogInformation("Fetching end user profile for user {UserId}", userId);
+            
+            var result = await service.GetEndUserProfileDetailAsync(userId);
+            
+            return Ok(result);
+        }
+        catch (EndUserNotFoundException ex)
+        {
+            logger.LogWarning(ex, "End user {UserId} not found", userId);
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting end user profile for user {UserId}", userId);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
     }
-}
+    
+    
+    [AllowAnonymous]
+    [HttpPut("end-user/{userId:guid}/profile")]
+    public async Task<IActionResult> UpdateEndUserProfileDetail(
+        Guid userId, 
+        [FromBody] UpdateEndUserProfileDto dto)
+    {
+        try
+        {
+            var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRoles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
+
+            logger.LogInformation("Updating end user profile for user {UserId}", userId);
+            
+            var result = await service.UpdateEndUserProfileAsync(userId, dto);
+            
+            logger.LogInformation("Successfully updated end user profile for user {UserId}", userId);
+            
+            return Ok(result);
+        }
+        catch (EndUserNotFoundException ex)
+        {
+            logger.LogWarning(ex, "End user {UserId} not found for update", userId);
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error updating end user profile for user {UserId}", userId);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+
+
 }
