@@ -26,6 +26,7 @@ builder.Services.AddScoped<IBusinessRepRepository, BusinessRepRepository>();
 builder.Services.AddScoped<ISupportUserProfileRepository, SupportUserProfileRepository>();
 builder.Services.AddScoped<IEndUserProfileRepository, EndUserProfileRepository>();
 builder.Services.AddScoped<IUserSettingsRepository, UserSettingsRepository>();
+builder.Services.AddScoped<ISocialIdentityRepository, SocialIdentityRepository>();
 
 // ---------- Auth0 Login HTTP Client (TLS forced) ----------
 builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(client =>
@@ -69,6 +70,22 @@ builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(cl
 
 // ---------- Auth0 Management API ----------
 builder.Services.AddHttpClient<IAuth0ManagementService, Auth0ManagementService>();
+
+// ---------- Auth0 Social Login Service ----------
+builder.Services.AddHttpClient<IAuth0SocialLoginService, Auth0SocialLoginService>(client =>
+{
+    client.DefaultRequestVersion = HttpVersion.Version11;
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    return new SocketsHttpHandler
+    {
+        SslOptions = new SslClientAuthenticationOptions
+        {
+            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+        }
+    };
+});
 
 // ---------- Cookie policy (needed for refresh cookie) ----------
 builder.Services.Configure<CookiePolicyOptions>(options =>
