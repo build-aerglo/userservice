@@ -28,6 +28,17 @@ builder.Services.AddScoped<IEndUserProfileRepository, EndUserProfileRepository>(
 builder.Services.AddScoped<IUserSettingsRepository, UserSettingsRepository>();
 builder.Services.AddScoped<ISocialIdentityRepository, SocialIdentityRepository>();
 
+// ---------- New Feature Repos (Badge, Points, Verification, Referral, Geolocation) ----------
+builder.Services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
+builder.Services.AddScoped<IUserPointsRepository, UserPointsRepository>();
+builder.Services.AddScoped<IPointTransactionRepository, PointTransactionRepository>();
+builder.Services.AddScoped<IUserVerificationRepository, UserVerificationRepository>();
+builder.Services.AddScoped<IVerificationTokenRepository, VerificationTokenRepository>();
+builder.Services.AddScoped<IUserReferralCodeRepository, UserReferralCodeRepository>();
+builder.Services.AddScoped<IReferralRepository, ReferralRepository>();
+builder.Services.AddScoped<IUserGeolocationRepository, UserGeolocationRepository>();
+builder.Services.AddScoped<IGeolocationHistoryRepository, GeolocationHistoryRepository>();
+
 // ---------- Auth0 Login HTTP Client (TLS forced) ----------
 builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(client =>
 {
@@ -49,6 +60,13 @@ builder.Services.AddScoped<IRefreshTokenCookieService, RefreshTokenCookieService
 
 // ---------- Domain Services ----------
 builder.Services.AddScoped<IUserService, UserService.Application.Services.UserService>();
+
+// ---------- New Feature Services (Badge, Points, Verification, Referral, Geolocation) ----------
+builder.Services.AddScoped<IBadgeService, BadgeService>();
+builder.Services.AddScoped<IPointsService, PointsService>();
+builder.Services.AddScoped<IVerificationService, VerificationService>();
+builder.Services.AddScoped<IReferralService, ReferralService>();
+builder.Services.AddScoped<IGeolocationService, GeolocationService>();
 
 // ==================================================================
 //  BUSINESS SERVICE CLIENT — ALLOW HTTP (FIX FOR SSL MISMATCH ERROR)
