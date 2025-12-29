@@ -24,8 +24,26 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UserService.Infrastructure.Tests", "tests\UserService.Infrastructure.Tests\UserService.Infrastructure.Tests.csproj", "{8F03ED35-39F1-4363-968A-D510AD45798F}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{C4E37ADF-4601-4B9F-B33D-E02F2BBF884C}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UserService.DbUp", "tools\UserService.DbUp\UserService.DbUp.csproj", "{C5408DFA-38FD-4CF1-8CA9-55BA557795AF}"
+	ProjectSection(SolutionItems) = preProject
+		tools\Lists.html = tools\Lists.html
+		tools\Log.html = tools\Log.html
+		tools\Notification.html = tools\Notification.html
+		tools\Notifications.html = tools\Notifications.html
+		tools\Profile   Login   Signup.html = tools\Profile   Login   Signup.html
+		tools\questions.html = tools\questions.html
+		tools\Review Source Integration.html = tools\Review Source Integration.html
+		tools\Rules.html = tools\Rules.html
+		tools\Settings.html = tools\Settings.html
+		tools\Summary.html = tools\Summary.html
+		tools\Support.html = tools\Support.html
+		tools\Unclaimed bus.html = tools\Unclaimed bus.html
+		tools\resources\sheet.css = tools\resources\sheet.css
+		tools\Analytics.html = tools\Analytics.html
+		tools\Business -Reviews.html = tools\Business -Reviews.html
+		tools\Consumer -Reviews.html = tools\Consumer -Reviews.html
+		tools\Integration .html = tools\Integration .html
+		tools\Landing.html = tools\Landing.html
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -61,10 +79,6 @@ Global
 		{8F03ED35-39F1-4363-968A-D510AD45798F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8F03ED35-39F1-4363-968A-D510AD45798F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8F03ED35-39F1-4363-968A-D510AD45798F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C5408DFA-38FD-4CF1-8CA9-55BA557795AF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C5408DFA-38FD-4CF1-8CA9-55BA557795AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C5408DFA-38FD-4CF1-8CA9-55BA557795AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C5408DFA-38FD-4CF1-8CA9-55BA557795AF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{FD605D2C-298B-42A0-9C46-13AAB32EF1B1} = {34D1AC84-E2CD-446D-B51E-B9306F32D3F8}
@@ -74,6 +88,5 @@ Global
 		{F0E78A03-64EB-4864-9349-CC8F73854E6B} = {50FC0792-6A05-4263-8277-392753F4F80F}
 		{D07F48A5-3A36-4561-8DF4-1B155C531E07} = {50FC0792-6A05-4263-8277-392753F4F80F}
 		{8F03ED35-39F1-4363-968A-D510AD45798F} = {50FC0792-6A05-4263-8277-392753F4F80F}
-		{C5408DFA-38FD-4CF1-8CA9-55BA557795AF} = {C4E37ADF-4601-4B9F-B33D-E02F2BBF884C}
 	EndGlobalSection
 EndGlobal
