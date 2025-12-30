@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Security;
 using System.Security.Authentication;
+using Azure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Configuration.AzureAppConfiguration;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using UserService.Application.Interfaces;
@@ -12,6 +14,69 @@ using UserService.Infrastructure.Clients;
 using UserService.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ============================================================================
+// AZURE CONFIGURATION - Key Vault & App Configuration Integration
+// ============================================================================
+// Configuration is loaded from multiple sources in this order (later sources override):
+// 1. appsettings.json (non-sensitive defaults)
+// 2. appsettings.{Environment}.json (environment-specific non-sensitive config)
+// 3. Environment variables (can override any setting)
+// 4. Azure App Configuration (centralized config management)
+// 5. Azure Key Vault (secrets only)
+
+var azureAppConfigConnectionString = builder.Configuration["Azure:AppConfigurationConnectionString"]
+    ?? Environment.GetEnvironmentVariable("AZURE_APP_CONFIGURATION_CONNECTION_STRING");
+
+var keyVaultUri = builder.Configuration["Azure:KeyVaultUri"]
+    ?? Environment.GetEnvironmentVariable("AZURE_KEY_VAULT_URI");
+
+// Add Azure App Configuration if connection string is provided
+if (!string.IsNullOrEmpty(azureAppConfigConnectionString))
+{
+    builder.Configuration.AddAzureAppConfiguration(options =>
+    {
+        options.Connect(azureAppConfigConnectionString)
+            .Select(KeyFilter.Any, LabelFilter.Null)
+            .Select(KeyFilter.Any, builder.Environment.EnvironmentName)
+            .ConfigureRefresh(refresh =>
+            {
+                refresh.Register("Settings:Sentinel", refreshAll: true)
+                    .SetCacheExpiration(TimeSpan.FromMinutes(5));
+            });
+
+        // Connect to Key Vault for secrets referenced in App Configuration
+        if (!string.IsNullOrEmpty(keyVaultUri))
+        {
+            options.ConfigureKeyVault(kv =>
+            {
+                kv.SetCredential(new DefaultAzureCredential());
+            });
+        }
+    });
+
+    // Add Azure App Configuration middleware for dynamic refresh
+    builder.Services.AddAzureAppConfiguration();
+}
+
+// Add Azure Key Vault directly if URI is provided (for secrets not in App Config)
+if (!string.IsNullOrEmpty(keyVaultUri))
+{
+    builder.Configuration.AddAzureKeyVault(
+        new Uri(keyVaultUri),
+        new DefaultAzureCredential());
+}
+
+// ============================================================================
+// ENVIRONMENT VARIABLE OVERRIDES
+// ============================================================================
+// All configuration can be overridden via environment variables using __ as separator
+// Examples:
+//   ConnectionStrings__PostgresConnection -> ConnectionStrings:PostgresConnection
+//   Auth0__ClientSecret -> Auth0:ClientSecret
+//   Services__BusinessServiceBaseUrl -> Services:BusinessServiceBaseUrl
+
+builder.Configuration.AddEnvironmentVariables();
 
 // MVC
 builder.Services.AddControllers();
@@ -69,20 +134,25 @@ builder.Services.AddScoped<IReferralService, ReferralService>();
 builder.Services.AddScoped<IGeolocationService, GeolocationService>();
 
 // ==================================================================
-//  BUSINESS SERVICE CLIENT — ALLOW HTTP (FIX FOR SSL MISMATCH ERROR)
+// BUSINESS SERVICE CLIENT - Secure SSL Configuration
 // ==================================================================
+var businessServiceBaseUrl = builder.Configuration["Services:BusinessServiceBaseUrl"];
 builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Services:BusinessServiceBaseUrl"]);
+    if (!string.IsNullOrEmpty(businessServiceBaseUrl))
+    {
+        client.BaseAddress = new Uri(businessServiceBaseUrl);
+    }
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 })
 .ConfigurePrimaryHttpMessageHandler(() =>
 {
-    // 👇 THIS FIXES YOUR ERROR: Allow HTTP, do NOT enforce SSL
-    return new HttpClientHandler
+    return new SocketsHttpHandler
     {
-        ServerCertificateCustomValidationCallback =
-            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        SslOptions = new SslClientAuthenticationOptions
+        {
+            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+        }
     };
 });
 
@@ -112,17 +182,34 @@ builder.Services.Configure<CookiePolicyOptions>(options =>
     options.Secure = CookieSecurePolicy.Always;
 });
 
-// ---------- CORS ----------
+// ---------- CORS - Secure Configuration ----------
+// Read allowed origins from configuration (can be set via environment variables or Azure App Config)
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "https://aerglotechnology.com", "https://www.aerglotechnology.com" };
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
         policy
-            .SetIsOriginAllowed(_ => true)  // allow temporary until production
+            .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
     });
+
+    // Development policy - only for non-production environments
+    if (builder.Environment.IsDevelopment())
+    {
+        options.AddPolicy("DevelopmentPolicy", policy =>
+        {
+            policy
+                .SetIsOriginAllowed(_ => true)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        });
+    }
 });
 
 // ---------- Auth0 JWT Auth ----------
@@ -145,12 +232,12 @@ builder.Services
         {
             OnAuthenticationFailed = ctx =>
             {
-                Console.WriteLine("❌ Token auth failed: " + ctx.Exception.Message);
+                Console.WriteLine("Token auth failed: " + ctx.Exception.Message);
                 return Task.CompletedTask;
             },
             OnTokenValidated = ctx =>
             {
-                Console.WriteLine("✅ Token validated");
+                Console.WriteLine("Token validated");
                 return Task.CompletedTask;
             }
         };
@@ -195,12 +282,22 @@ builder.Services.AddSwaggerGen(options =>
 // Build
 var app = builder.Build();
 
-// Swagger always enabled
-app.UseSwagger();
-app.UseSwaggerUI();
+// Use Azure App Configuration middleware for dynamic refresh (if configured)
+if (!string.IsNullOrEmpty(azureAppConfigConnectionString))
+{
+    app.UseAzureAppConfiguration();
+}
+
+// Swagger - only in Development or if explicitly enabled
+if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("EnableSwagger"))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 // Correct order
-app.UseCors("FrontendPolicy");
+var corsPolicy = app.Environment.IsDevelopment() ? "DevelopmentPolicy" : "FrontendPolicy";
+app.UseCors(corsPolicy);
 app.UseCookiePolicy();
 app.UseAuthentication();
 app.UseAuthorization();

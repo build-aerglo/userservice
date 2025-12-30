@@ -1,5 +1,67 @@
+# Build output
 bin/
 obj/
 /packages/
+
+# IDE files
 riderModule.iml
 /_ReSharper.Caches/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+*.csproj.user
+
+# User-specific secrets (local development)
+appsettings.*.local.json
+appsettings.local.json
+secrets.json
+*.secrets.json
+
+# Environment files with secrets
+.env
+.env.*
+!.env.example
+*.env
+*.env.*
+
+# Azure credentials (if stored locally)
+azure.json
+azure-credentials.json
+
+# Local development certificates
+*.pfx
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+nlog-*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test results
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# NuGet packages
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!.nuget/NuGet.Config
+
+# Publish output
+publish/

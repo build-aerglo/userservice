@@ -13,11 +13,12 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
     private async Task<string> GetMgmtTokenAsync()
     {
         var domain = config["Auth0:Domain"]!;
+        var managementAudience = config["Auth0:ManagementAudience"] ?? $"https://{domain}/api/v2/";
         var body = new
         {
-            client_id = config["Auth0:ClientId"],
-            client_secret = config["Auth0:ClientSecret"],
-            audience = "https://dev-jx8cz5q0wcoddune.us.auth0.com/api/v2/",
+            client_id = config["Auth0:MgmtClientId"],
+            client_secret = config["Auth0:MgmtClientSecret"],
+            audience = managementAudience,
             grant_type = "client_credentials"
         };
 

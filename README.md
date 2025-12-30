@@ -185,15 +185,18 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ---
 
-Example curl:- curl --request POST \
-  --url https://dev-jx8cz5q0wcoddune.us.auth0.com/oauth/token \
+Example curl (replace placeholders with your actual values):
+```bash
+curl --request POST \
+  --url https://${AUTH0_DOMAIN}/oauth/token \
   --header 'content-type: application/json' \
   --data '{
-    "client_id":"HYUCewQj7h3Ybt8ttM0jvL5tQApkKEMg",
-    "client_secret":"jmwxviI8ZCSqSqD-2ZjYQxZXXn1PHVhzvTMJR4C5W6BHpHflcrlkqdt16VIOEoJv",
-    "audience":"https://user-service.aerglotechnology.com",
+    "client_id":"${AUTH0_CLIENT_ID}",
+    "client_secret":"${AUTH0_CLIENT_SECRET}",
+    "audience":"${AUTH0_AUDIENCE}",
     "grant_type":"client_credentials"
   }'
+```
 
 
 ## 🧰 Setup Instructions
@@ -209,18 +212,28 @@ git clone https://github.com/build-aerglo/userservice.git
 cd userservice
 ```
 
-### 3️⃣ Configure appsettings
-```json
-{
-  "ConnectionStrings": {
-    "PostgresConnection": "Host=localhost;Port=5432;Database=user_service;Username=postgres;Password=postgres"
-  },
-  "Auth0": {
-    "Domain": "your-tenant.auth0.com",
-    "Audience": "https://api.aerglo-userservice"
-  }
-}
+### 3️⃣ Configure Environment Variables
+
+Copy the `.env.example` file and configure your local settings:
+```bash
+cp .env.example .env
+# Edit .env with your local values
 ```
+
+Or set environment variables directly:
+```bash
+export ConnectionStrings__PostgresConnection="Host=localhost;Port=5432;Database=user_service;Username=postgres;Password=postgres"
+export Auth0__Domain="your-tenant.auth0.com"
+export Auth0__Audience="https://api.aerglo-userservice"
+export Auth0__ClientId="your-client-id"
+export Auth0__ClientSecret="your-client-secret"
+```
+
+**Important:** Never commit secrets to version control. All sensitive values should be:
+- Stored in environment variables for local development
+- Stored in Azure Key Vault for production deployments
+
+See [Azure Deployment Guide](docs/AZURE_DEPLOYMENT.md) for production setup.
 
 ### 4️⃣ Run migrations
 ```bash
