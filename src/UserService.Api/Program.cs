@@ -28,6 +28,36 @@ builder.Services.AddScoped<IEndUserProfileRepository, EndUserProfileRepository>(
 builder.Services.AddScoped<IUserSettingsRepository, UserSettingsRepository>();
 builder.Services.AddScoped<ISocialIdentityRepository, SocialIdentityRepository>();
 
+// ---------- Badge System Repos ----------
+builder.Services.AddScoped<IBadgeDefinitionRepository, BadgeDefinitionRepository>();
+builder.Services.AddScoped<IUserBadgeRepository, UserBadgeRepository>();
+builder.Services.AddScoped<IUserBadgeLevelRepository, UserBadgeLevelRepository>();
+
+// ---------- Points System Repos ----------
+builder.Services.AddScoped<IPointRuleRepository, PointRuleRepository>();
+builder.Services.AddScoped<IUserPointsRepository, UserPointsRepository>();
+builder.Services.AddScoped<IPointTransactionRepository, PointTransactionRepository>();
+builder.Services.AddScoped<IPointMultiplierRepository, PointMultiplierRepository>();
+builder.Services.AddScoped<IUserDailyPointsRepository, UserDailyPointsRepository>();
+
+// ---------- Verification System Repos ----------
+builder.Services.AddScoped<IEmailVerificationRepository, EmailVerificationRepository>();
+builder.Services.AddScoped<IPhoneVerificationRepository, PhoneVerificationRepository>();
+builder.Services.AddScoped<IUserVerificationStatusRepository, UserVerificationStatusRepository>();
+
+// ---------- Referral System Repos ----------
+builder.Services.AddScoped<IUserReferralCodeRepository, UserReferralCodeRepository>();
+builder.Services.AddScoped<IReferralRepository, ReferralRepository>();
+builder.Services.AddScoped<IReferralRewardTierRepository, ReferralRewardTierRepository>();
+builder.Services.AddScoped<IReferralCampaignRepository, ReferralCampaignRepository>();
+
+// ---------- Location System Repos ----------
+builder.Services.AddScoped<IUserLocationRepository, UserLocationRepository>();
+builder.Services.AddScoped<IUserSavedLocationRepository, UserSavedLocationRepository>();
+builder.Services.AddScoped<IUserLocationPreferencesRepository, UserLocationPreferencesRepository>();
+builder.Services.AddScoped<IGeofenceRepository, GeofenceRepository>();
+builder.Services.AddScoped<IUserGeofenceEventRepository, UserGeofenceEventRepository>();
+
 // ---------- Auth0 Login HTTP Client (TLS forced) ----------
 builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(client =>
 {
@@ -49,6 +79,13 @@ builder.Services.AddScoped<IRefreshTokenCookieService, RefreshTokenCookieService
 
 // ---------- Domain Services ----------
 builder.Services.AddScoped<IUserService, UserService.Application.Services.UserService>();
+
+// ---------- New Feature Services ----------
+builder.Services.AddScoped<IBadgeService, BadgeService>();
+builder.Services.AddScoped<IPointsService, PointsService>();
+builder.Services.AddScoped<IVerificationService, VerificationService>();
+builder.Services.AddScoped<IReferralService, ReferralService>();
+builder.Services.AddScoped<ILocationService, LocationService>();
 
 // ==================================================================
 //  BUSINESS SERVICE CLIENT — ALLOW HTTP (FIX FOR SSL MISMATCH ERROR)
