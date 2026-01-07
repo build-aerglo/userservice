@@ -23,3 +23,6 @@ public class ReferralCodeInactiveException(string code)
 
 public class ReferralAlreadyCompletedException(Guid referralId)
     : Exception($"Referral '{referralId}' has already been completed.");
+
+public class ReferralCodeTakenException(String message)
+    : Exception($"Referral code '{message}' was taken.");
