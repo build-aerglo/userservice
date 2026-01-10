@@ -13,6 +13,7 @@ riderModule.iml
 *.sln.docstates
 .vs/
 *.csproj.user
+.vscode/
 
 # User-specific secrets (local development)
 appsettings.*.local.json
