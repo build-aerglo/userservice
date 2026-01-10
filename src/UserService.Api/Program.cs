@@ -35,6 +35,10 @@ var keyVaultUri = builder.Configuration["Azure:KeyVaultUri"]
 Console.WriteLine($"[CONFIG DEBUG] Azure App Config Connection String: {(string.IsNullOrEmpty(azureAppConfigConnectionString) ? "NOT SET" : "SET (length: " + azureAppConfigConnectionString.Length + ")")}");
 Console.WriteLine($"[CONFIG DEBUG] Key Vault URI: {(string.IsNullOrEmpty(keyVaultUri) ? "NOT SET" : keyVaultUri)}");
 
+// Debug logging for Azure configuration
+Console.WriteLine($"[CONFIG DEBUG] Azure App Config Connection String: {(string.IsNullOrEmpty(azureAppConfigConnectionString) ? "NOT SET" : "SET (length: " + azureAppConfigConnectionString.Length + ")")}");
+
+
 // Add Azure App Configuration if connection string is provided
 if (!string.IsNullOrEmpty(azureAppConfigConnectionString))
 {
@@ -89,6 +93,15 @@ Console.WriteLine($"[CONFIG DEBUG] Auth0:ClientId = {builder.Configuration["Auth
 Console.WriteLine($"[CONFIG DEBUG] Auth0:ClientSecret = {(string.IsNullOrEmpty(builder.Configuration["Auth0:ClientSecret"]) ? "NOT SET" : "SET (length: " + builder.Configuration["Auth0:ClientSecret"]?.Length + ")")}");
 Console.WriteLine($"[CONFIG DEBUG] Auth0:DbConnection = {builder.Configuration["Auth0:DbConnection"]}");
 Console.WriteLine($"[CONFIG DEBUG] ConnectionStrings:PostgresConnection = {(string.IsNullOrEmpty(builder.Configuration.GetConnectionString("PostgresConnection")) ? "NOT SET" : "SET")}");
+
+// Debug: Print loaded Auth0 configuration (mask secrets)
+Console.WriteLine($"[CONFIG DEBUG] Auth0:Domain = {builder.Configuration["Auth0:Domain"]}");
+Console.WriteLine($"[CONFIG DEBUG] Auth0:Audience = {builder.Configuration["Auth0:Audience"]}");
+Console.WriteLine($"[CONFIG DEBUG] Auth0:ClientId = {builder.Configuration["Auth0:ClientId"]}");
+Console.WriteLine($"[CONFIG DEBUG] Auth0:ClientSecret = {(string.IsNullOrEmpty(builder.Configuration["Auth0:ClientSecret"]) ? "NOT SET" : "SET (length: " + builder.Configuration["Auth0:ClientSecret"]?.Length + ")")}");
+Console.WriteLine($"[CONFIG DEBUG] Auth0:DbConnection = {builder.Configuration["Auth0:DbConnection"]}");
+Console.WriteLine($"[CONFIG DEBUG] ConnectionStrings:PostgresConnection = {(string.IsNullOrEmpty(builder.Configuration.GetConnectionString("PostgresConnection")) ? "NOT SET" : "SET")}");
+
 
 // MVC
 builder.Services.AddControllers();
@@ -301,8 +314,7 @@ if (!string.IsNullOrEmpty(azureAppConfigConnectionString))
 }
 
 // Swagger - only in Development or if explicitly enabled
-var enableSwagger = builder.Configuration.GetValue<bool>("EnableSwagger")
-    || string.Equals(builder.Configuration["EnableSwagger"], "true", StringComparison.OrdinalIgnoreCase);
+var enableSwagger = true;
 if (app.Environment.IsDevelopment() || enableSwagger)
 {
     app.UseSwagger();
