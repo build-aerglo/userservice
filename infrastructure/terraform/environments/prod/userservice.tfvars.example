@@ -1,0 +1,33 @@
+# =============================================================================
+# UserService - Production Configuration
+# =============================================================================
+
+environment = "prod"
+location    = "canadacentral"
+
+services = [
+  {
+    name              = "userservice"
+    app_service_sku   = "B1"
+    dotnet_version    = "9.0"
+    always_on         = false
+    health_check_path = "/health"
+    create_key_vault  = true
+    create_app_config = true
+    enable_swagger    = true
+
+    # Secrets are stored in Key Vault - values provided via environment or Azure DevOps
+    secrets = {
+      # "ConnectionStrings:PostgresConnection" = var.postgres_connection_string
+      # "Auth0:ClientSecret"                   = var.auth0_client_secret
+    }
+
+    # Non-sensitive configuration stored in App Configuration
+    config_values = {
+      "Auth0:Domain"   = "your-tenant.auth0.com"
+      "Auth0:Audience" = "https://your-api.example.com"
+      "Auth0:ClientId" = "your-client-id"
+      "EnableSwagger"  = "true"
+    }
+  }
+]

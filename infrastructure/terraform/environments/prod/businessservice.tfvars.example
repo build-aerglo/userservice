@@ -1,0 +1,30 @@
+# =============================================================================
+# BusinessService - Production Configuration (Example)
+# =============================================================================
+# Copy this file to businessservice.tfvars and fill in the values
+
+environment = "prod"
+location    = "canadacentral"
+
+services = [
+  {
+    name              = "businessservice"
+    app_service_sku   = "B1"
+    dotnet_version    = "9.0"
+    always_on         = false
+    health_check_path = "/health"
+    create_key_vault  = true
+    create_app_config = true
+    enable_swagger    = true
+
+    secrets = {
+      # Add your secrets here
+      # "ConnectionStrings:PostgresConnection" = "..."
+    }
+
+    config_values = {
+      "EnableSwagger" = "true"
+      # Add your config values here
+    }
+  }
+]

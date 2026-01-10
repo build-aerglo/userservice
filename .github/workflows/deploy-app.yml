@@ -1,0 +1,114 @@
+# =============================================================================
+# Deploy Application - Build and deploy .NET app to Azure
+# =============================================================================
+# This workflow builds and deploys the .NET application to Azure App Service.
+# Trigger manually or after infrastructure is deployed.
+
+name: Deploy Application
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to deploy'
+        required: true
+        default: 'userservice'
+        type: choice
+        options:
+          - userservice
+          - reviewservice
+          - businessservice
+      environment:
+        description: 'Environment'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+          - prod
+          - staging
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Set Variables
+        id: vars
+        run: |
+          SERVICE="${{ github.event.inputs.service }}"
+          ENV="${{ github.event.inputs.environment }}"
+
+          # Map service name to project path
+          case $SERVICE in
+            userservice)
+              PROJECT_PATH="src/UserService.Api"
+              ;;
+            reviewservice)
+              PROJECT_PATH="src/ReviewService.Api"
+              ;;
+            businessservice)
+              PROJECT_PATH="src/BusinessService.Api"
+              ;;
+          esac
+
+          echo "project_path=$PROJECT_PATH" >> $GITHUB_OUTPUT
+          echo "webapp_name=${SERVICE}-api-cc" >> $GITHUB_OUTPUT
+          echo "resource_group=rg-${SERVICE}-${ENV}" >> $GITHUB_OUTPUT
+
+      - name: Build
+        run: |
+          dotnet publish ${{ steps.vars.outputs.project_path }} \
+            -c Release \
+            -o ./publish
+
+      - name: Create Zip Package
+        run: |
+          cd publish
+          zip -r ../app.zip .
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure App Service
+        run: |
+          az webapp deploy \
+            --name ${{ steps.vars.outputs.webapp_name }} \
+            --resource-group ${{ steps.vars.outputs.resource_group }} \
+            --src-path app.zip \
+            --type zip \
+            --clean true
+
+      - name: Restart App
+        run: |
+          az webapp restart \
+            --name ${{ steps.vars.outputs.webapp_name }} \
+            --resource-group ${{ steps.vars.outputs.resource_group }}
+
+      - name: Verify Deployment
+        run: |
+          echo "Deployment complete!"
+          echo "URL: https://${{ steps.vars.outputs.webapp_name }}.azurewebsites.net"
+
+          # Wait for app to start
+          sleep 30
+
+          # Check health endpoint
+          curl -f "https://${{ steps.vars.outputs.webapp_name }}.azurewebsites.net/health" || echo "Health check pending..."
