@@ -16,22 +16,25 @@ using UserService.Infrastructure.Repositories;
 var builder = WebApplication.CreateBuilder(args);
 
 // ============================================================================
+// DEBUG: Print all AZURE environment variables
+// ============================================================================
+Console.WriteLine("[ENV DEBUG] Checking all AZURE environment variables:");
+foreach (System.Collections.DictionaryEntry env in Environment.GetEnvironmentVariables())
+{
+    if (env.Key.ToString()?.Contains("AZURE", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        var value = env.Value?.ToString();
+        Console.WriteLine($"  {env.Key} = {(string.IsNullOrEmpty(value) ? "EMPTY" : $"SET (length: {value.Length})")}");
+    }
+}
+Console.WriteLine($"[ENV DEBUG] ASPNETCORE_ENVIRONMENT = {Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")}");
+
+// ============================================================================
 // AZURE CONFIGURATION - Key Vault & App Configuration Integration
 // ============================================================================
-// Configuration is loaded from multiple sources in this order (later sources override):
-// 1. appsettings.json (non-sensitive defaults)
-// 2. appsettings.{Environment}.json (environment-specific non-sensitive config)
-// 3. Environment variables (can override any setting)
-// 4. Azure App Configuration (centralized config management)
-// 5. Azure Key Vault (secrets only)
+var azureAppConfigConnectionString = Environment.GetEnvironmentVariable("AZURE_APP_CONFIGURATION_CONNECTION_STRING");
+var keyVaultUri = Environment.GetEnvironmentVariable("AZURE_KEY_VAULT_URI");
 
-var azureAppConfigConnectionString = builder.Configuration["Azure:AppConfigurationConnectionString"]
-    ?? Environment.GetEnvironmentVariable("AZURE_APP_CONFIGURATION_CONNECTION_STRING");
-
-var keyVaultUri = builder.Configuration["Azure:KeyVaultUri"]
-    ?? Environment.GetEnvironmentVariable("AZURE_KEY_VAULT_URI");
-
-// Debug logging for Azure configuration
 Console.WriteLine($"[CONFIG DEBUG] Azure App Config Connection String: {(string.IsNullOrEmpty(azureAppConfigConnectionString) ? "NOT SET" : "SET (length: " + azureAppConfigConnectionString.Length + ")")}");
 Console.WriteLine($"[CONFIG DEBUG] Key Vault URI: {(string.IsNullOrEmpty(keyVaultUri) ? "NOT SET" : keyVaultUri)}");
 
