@@ -20,6 +20,7 @@ appsettings.*.local.json
 appsettings.local.json
 secrets.json
 *.secrets.json
+**/Properties/launchSettings.json
 
 # Environment files with secrets
 .env
