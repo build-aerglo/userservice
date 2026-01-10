@@ -113,7 +113,7 @@ az appservice plan create \
   --name $APP_SERVICE_PLAN \
   --resource-group $RESOURCE_GROUP \
   --location $LOCATION \
-  --sku P1V3 \
+  --sku B1 \
   --is-linux
 ```
 
