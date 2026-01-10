@@ -289,7 +289,9 @@ if (!string.IsNullOrEmpty(azureAppConfigConnectionString))
 }
 
 // Swagger - only in Development or if explicitly enabled
-if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("EnableSwagger"))
+var enableSwagger = builder.Configuration.GetValue<bool>("EnableSwagger")
+    || string.Equals(builder.Configuration["EnableSwagger"], "true", StringComparison.OrdinalIgnoreCase);
+if (app.Environment.IsDevelopment() || enableSwagger)
 {
     app.UseSwagger();
     app.UseSwaggerUI();
