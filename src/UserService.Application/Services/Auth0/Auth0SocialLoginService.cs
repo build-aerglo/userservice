@@ -84,19 +84,23 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
         if (!SocialProvider.IsValid(provider))
             throw new InvalidSocialProviderException(request.Provider);
 
+        // Exchange authorization code for tokens
         var tokenResponse = await ExchangeCodeForTokenAsync(request.Code, request.RedirectUri ?? "");
 
+        // Get user info from Auth0
         var userInfo = await GetUserInfoAsync(tokenResponse.AccessToken);
 
-        var existingIdentity = await _socialIdentityRepo.GetByProviderUserIdAsync(
-            provider, userInfo.Sub);
+        // Check if this social identity already exists in our database
+        var existingIdentity = await _socialIdentityRepo.GetByProviderUserIdAsync(provider, userInfo.Sub);
 
         bool isNewUser = false;
         Guid userId;
         User? user;
+        EndUserProfile? endUserProfile = null;
 
         if (existingIdentity != null)
         {
+            // Existing social login user - update tokens and get user data
             userId = existingIdentity.UserId;
             user = await _userRepo.GetByIdAsync(userId);
 
@@ -107,26 +111,39 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             existingIdentity.UpdateProfile(userInfo.Email, userInfo.Name);
 
             await _socialIdentityRepo.UpdateAsync(existingIdentity);
+
+            // Fetch end user profile
+            endUserProfile = await _endUserProfileRepo.GetByUserIdAsync(userId);
         }
         else
         {
-            var existingUserByEmail = userInfo.Email != null
-                ? await _userRepo.GetUserOrBusinessIdByEmailAsync(userInfo.Email)
-                : null;
-
-            if (existingUserByEmail.HasValue)
+            // New social login - check if email already exists in our system
+            User? existingUserByEmail = null;
+            if (!string.IsNullOrEmpty(userInfo.Email))
             {
-                userId = existingUserByEmail.Value;
-                user = await _userRepo.GetByIdAsync(userId);
+                var existingUserId = await _userRepo.GetUserOrBusinessIdByEmailAsync(userInfo.Email);
+                if (existingUserId.HasValue)
+                {
+                    existingUserByEmail = await _userRepo.GetByIdAsync(existingUserId.Value);
+                }
+            }
+
+            if (existingUserByEmail != null)
+            {
+                // Link social identity to existing user
+                userId = existingUserByEmail.Id;
+                user = existingUserByEmail;
+                endUserProfile = await _endUserProfileRepo.GetByUserIdAsync(userId);
             }
             else
             {
-                var newUser = await CreateEndUserFromSocialAsync(userInfo, provider);
-                userId = newUser.Id;
-                user = newUser;
+                // Create new local user for social login
+                (user, endUserProfile) = await CreateEndUserFromSocialAsync(userInfo, provider);
+                userId = user.Id;
                 isNewUser = true;
             }
 
+            // Create social identity link
             var socialIdentity = new SocialIdentity(
                 userId,
                 provider,
@@ -140,7 +157,12 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             await _socialIdentityRepo.AddAsync(socialIdentity);
         }
 
+        // Extract roles from token (or use default for new users)
         var roles = ExtractRolesFromToken(tokenResponse.IdToken);
+        if (roles.Count == 0 && user?.UserType == "end_user")
+        {
+            roles = new List<string> { "end_user" };
+        }
 
         return new SocialLoginResponse
         {
@@ -149,10 +171,14 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             ExpiresIn = tokenResponse.ExpiresIn,
             Roles = roles,
             UserId = userId,
+            EndUserProfileId = endUserProfile?.Id,
             IsNewUser = isNewUser,
             Provider = provider,
-            Email = userInfo.Email,
-            Name = userInfo.Name
+            Email = userInfo.Email ?? user?.Email,
+            Name = userInfo.Name ?? user?.Username,
+            Picture = userInfo.Picture,
+            Phone = user?.Phone,
+            Address = user?.Address
         };
     }
 
@@ -275,16 +301,33 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
                ?? throw new SocialLoginException("auth0", "invalid_userinfo", "Invalid user info response");
     }
 
-    private async Task<User> CreateEndUserFromSocialAsync(Auth0UserInfo userInfo, string provider)
+    /// <summary>
+    /// Creates a new end user in our local database from social login.
+    /// Note: The user already exists in Auth0 via social login, so we only:
+    /// 1. Assign the end_user role to the Auth0 social user
+    /// 2. Create the local user record with the social Auth0 user ID
+    /// </summary>
+    private async Task<(User user, EndUserProfile profile)> CreateEndUserFromSocialAsync(Auth0UserInfo userInfo, string provider)
     {
-        var email = userInfo.Email ?? $"{userInfo.Sub}@{provider}.social";
+        var email = userInfo.Email ?? $"{userInfo.Sub.Replace("|", "_")}@social.local";
         var username = userInfo.Name ?? userInfo.Nickname ?? email.Split('@')[0];
-        var password = GenerateRandomPassword();
 
-        var endUserRoleId = _config["Auth0:Roles:EndUser"]!;
-        var auth0UserId = await _auth0Management.CreateUserAndAssignRoleAsync(
-            email, username, password, endUserRoleId);
+        // The Auth0 user already exists from social login (e.g., "google-oauth2|101712854607093347603")
+        // We just need to assign the end_user role to this existing Auth0 user
+        var auth0UserId = userInfo.Sub;
 
+        try
+        {
+            var endUserRoleId = _config["Auth0:Roles:EndUser"]!;
+            await _auth0Management.AssignRoleAsync(auth0UserId, endUserRoleId);
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail - role assignment is not critical for login
+            Console.WriteLine($"Warning: Failed to assign role to social user {auth0UserId}: {ex.Message}");
+        }
+
+        // Create local user record with the social Auth0 user ID
         var user = new User(
             username: username,
             email: email,
@@ -296,13 +339,17 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
 
         await _userRepo.AddAsync(user);
 
-        var endUserProfile = new EndUserProfile(user.Id, $"Registered via {SocialProvider.GetDisplayName(provider)}");
+        // Create end user profile
+        var endUserProfile = new EndUserProfile(
+            user.Id,
+            $"Registered via {SocialProvider.GetDisplayName(provider)}");
         await _endUserProfileRepo.AddAsync(endUserProfile);
 
+        // Create default user settings
         var userSettings = new UserSettings(user.Id);
         await _userSettingsRepo.AddAsync(userSettings);
 
-        return user;
+        return (user, endUserProfile);
     }
 
     private List<string> ExtractRolesFromToken(string? idToken)
@@ -338,21 +385,6 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             .Replace("+", "-")
             .Replace("/", "_")
             .TrimEnd('=');
-    }
-
-    private static string GenerateRandomPassword()
-    {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
-        var bytes = new byte[24];
-        using var rng = RandomNumberGenerator.Create();
-        rng.GetBytes(bytes);
-
-        var result = new StringBuilder(24);
-        foreach (var b in bytes)
-        {
-            result.Append(chars[b % chars.Length]);
-        }
-        return result.ToString();
     }
 
     private class Auth0TokenResponseRaw

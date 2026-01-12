@@ -150,10 +150,14 @@ public class AuthController(
                 expires_in = response.ExpiresIn,
                 roles = response.Roles,
                 id = response.UserId,
+                end_user_profile_id = response.EndUserProfileId,
                 is_new_user = response.IsNewUser,
                 provider = response.Provider,
                 email = response.Email,
-                name = response.Name
+                name = response.Name,
+                picture = response.Picture,
+                phone = response.Phone,
+                address = response.Address
             });
         }
         catch (InvalidSocialProviderException ex)

@@ -7,8 +7,12 @@ public class SocialLoginResponse
     public int ExpiresIn { get; set; }
     public List<string>? Roles { get; set; }
     public Guid? UserId { get; set; }
+    public Guid? EndUserProfileId { get; set; }
     public bool IsNewUser { get; set; }
     public string Provider { get; set; } = default!;
     public string? Email { get; set; }
     public string? Name { get; set; }
+    public string? Picture { get; set; }
+    public string? Phone { get; set; }
+    public string? Address { get; set; }
 }
