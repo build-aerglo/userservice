@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Configuration;
 using UserService.Application.DTOs;
 using UserService.Application.Interfaces;
+using UserService.Application.Services.Auth0;
 using UserService.Domain.Entities;
 using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
@@ -11,25 +13,36 @@ public class UserService(
     IBusinessRepRepository businessRepRepository,
     IBusinessServiceClient businessServiceClient,
     ISupportUserProfileRepository supportUserProfileRepository,
-    IEndUserProfileRepository endUserProfileRepository
+    IEndUserProfileRepository endUserProfileRepository,
+    IUserSettingsRepository userSettingsRepository,
+    IAuth0ManagementService _auth0,
+    IConfiguration _config
 ) : IUserService
 {
 
+public async Task<User?> GetUserByIdAsync(Guid userId)
+{
+    return await userRepository.GetByIdAsync(userId);
+}
 	//Sub business user services
     public async Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto)
     {
-        // ✅ 1. Check if the target business exists via BusinessService API
+        // 1. Check if the target business exists via BusinessService API
         var businessExists = await businessServiceClient.BusinessExistsAsync(dto.BusinessId);
-        if (!businessExists)
+       if (!businessExists) 
             throw new BusinessNotFoundException(dto.BusinessId);
+        
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password,_config["Auth0:Roles:BusinessUser"]);
 
         // ✅ 2. Create the user entity
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
+            password: dto.Password,
             userType: "business_user",
-            address: dto.Address
+            address: dto.Address,
+            auth0UserId
         );
         // ✅ 3. Save user
         await userRepository.AddAsync(user);
@@ -65,6 +78,7 @@ public class UserService(
             Address: user.Address,
             BranchName: businessRep.BranchName,
             BranchAddress: businessRep.BranchAddress,
+            Auth0UserId: auth0UserId,
             CreatedAt: user.CreatedAt
         );
     }
@@ -76,7 +90,7 @@ public class UserService(
         var user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             throw new SubBusinessUserNotFoundException(userId);
-
+        
         //Get existing business rep record
         var businessRep = await businessRepRepository.GetByUserIdAsync(userId);
         if (businessRep is null)
@@ -111,6 +125,7 @@ public class UserService(
             Address: updatedUser.Address,
             BranchName: updatedBusinessRep.BranchName,
             BranchAddress: updatedBusinessRep.BranchAddress,
+            Auth0UserId: string.Empty,
             CreatedAt: updatedUser.CreatedAt
         );
     }
@@ -120,18 +135,22 @@ public class UserService(
 
     public async Task<SupportUserResponseDto> CreateSupportUserAsync(CreateSupportUserDto dto)
     {
+        // validate email address
+        if (await userRepository.EmailExistsAsync(dto.Email))
+            throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
+        
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password,_config["Auth0:Roles:SupportUser"]);
+        
         // ✅ 1. Create the user entity with support_user type
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
+            password:dto.Password,
             userType: "support_user",
-            address: dto.Address
+            address: dto.Address,
+            auth0UserId:auth0UserId
         );
-
-        // validate email address
-        if (await userRepository.EmailExistsAsync(dto.Email))
-            throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
 
         // ✅ 2. Save user
         await userRepository.AddAsync(user);
@@ -159,6 +178,7 @@ public class UserService(
             Email: user.Email,
             Phone: user.Phone,
             Address: user.Address,
+            Auth0UserId: auth0UserId,
             CreatedAt: user.CreatedAt
         );
     }
@@ -215,9 +235,11 @@ public class UserService(
         var businessId = await businessServiceClient.CreateBusinessAsync(userPayload);
         if (businessId == null || businessId == Guid.Empty)
             throw new BusinessUserCreationFailedException("Business creation failed: BusinessId is missing from services.");
+        
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(userPayload.Email, userPayload.Name, userPayload.Password,_config["Auth0:Roles:BusinessUser"]);
 
         // save user
-        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, userPayload.UserType, userPayload.Address);
+        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, userPayload.Password, userPayload.UserType, userPayload.Address,auth0UserId);
         await userRepository.AddAsync(user);
 
         // confirm save
@@ -246,14 +268,18 @@ public class UserService(
         // ✅ 1. Validate email uniqueness
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
+        
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password,_config["Auth0:Roles:EndUser"]);
 
         // ✅ 2. Create user entity
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
+            password:dto.Password,
             userType: "end_user",
-            address: dto.Address
+            address: dto.Address,
+            auth0UserId
         );
 
         // ✅ 3. Save user
@@ -286,9 +312,138 @@ public class UserService(
             Phone: user.Phone,
             Address: user.Address,
             SocialMedia: endUserProfile.SocialMedia,
+            Auth0UserId:auth0UserId,
             CreatedAt: user.CreatedAt
         );
     }
+    
+    public async Task<EndUserProfileDetailDto> GetEndUserProfileDetailAsync(Guid userId)
+    {
+        // 1. Get the user
+        var user = await userRepository.GetByIdAsync(userId);
+        if (user is null)
+            throw new EndUserNotFoundException(userId);
+
+        // 2. Verify this is an end user
+        if (user.UserType != "end_user")
+            throw new EndUserNotFoundException(userId);
+
+        // 3. Get the end user profile
+        var profile = await endUserProfileRepository.GetByUserIdAsync(userId);
+        if (profile is null)
+            throw new EndUserNotFoundException(userId);
+
+        // 4. Get user settings (create default if doesn't exist)
+        var settings = await userSettingsRepository.GetByUserIdAsync(userId);
+        if (settings is null)
+        {
+            // Create default settings for this user
+            settings = new UserSettings(userId);
+            await userSettingsRepository.AddAsync(settings);
+        }
+
+        // 5. Parse notification preferences from JSONB
+        var notificationPrefs = settings.GetNotificationPreferences();
+
+        // 6. Map to DTO
+        return new EndUserProfileDetailDto(
+            UserId: user.Id,
+            Username: user.Username,
+            Email: user.Email,
+            Phone: user.Phone,
+            Address: user.Address,
+            JoinDate: user.JoinDate,
+        
+            EndUserProfileId: profile.Id,
+            SocialMedia: profile.SocialMedia,
+        
+            NotificationPreferences: new NotificationPreferencesDto(
+                EmailNotifications: notificationPrefs.EmailNotifications,
+                SmsNotifications: notificationPrefs.SmsNotifications,
+                PushNotifications: notificationPrefs.PushNotifications,
+                MarketingEmails: notificationPrefs.MarketingEmails
+            ),
+            DarkMode: settings.DarkMode,
+        
+            CreatedAt: user.CreatedAt,
+            UpdatedAt: settings.UpdatedAt
+        );
+    }
+
+    public async Task<EndUserProfileDetailDto> UpdateEndUserProfileAsync(Guid userId, UpdateEndUserProfileDto dto)
+    {
+        // 1. Get the user
+        var user = await userRepository.GetByIdAsync(userId);
+        if (user is null)
+            throw new EndUserNotFoundException(userId);
+
+        // 2. Verify this is an end user
+        if (user.UserType != "end_user")
+            throw new EndUserNotFoundException(userId);
+
+        // 3. Get the end user profile
+        var profile = await endUserProfileRepository.GetByUserIdAsync(userId);
+        if (profile is null)
+            throw new EndUserNotFoundException(userId);
+
+        // 4. Get user settings (create if doesn't exist)
+        var settings = await userSettingsRepository.GetByUserIdAsync(userId);
+        if (settings is null)
+        {
+            settings = new UserSettings(userId);
+            await userSettingsRepository.AddAsync(settings);
+        }
+
+        // 5. Update user basic info (if provided)
+        if (!string.IsNullOrWhiteSpace(dto.Username) || 
+            !string.IsNullOrWhiteSpace(dto.Phone) || 
+            dto.Address != null)
+        {
+            user.Update(
+                email: null, // Email cannot be updated via this endpoint
+                phone: dto.Phone,
+                address: dto.Address
+            );
+            
+            // Update username separately if needed (User entity might not have this in Update method)
+            // If username update is needed, you may need to add it to the User.Update method
+            await userRepository.UpdateAsync(user);
+        }
+
+        // 6. Update end user profile (if provided)
+        if (dto.SocialMedia != null)
+        {
+            profile.UpdateSocialMedia(dto.SocialMedia);
+            await endUserProfileRepository.UpdateAsync(profile);
+        }
+
+        // 7. Update user settings (if provided)
+        if (dto.NotificationPreferences != null || dto.DarkMode.HasValue)
+        {
+            NotificationPreferencesModel? notifPrefs = null;
+            
+            if (dto.NotificationPreferences != null)
+            {
+                notifPrefs = new NotificationPreferencesModel
+                {
+                    EmailNotifications = dto.NotificationPreferences.EmailNotifications,
+                    SmsNotifications = dto.NotificationPreferences.SmsNotifications,
+                    PushNotifications = dto.NotificationPreferences.PushNotifications,
+                    MarketingEmails = dto.NotificationPreferences.MarketingEmails
+                };
+            }
+            
+            settings.UpdateSettings(
+                darkMode: dto.DarkMode,
+                notificationPrefs: notifPrefs
+            );
+            await userSettingsRepository.UpdateAsync(settings);
+        }
+
+        // 8. Fetch and return updated profile
+        return await GetEndUserProfileDetailAsync(userId);
+    }
+
 
 
 }

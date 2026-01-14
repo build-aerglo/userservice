@@ -23,7 +23,8 @@ public record CreateSubBusinessUserDto(
     string Email,              
     string Phone,             
     string? Address,         
-    string? BranchName,        
+    string? BranchName,
+    string? Password,
     string? BranchAddress     
 );
 
@@ -47,6 +48,7 @@ public record SubBusinessUserResponseDto(
     string? Address,
     string? BranchName,
     string? BranchAddress,
+    string Auth0UserId,
     DateTime CreatedAt
 );
 
@@ -56,6 +58,7 @@ public record SubBusinessUserResponseDto(
 public record CreateSupportUserDto(
     string Username,
     string Email,
+    string Password,
     string Phone,
     string? Address
 );
@@ -74,5 +77,6 @@ public record SupportUserResponseDto(
     string Email,
     string Phone,
     string? Address,
+    string Auth0UserId,
     DateTime CreatedAt
 );

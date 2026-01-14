@@ -1,0 +1,78 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using UserService.Application.DTOs;
+using UserService.Domain.Exceptions;
+using UserService.Domain.Repositories;
+
+namespace UserService.Application.Services.Auth0;
+
+public class Auth0UserLoginService(HttpClient httpClient, IConfiguration config, IUserRepository rep) : IAuth0UserLoginService
+{
+    public async Task<TokenResponse> LoginAsync(string email, string password)
+    {
+        var body = new
+        {
+            grant_type = "password",
+            username = email,
+            password = password,
+            audience = config["Auth0:Audience"],
+            client_id = config["Auth0:ClientId"],
+            client_secret = config["Auth0:ClientSecret"],
+            realm = config["Auth0:DbConnection"],
+            scope = "openid profile email offline_access"
+        };
+
+        var response = await httpClient.PostAsJsonAsync(
+            $"https://{config["Auth0:Domain"]}/oauth/token", body
+        );
+
+        // ✅ If login fails, throw custom exception
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<Auth0ErrorResponse>();
+            throw new AuthLoginFailedException(error?.Error, error?.Error_Description);
+        }
+
+        var token = await response.Content.ReadFromJsonAsync<TokenResponse>()
+                    ?? throw new Exception("Auth0 login failed");
+
+        // ✅ Decode ID token & extract roles
+        var handler = new JwtSecurityTokenHandler();
+        var jwt = handler.ReadJwtToken(token.Id_Token);
+
+        var rolesClaimKey = $"{config["Auth0:Audience"]}/roles";
+
+        if (jwt.Payload.TryGetValue(rolesClaimKey, out var rolesObj) &&
+            rolesObj is JsonElement json && json.ValueKind == JsonValueKind.Array)
+        {
+            token.Roles = json.EnumerateArray().Select(r => r.GetString()!).ToList();
+        }
+        
+        var id = await rep.GetUserOrBusinessIdByEmailAsync(email);
+        
+        token.Id = id;
+        return token;
+    }
+
+
+    public async Task<TokenResponse> RefreshAsync(string refreshToken)
+    {
+        var body = new
+        {
+            grant_type = "refresh_token",
+            refresh_token = refreshToken,
+            client_id = config["Auth0:ClientId"],
+            client_secret = config["Auth0:ClientSecret"]
+        };
+
+        var response = await httpClient.PostAsJsonAsync(
+            $"https://{config["Auth0:Domain"]}/oauth/token", body);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<TokenResponse>()
+               ?? throw new Exception("Failed to refresh token");
+    }
+}
