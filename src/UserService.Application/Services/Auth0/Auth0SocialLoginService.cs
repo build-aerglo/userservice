@@ -84,7 +84,17 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
         if (!SocialProvider.IsValid(provider))
             throw new InvalidSocialProviderException(request.Provider);
 
-        var tokenResponse = await ExchangeCodeForTokenAsync(request.Code, request.RedirectUri ?? "");
+        // Validate required parameters
+        if (string.IsNullOrWhiteSpace(request.Code))
+            throw new SocialLoginException(provider, "invalid_request", "Authorization code is required");
+
+        if (string.IsNullOrWhiteSpace(request.RedirectUri))
+            throw new SocialLoginException(provider, "invalid_request", "RedirectUri is required and must match the authorize request");
+
+        Console.WriteLine($"🔄 Starting OAuth token exchange for provider: {provider}");
+        Console.WriteLine($"📍 RedirectUri: {request.RedirectUri}");
+
+        var tokenResponse = await ExchangeCodeForTokenAsync(request.Code, request.RedirectUri);
 
         var userInfo = await GetUserInfoAsync(tokenResponse.AccessToken);
 
@@ -163,11 +173,18 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
         if (!SocialProvider.IsValid(provider))
             throw new InvalidSocialProviderException(request.Provider);
 
+        // Validate required parameters
+        if (string.IsNullOrWhiteSpace(request.Code))
+            throw new SocialLoginException(provider, "invalid_request", "Authorization code is required");
+
+        if (string.IsNullOrWhiteSpace(request.RedirectUri))
+            throw new SocialLoginException(provider, "invalid_request", "RedirectUri is required and must match the authorize request");
+
         var existingLink = await _socialIdentityRepo.GetByUserAndProviderAsync(userId, provider);
         if (existingLink != null)
             throw new SocialAccountAlreadyLinkedException(provider);
 
-        var tokenResponse = await ExchangeCodeForTokenAsync(request.Code, request.RedirectUri ?? "");
+        var tokenResponse = await ExchangeCodeForTokenAsync(request.Code, request.RedirectUri);
         var userInfo = await GetUserInfoAsync(tokenResponse.AccessToken);
 
         var existingIdentity = await _socialIdentityRepo.GetByProviderUserIdAsync(
@@ -236,17 +253,41 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             redirect_uri = redirectUri
         };
 
+        Console.WriteLine($"🔐 Exchanging code with Auth0...");
+        Console.WriteLine($"   Domain: {_domain}");
+        Console.WriteLine($"   RedirectUri: {redirectUri}");
+        Console.WriteLine($"   Code (first 10 chars): {code.Substring(0, Math.Min(10, code.Length))}...");
+
         var response = await _httpClient.PostAsJsonAsync(
             $"https://{_domain}/oauth/token", body);
 
         if (!response.IsSuccessStatusCode)
         {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"❌ Auth0 token exchange failed!");
+            Console.WriteLine($"   Status Code: {response.StatusCode}");
+            Console.WriteLine($"   Error Response: {errorContent}");
+
             var error = await response.Content.ReadFromJsonAsync<Auth0ErrorResponse>();
+
+            var errorMessage = error?.Error_Description ?? "Failed to exchange authorization code for token";
+
+            // Add helpful context to common errors
+            if (error?.Error == "invalid_grant")
+            {
+                errorMessage += " - Common causes: (1) Code already used, (2) Code expired, (3) RedirectUri mismatch";
+            }
+
+            Console.WriteLine($"   Error Code: {error?.Error ?? "unknown"}");
+            Console.WriteLine($"   Error Description: {errorMessage}");
+
             throw new SocialLoginException(
                 "auth0",
                 error?.Error ?? "token_exchange_failed",
-                error?.Error_Description ?? "Failed to exchange authorization code for token");
+                errorMessage);
         }
+
+        Console.WriteLine($"✅ Auth0 token exchange successful!");
 
         var tokenData = await response.Content.ReadFromJsonAsync<Auth0TokenResponseRaw>()
                         ?? throw new SocialLoginException("auth0", "invalid_response", "Invalid token response");
