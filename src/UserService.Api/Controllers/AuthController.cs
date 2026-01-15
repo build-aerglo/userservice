@@ -102,7 +102,7 @@ public class AuthController(
             new { id = "google-oauth2", name = "Google", icon = "google" },
             new { id = "Facebook", name = "Facebook", icon = "facebook" },
             new { id = "Apple", name = "Apple", icon = "apple" },
-            new { id = "Github", name = "GitHub", icon = "github" },
+            new { id = "GitHub", name = "GitHub", icon = "github" },
             new { id = "Twitter", name = "Twitter/X", icon = "twitter" },
             new { id = "linkedin", name = "LinkedIn", icon = "linkedin" }
         };
