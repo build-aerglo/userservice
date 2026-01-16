@@ -118,6 +118,12 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             {
                 userId = existingUserByEmail.Value;
                 user = await _userRepo.GetByIdAsync(userId);
+
+                // Check if user was registered with a password (password-based registration)
+                if (!string.IsNullOrEmpty(user?.Password))
+                {
+                    throw new EmailAlreadyRegisteredWithPasswordException(userInfo.Email!);
+                }
             }
             else
             {

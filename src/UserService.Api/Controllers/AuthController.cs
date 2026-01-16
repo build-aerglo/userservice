@@ -156,6 +156,15 @@ public class AuthController(
                 name = response.Name
             });
         }
+        catch (EmailAlreadyRegisteredWithPasswordException ex)
+        {
+            return Conflict(new
+            {
+                error = "email_already_registered_with_password",
+                message = ex.Message,
+                email = ex.Email
+            });
+        }
         catch (InvalidSocialProviderException ex)
         {
             return BadRequest(new

@@ -45,3 +45,14 @@ public class InvalidSocialProviderException : Exception
         Provider = provider;
     }
 }
+
+public class EmailAlreadyRegisteredWithPasswordException : Exception
+{
+    public string Email { get; }
+
+    public EmailAlreadyRegisteredWithPasswordException(string email)
+        : base($"Email '{email}' is already registered with a password. Please login with your password or use the link account feature after logging in.")
+    {
+        Email = email;
+    }
+}
