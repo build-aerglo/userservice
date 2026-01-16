@@ -393,6 +393,7 @@ public class UserControllerTests
         Assert.That(error!.StatusCode, Is.EqualTo(500));
     }
     
+    [Test]
     public async Task GetEndUserProfileDetail_ShouldReturnOk_WhenUserExists()
     {
         // Arrange
@@ -622,7 +623,7 @@ public class UserControllerTests
             Address: null,
             SocialMedia: null,
             NotificationPreferences: null,
-            DarkMode: true  // Only updating dark mode
+            DarkMode: true
         );
 
         var expectedResponse = new EndUserProfileDetailDto(
@@ -656,7 +657,7 @@ public class UserControllerTests
 
         Assert.That(response, Is.Not.Null);
         Assert.That(response!.DarkMode, Is.True);
-        Assert.That(response.Phone, Is.EqualTo("1234567890")); // Unchanged
+        Assert.That(response.Phone, Is.EqualTo("1234567890"));
     }
 
     [Test]
@@ -712,12 +713,13 @@ public class UserControllerTests
     }
 
     [Test]
-    public async Task UpdateEndUserProfileDetail_ShouldReturnInternalServerError_OnUnexpectedException()
+    public async Task CreateSupportUser_ShouldAllowNullAddress()
     {
         // ARRANGE
         var dto = new CreateSupportUserDto(
             Username: "no_address_support",
             Email: "noaddr@support.com",
+            Password: "password123",
             Phone: "5555555555",
             Address: null
         );
@@ -729,6 +731,7 @@ public class UserControllerTests
             Email: "noaddr@support.com",
             Phone: "5555555555",
             Address: null,
+            Auth0UserId: "auth0|test",
             CreatedAt: DateTime.UtcNow
         );
 
@@ -750,11 +753,10 @@ public class UserControllerTests
         var createdResult = result as CreatedResult;
         Assert.That(createdResult, Is.Not.Null);
 
-        var returnedValue = createdResult!.Value as SupportUserResponseDto;
+        var json = JsonSerializer.Serialize(createdResult!.Value);
+        var returnedValue = JsonSerializer.Deserialize<SupportUserResponseDto>(json);
         Assert.That(returnedValue!.Address, Is.Null);
     }
-
-
 
     // UPDATE SUPPORT USER TESTS
     [Test]
@@ -775,6 +777,7 @@ public class UserControllerTests
             Email: "updated@support.com",
             Phone: "9876543210",
             Address: "456 Updated St",
+            Auth0UserId: "auth0|test",
             CreatedAt: DateTime.UtcNow
         );
 
@@ -790,7 +793,8 @@ public class UserControllerTests
         Assert.That(okResult, Is.Not.Null);
         Assert.That(okResult!.StatusCode, Is.EqualTo(200));
 
-        var returnedValue = okResult.Value as SupportUserResponseDto;
+        var json = JsonSerializer.Serialize(okResult.Value);
+        var returnedValue = JsonSerializer.Deserialize<SupportUserResponseDto>(json);
         Assert.That(returnedValue, Is.Not.Null);
         Assert.That(returnedValue!.Email, Is.EqualTo("updated@support.com"));
         Assert.That(returnedValue.Phone, Is.EqualTo("9876543210"));
@@ -880,7 +884,7 @@ public class UserControllerTests
         // ARRANGE
         var userId = Guid.NewGuid();
         var dto = new UpdateSupportUserDto(
-            Email: "",  // Invalid - empty email
+            Email: "",
             Phone: "1234567890",
             Address: null
         );
@@ -903,8 +907,8 @@ public class UserControllerTests
         var userId = Guid.NewGuid();
         var dto = new UpdateSupportUserDto(
             Email: "partial@support.com",
-            Phone: null,  // Not updating phone
-            Address: null  // Not updating address
+            Phone: null,
+            Address: null
         );
 
         var response = new SupportUserResponseDto(
@@ -912,8 +916,9 @@ public class UserControllerTests
             SupportUserProfileId: Guid.NewGuid(),
             Username: "support_admin",
             Email: "partial@support.com",
-            Phone: "1234567890",  // Original phone retained
-            Address: "123 Original St",  // Original address retained
+            Phone: "1234567890",
+            Address: "123 Original St",
+            Auth0UserId: "auth0|test",
             CreatedAt: DateTime.UtcNow
         );
 
@@ -928,7 +933,8 @@ public class UserControllerTests
         var okResult = result as OkObjectResult;
         Assert.That(okResult, Is.Not.Null);
 
-        var returnedValue = okResult!.Value as SupportUserResponseDto;
+        var json = JsonSerializer.Serialize(okResult!.Value);
+        var returnedValue = JsonSerializer.Deserialize<SupportUserResponseDto>(json);
         Assert.That(returnedValue!.Email, Is.EqualTo("partial@support.com"));
         Assert.That(returnedValue.Phone, Is.EqualTo("1234567890"));
     }
@@ -951,6 +957,7 @@ public class UserControllerTests
             Email: "original@support.com",
             Phone: "1234567890",
             Address: "123 Original St",
+            Auth0UserId: "auth0|test",
             CreatedAt: DateTime.UtcNow
         );
 
@@ -991,98 +998,94 @@ public class UserControllerTests
         Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
         Assert.That(errorResult.Value?.ToString(), Does.Contain("is not a support user"));
     }
-    
+
     // ---------------------- END USER TESTS ----------------------
-[Test]
-public async Task CreateEndUser_ShouldReturnCreated_WhenSuccessful()
-{
-    // ARRANGE
-    var dto = new CreateEndUserDto(
-        Username: "jane_doe",
-        Email: "jane@example.com",
-        Phone: "1234567890",
-        Address: "123 Main St",
-        SocialMedia: "https://twitter.com/jane_doe"
-    );
+    [Test]
+    public async Task CreateEndUser_WithAllFields_ShouldReturnCreated()
+    {
+        // ARRANGE
+        var dto = new CreateEndUserDto(
+            Username: "jane_doe",
+            Email: "jane@example.com",
+            Password: "password123",
+            Phone: "1234567890",
+            Address: "123 Main St",
+            SocialMedia: "https://twitter.com/jane_doe"
+        );
 
-    var response = new EndUserResponseDto(
-        UserId: Guid.NewGuid(),
-        EndUserProfileId: Guid.NewGuid(),
-        Username: "jane_doe",
-        Email: "jane@example.com",
-        Phone: "1234567890",
-        Address: "123 Main St",
-        SocialMedia: "https://twitter.com/jane_doe",
-        CreatedAt: DateTime.UtcNow
-    );
+        var response = new EndUserResponseDto(
+            UserId: Guid.NewGuid(),
+            EndUserProfileId: Guid.NewGuid(),
+            Username: "jane_doe",
+            Email: "jane@example.com",
+            Phone: "1234567890",
+            Address: "123 Main St",
+            SocialMedia: "https://twitter.com/jane_doe",
+            Auth0UserId: "auth0|test",
+            CreatedAt: DateTime.UtcNow
+        );
 
-    _mockUserService
-        .Setup(s => s.CreateEndUserAsync(dto))
-        .ReturnsAsync(response);
+        _mockUserService
+            .Setup(s => s.CreateEndUserAsync(dto))
+            .ReturnsAsync(response);
 
-    var mockUrlHelper = new Mock<IUrlHelper>();
-    mockUrlHelper
-        .Setup(u => u.Action(It.IsAny<UrlActionContext>()))
-        .Returns("/api/user/" + response.UserId);
+        var mockUrlHelper = new Mock<IUrlHelper>();
+        mockUrlHelper
+            .Setup(u => u.Action(It.IsAny<UrlActionContext>()))
+            .Returns("/api/user/" + response.UserId);
 
-    _controller.Url = mockUrlHelper.Object;
+        _controller.Url = mockUrlHelper.Object;
 
-    // ACT
-    var result = await _controller.CreateEndUser(dto);
+        // ACT
+        var result = await _controller.CreateEndUser(dto);
 
-    // ASSERT
-    var createdResult = result as CreatedResult;
-    Assert.That(createdResult, Is.Not.Null);
-    Assert.That(createdResult!.StatusCode, Is.EqualTo(201));
+        // ASSERT
+        var createdResult = result as CreatedResult;
+        Assert.That(createdResult, Is.Not.Null);
+        Assert.That(createdResult!.StatusCode, Is.EqualTo(201));
 
-    var returnedValue = createdResult.Value as EndUserResponseDto;
-    Assert.That(returnedValue, Is.Not.Null);
-    Assert.That(returnedValue!.Username, Is.EqualTo("jane_doe"));
-    Assert.That(returnedValue.Email, Is.EqualTo("jane@example.com"));
-    Assert.That(returnedValue.SocialMedia, Is.EqualTo("https://twitter.com/jane_doe"));
+        var json = JsonSerializer.Serialize(createdResult.Value);
+        var returnedValue = JsonSerializer.Deserialize<EndUserResponseDto>(json);
+        Assert.That(returnedValue, Is.Not.Null);
+        Assert.That(returnedValue!.Username, Is.EqualTo("jane_doe"));
+        Assert.That(returnedValue.Email, Is.EqualTo("jane@example.com"));
+        Assert.That(returnedValue.SocialMedia, Is.EqualTo("https://twitter.com/jane_doe"));
 
-    _mockUserService.Verify(s => s.CreateEndUserAsync(dto), Times.Once);
-}
+        _mockUserService.Verify(s => s.CreateEndUserAsync(dto), Times.Once);
+    }
 
-[Test]
-public async Task CreateEndUser_ShouldReturnConflict_WhenEmailAlreadyExists()
-{
-    // ARRANGE
-    var dto = new CreateEndUserDto(
-        Username: "duplicate_user",
-        Email: "duplicate@example.com",
-        Phone: "9999999999",
-        Address: "Duplicate St",
-        SocialMedia: null
-    );
+    [Test]
+    public async Task CreateEndUser_ShouldReturnConflict_WhenEmailAlreadyExists()
+    {
+        // ARRANGE
+        var dto = new CreateEndUserDto(
+            Username: "duplicate_user",
+            Email: "duplicate@example.com",
+            Password: "password123",
+            Phone: "9999999999",
+            Address: "Duplicate St",
+            SocialMedia: null
+        );
 
-    _mockUserService
-        .Setup(s => s.CreateEndUserAsync(dto))
-        .ThrowsAsync(new DuplicateUserEmailException($"Email '{dto.Email}' already exists."));
+        _mockUserService
+            .Setup(s => s.CreateEndUserAsync(dto))
+            .ThrowsAsync(new DuplicateUserEmailException($"Email '{dto.Email}' already exists."));
 
-    // ACT
-    var result = await _controller.CreateEndUser(dto);
+        // ACT
+        var result = await _controller.CreateEndUser(dto);
 
-    // ASSERT
-    var conflictResult = result as ObjectResult;
-    Assert.That(conflictResult, Is.Not.Null);
-    Assert.That(conflictResult!.StatusCode, Is.EqualTo(409));
+        // ASSERT
+        var conflictResult = result as ObjectResult;
+        Assert.That(conflictResult, Is.Not.Null);
+        Assert.That(conflictResult!.StatusCode, Is.EqualTo(409));
 
-    var errorValue = conflictResult.Value?.ToString();
-    Assert.That(errorValue, Does.Contain("already exists"));
-}
+        var errorValue = conflictResult.Value?.ToString();
+        Assert.That(errorValue, Does.Contain("already exists"));
+    }
 
-[Test]
-public async Task CreateEndUser_ShouldReturnInternalServerError_WhenUserCreationFails()
-{
-    // ARRANGE
-    var dto = new CreateEndUserDto(
-        Username: "failed_end_user",
-        Email: "fail@enduser.com",
-        Phone: "0000000000",
-        Address: null,
-        SocialMedia: null
-    );
+    [Test]
+    public async Task UpdateEndUserProfileDetail_ShouldReturnInternalServerError_OnUnexpectedException()
+    {
         // Arrange
         var userId = Guid.NewGuid();
         var updateDto = new UpdateEndUserProfileDto(
@@ -1197,19 +1200,14 @@ public async Task CreateEndUser_ShouldReturnInternalServerError_WhenUserCreation
         var okResult = result as OkObjectResult;
         Assert.That(okResult, Is.Not.Null);
 
-        var json = JsonSerializer.Serialize(okResult.Value);
+        var json = JsonSerializer.Serialize(okResult!.Value);
         var response = JsonSerializer.Deserialize<EndUserProfileDetailDto>(json);
 
         Assert.That(response, Is.Not.Null);
         Assert.That(response!.NotificationPreferences.EmailNotifications, Is.False);
         Assert.That(response.NotificationPreferences.SmsNotifications, Is.True);
         Assert.That(response.NotificationPreferences.MarketingEmails, Is.True);
-        Assert.That(response.Phone, Is.EqualTo("1234567890")); // Unchanged
-        Assert.That(response.DarkMode, Is.False); // Unchanged
+        Assert.That(response.Phone, Is.EqualTo("1234567890"));
+        Assert.That(response.DarkMode, Is.False);
     }
-
-
-
-
-
 }

@@ -222,6 +222,7 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
             Email: updatedUser.Email,
             Phone: updatedUser.Phone,
             Address: updatedUser.Address,
+            Auth0UserId: updatedUser.Auth0UserId,
             CreatedAt: updatedUser.CreatedAt
         );
     }
