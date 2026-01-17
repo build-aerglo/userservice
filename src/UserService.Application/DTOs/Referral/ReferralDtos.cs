@@ -1,6 +1,9 @@
 namespace UserService.Application.DTOs.Referral;
 
-// Response DTOs
+// ========================================================================
+// RESPONSE DTOs
+// ========================================================================
+
 public record UserReferralCodeDto(
     Guid UserId,
     string Code,
@@ -45,7 +48,74 @@ public record ApplyReferralCodeResponseDto(
     Guid? ReferrerId
 );
 
-// Request DTOs
+public record TopReferrerDto(
+    int Rank,
+    Guid UserId,
+    string Username,
+    string Code,
+    int SuccessfulReferrals,
+    decimal TotalPointsEarned
+);
+
+//     Referral code details
+public record ReferralCodeDetailsDto(
+    string Code,
+    Guid UserId,
+    string Username,
+    int TotalReferrals,
+    int SuccessfulReferrals,
+    bool IsActive
+);
+
+//     Referred by info
+public record ReferredByDto(
+    Guid ReferrerId,
+    string ReferrerUsername,
+    string ReferralCode,
+    string Status,
+    int ApprovedReviewCount,
+    DateTime ReferredAt
+);
+
+//     Reward tiers
+public record RewardTierDto(
+    string Name,
+    int NonVerifiedPoints,
+    int VerifiedPoints,
+    string Description
+);
+
+public record RewardTiersResponseDto(
+    IEnumerable<RewardTierDto> Tiers,
+    string CurrentTier
+);
+
+//     User tier
+public record UserTierDto(
+    Guid UserId,
+    string Tier,
+    int TotalReferrals,
+    int SuccessfulReferrals,
+    decimal TotalPointsEarned,
+    int NextTierReferralsNeeded
+);
+
+//     Campaigns
+public record ReferralCampaignDto(
+    Guid Id,
+    string Name,
+    string Description,
+    int NonVerifiedBonus,
+    int VerifiedBonus,
+    DateTime StartDate,
+    DateTime EndDate,
+    bool IsActive
+);
+
+// ========================================================================
+// REQUEST DTOs
+// ========================================================================
+
 public record GenerateReferralCodeDto(
     Guid UserId
 );
@@ -61,11 +131,30 @@ public record ProcessReferralReviewDto(
     bool IsApproved
 );
 
-public record TopReferrerDto(
-    int Rank,
+//     Set custom referral code
+public record SetCustomReferralCodeDto(
     Guid UserId,
-    string Username,
-    string Code,
-    int SuccessfulReferrals,
-    decimal TotalPointsEarned
+    string CustomCode
+);
+
+//     Create campaign
+public record CreateCampaignDto(
+    string Name,
+    string Description,
+    int NonVerifiedBonus,
+    int VerifiedBonus,
+    DateTime StartDate,
+    DateTime EndDate
+);
+
+//     Send referral invite
+public record SendReferralInviteDto(
+    Guid UserId,
+    string RecipientEmail,
+    string? PersonalMessage = null
+);
+
+public record SendReferralInviteResponseDto(
+    bool Success,
+    string Message
 );

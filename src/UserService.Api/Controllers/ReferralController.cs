@@ -7,22 +7,32 @@ using UserService.Domain.Exceptions;
 namespace UserService.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/referral")]
 public class ReferralController(IReferralService referralService, ILogger<ReferralController> logger) : ControllerBase
 {
+    // ========================================================================
+    // REFERRAL CODE MANAGEMENT
+    // ========================================================================
+
     /// <summary>
-    /// Get user's referral code
+    /// GET /api/referral/user/{userId}/code - Get or create user's referral code
     /// </summary>
     [AllowAnonymous]
-    [HttpGet("code/{userId:guid}")]
+    [HttpGet("user/{userId:guid}/code")]
     public async Task<IActionResult> GetUserReferralCode(Guid userId)
     {
         try
         {
             var result = await referralService.GetUserReferralCodeAsync(userId);
-            return result is null
-                ? NotFound(new { error = "User does not have a referral code" })
-                : Ok(result);
+            
+            // If user doesn't have a code, generate one automatically
+            if (result is null)
+            {
+                result = await referralService.GenerateReferralCodeAsync(new GenerateReferralCodeDto(userId));
+                return Created($"/api/referral/user/{userId}/code", result);
+            }
+            
+            return Ok(result);
         }
         catch (Exception ex)
         {
@@ -32,41 +42,88 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
     }
 
     /// <summary>
-    /// Generate a new referral code for a user
+    /// GET /api/referral/validate/{code} - Validate a referral code
     /// </summary>
     [AllowAnonymous]
-    [HttpPost("code/generate")]
-    public async Task<IActionResult> GenerateReferralCode([FromBody] GenerateReferralCodeDto dto)
+    [HttpGet("validate/{code}")]
+    public async Task<IActionResult> ValidateReferralCode(string code)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
         try
         {
-            var result = await referralService.GenerateReferralCodeAsync(dto);
-            return Created($"/api/referral/code/{dto.UserId}", result);
-        }
-        catch (EndUserNotFoundException ex)
-        {
-            return NotFound(new { error = ex.Message });
-        }
-        catch (ReferralCodeAlreadyExistsException ex)
-        {
-            return Conflict(new { error = ex.Message });
+            var isValid = await referralService.ValidateReferralCodeAsync(code);
+            return Ok(new { code, isValid });
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error generating referral code for user {UserId}", dto.UserId);
+            logger.LogError(ex, "Error validating referral code {Code}", code);
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
 
     /// <summary>
-    /// Apply a referral code when user signs up
+    /// GET /api/referral/code/{code} - Look up referral code details
     /// </summary>
     [AllowAnonymous]
-    [HttpPost("apply")]
-    public async Task<IActionResult> ApplyReferralCode([FromBody] ApplyReferralCodeDto dto)
+    [HttpGet("code/{code}")]
+    public async Task<IActionResult> GetReferralCodeDetails(string code)
+    {
+        try
+        {
+            var result = await referralService.GetReferralCodeDetailsAsync(code);
+            return result is null
+                ? NotFound(new { error = "Referral code not found" })
+                : Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting details for referral code {Code}", code);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    /// <summary>
+    /// PUT /api/referral/user/{userId}/code/custom - Set custom referral code
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPut("user/{userId:guid}/code/custom")]
+    public async Task<IActionResult> SetCustomReferralCode(Guid userId, [FromBody] SetCustomReferralCodeDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        if (userId != dto.UserId)
+            return BadRequest(new { error = "UserId in URL must match UserId in body" });
+
+        try
+        {
+            var result = await referralService.SetCustomReferralCodeAsync(dto);
+            return Ok(result);
+        }
+        catch (ReferralCodeAlreadyExistsException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+        catch (InvalidReferralCodeException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error setting custom referral code for user {UserId}", userId);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    // ========================================================================
+    // REFERRAL USAGE
+    // ========================================================================
+
+    /// <summary>
+    /// POST /api/referral/use - Use referral code when signing up
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("use")]
+    public async Task<IActionResult> UseReferralCode([FromBody] ApplyReferralCodeDto dto)
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
@@ -98,16 +155,20 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error applying referral code for user {UserId}", dto.UserId);
+            logger.LogError(ex, "Error using referral code for user {UserId}", dto.UserId);
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
 
+    // ========================================================================
+    // REFERRAL TRACKING
+    // ========================================================================
+
     /// <summary>
-    /// Get all referrals made by a user
+    /// GET /api/referral/user/{userId}/referrals - Get user's referrals
     /// </summary>
     [AllowAnonymous]
-    [HttpGet("user/{userId:guid}")]
+    [HttpGet("user/{userId:guid}/referrals")]
     public async Task<IActionResult> GetUserReferrals(Guid userId)
     {
         try
@@ -123,11 +184,11 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
     }
 
     /// <summary>
-    /// Get referral statistics for a user
+    /// GET /api/referral/user/{userId}/summary - Get referral summary
     /// </summary>
     [AllowAnonymous]
-    [HttpGet("stats/{userId:guid}")]
-    public async Task<IActionResult> GetReferralStats(Guid userId)
+    [HttpGet("user/{userId:guid}/summary")]
+    public async Task<IActionResult> GetReferralSummary(Guid userId)
     {
         try
         {
@@ -136,13 +197,62 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error getting referral stats for user {UserId}", userId);
+            logger.LogError(ex, "Error getting referral summary for user {UserId}", userId);
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
 
     /// <summary>
-    /// Process a review approval for a referred user
+    /// GET /api/referral/user/{userId}/referred-by - Check who referred a user
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("user/{userId:guid}/referred-by")]
+    public async Task<IActionResult> GetReferredBy(Guid userId)
+    {
+        try
+        {
+            var result = await referralService.GetReferredByAsync(userId);
+            return result is null
+                ? NotFound(new { message = "User was not referred" })
+                : Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error checking who referred user {UserId}", userId);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/referral/{referralId}/complete - Complete a referral (after 3rd approved review)
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("{referralId:guid}/complete")]
+    public async Task<IActionResult> CompleteReferral(Guid referralId)
+    {
+        try
+        {
+            await referralService.CompleteReferralAsync(referralId);
+            return Ok(new { message = "Referral completed and points awarded" });
+        }
+        catch (ReferralNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (ReferralAlreadyCompletedException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error completing referral {ReferralId}", referralId);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/referral/review/process - Process a review approval for referral tracking
+    /// Called by ReviewService when a review is approved
     /// </summary>
     [AllowAnonymous]
     [HttpPost("review/process")]
@@ -163,31 +273,187 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
         }
     }
 
+    // ========================================================================
+    // LEADERBOARD & REWARDS
+    // ========================================================================
+
     /// <summary>
-    /// Validate a referral code
+    /// GET /api/referral/leaderboard - Get referral leaderboard
     /// </summary>
     [AllowAnonymous]
-    [HttpGet("validate/{code}")]
-    public async Task<IActionResult> ValidateReferralCode(string code)
+    [HttpGet("leaderboard")]
+    public async Task<IActionResult> GetLeaderboard([FromQuery] int limit = 10)
     {
         try
         {
-            var isValid = await referralService.ValidateReferralCodeAsync(code);
-            return Ok(new { code, isValid });
+            var result = await referralService.GetTopReferrersAsync(limit);
+            return Ok(result);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error validating referral code {Code}", code);
+            logger.LogError(ex, "Error getting referral leaderboard");
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
 
     /// <summary>
-    /// Check if user was referred
+    /// GET /api/referral/tiers - Get reward tiers
     /// </summary>
     [AllowAnonymous]
+    [HttpGet("tiers")]
+    public async Task<IActionResult> GetRewardTiers()
+    {
+        try
+        {
+            var result = await referralService.GetRewardTiersAsync();
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting reward tiers");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    /// <summary>
+    /// GET /api/referral/user/{userId}/tier - Get user's current reward tier
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("user/{userId:guid}/tier")]
+    public async Task<IActionResult> GetUserTier(Guid userId)
+    {
+        try
+        {
+            var result = await referralService.GetUserTierAsync(userId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting tier for user {UserId}", userId);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    // ========================================================================
+    // CAMPAIGNS (Support Only)
+    // ========================================================================
+
+    /// <summary>
+    /// GET /api/referral/campaign/active - Get active referral campaign
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("campaign/active")]
+    public async Task<IActionResult> GetActiveCampaign()
+    {
+        try
+        {
+            var result = await referralService.GetActiveCampaignAsync();
+            return result is null
+                ? NotFound(new { message = "No active campaign" })
+                : Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting active campaign");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    /// <summary>
+    /// GET /api/referral/campaigns - Get all campaigns
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("campaigns")]
+    public async Task<IActionResult> GetAllCampaigns()
+    {
+        try
+        {
+            var result = await referralService.GetAllCampaignsAsync();
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting campaigns");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/referral/campaigns - Create referral campaign (Support only)
+    /// </summary>
+    [Authorize(Roles = "support_user")]
+    [HttpPost("campaigns")]
+    public async Task<IActionResult> CreateCampaign([FromBody] CreateCampaignDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var result = await referralService.CreateCampaignAsync(dto);
+            return Created($"/api/referral/campaigns/{result.Id}", result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error creating campaign");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/referral/invite - Send referral invite
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("invite")]
+    public async Task<IActionResult> SendReferralInvite([FromBody] SendReferralInviteDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var result = await referralService.SendReferralInviteAsync(dto);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error sending referral invite from user {UserId}", dto.UserId);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    // ========================================================================
+    // LEGACY/BACKWARD COMPATIBILITY (Keep existing endpoints)
+    // ========================================================================
+
+    [AllowAnonymous]
+    [HttpGet("code/{userId:guid}")]
+    [ApiExplorerSettings(IgnoreApi = true)] // Hide from Swagger
+    public Task<IActionResult> GetUserReferralCodeLegacy(Guid userId) 
+        => GetUserReferralCode(userId);
+
+    [AllowAnonymous]
+    [HttpPost("apply")]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public Task<IActionResult> ApplyReferralCodeLegacy([FromBody] ApplyReferralCodeDto dto) 
+        => UseReferralCode(dto);
+
+    [AllowAnonymous]
+    [HttpGet("user/{userId:guid}")]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public Task<IActionResult> GetUserReferralsLegacy(Guid userId) 
+        => GetUserReferrals(userId);
+
+    [AllowAnonymous]
+    [HttpGet("stats/{userId:guid}")]
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public Task<IActionResult> GetReferralStatsLegacy(Guid userId) 
+        => GetReferralSummary(userId);
+
+    [AllowAnonymous]
     [HttpGet("was-referred/{userId:guid}")]
-    public async Task<IActionResult> WasUserReferred(Guid userId)
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public async Task<IActionResult> WasUserReferredLegacy(Guid userId)
     {
         try
         {
@@ -201,31 +467,10 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
         }
     }
 
-    /// <summary>
-    /// Get top referrers leaderboard
-    /// </summary>
-    [AllowAnonymous]
-    [HttpGet("leaderboard")]
-    public async Task<IActionResult> GetTopReferrers([FromQuery] int limit = 10)
-    {
-        try
-        {
-            var result = await referralService.GetTopReferrersAsync(limit);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error getting top referrers");
-            return StatusCode(500, new { error = "Internal server error" });
-        }
-    }
-
-    /// <summary>
-    /// Process all qualified referrals (Background job endpoint)
-    /// </summary>
     [Authorize(Roles = "support_user")]
     [HttpPost("process-qualified")]
-    public async Task<IActionResult> ProcessQualifiedReferrals()
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public async Task<IActionResult> ProcessQualifiedReferralsLegacy()
     {
         try
         {

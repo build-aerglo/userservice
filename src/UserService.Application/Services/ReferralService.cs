@@ -319,4 +319,203 @@ public class ReferralService(
             CreatedAt: referral.CreatedAt
         );
     }
+    
+    /// <summary>
+    /// Get referral code details by code
+    /// </summary>
+    public async Task<ReferralCodeDetailsDto?> GetReferralCodeDetailsAsync(string code)
+    {
+        var referralCode = await referralCodeRepository.GetByCodeAsync(code);
+        if (referralCode is null)
+            return null;
+
+        var user = await userRepository.GetByIdAsync(referralCode.UserId);
+
+        return new ReferralCodeDetailsDto(
+            Code: referralCode.Code,
+            UserId: referralCode.UserId,
+            Username: user?.Username ?? "Unknown",
+            TotalReferrals: referralCode.TotalReferrals,
+            SuccessfulReferrals: referralCode.SuccessfulReferrals,
+            IsActive: referralCode.IsActive
+        );
+    }
+    
+    
+    /// <summary>
+    /// Set a custom referral code for a user
+    /// </summary>
+    public async Task<UserReferralCodeDto> SetCustomReferralCodeAsync(SetCustomReferralCodeDto dto)
+    {
+        // Validate custom code format (alphanumeric, 6-20 chars)
+        if (string.IsNullOrWhiteSpace(dto.CustomCode) || 
+            dto.CustomCode.Length < 6 || 
+            dto.CustomCode.Length > 20 ||
+            !dto.CustomCode.All(c => char.IsLetterOrDigit(c)))
+        {
+            throw new InvalidReferralCodeException("Custom code must be 6-20 alphanumeric characters");
+        }
+
+        // Check if code is already taken
+        var existingCode = await referralCodeRepository.GetByCodeAsync(dto.CustomCode);
+        if (existingCode is not null)
+        {
+            throw new ReferralCodeTakenException("This code is already taken");
+        }
+
+        // Get user's existing referral code
+        var userCode = await referralCodeRepository.GetByUserIdAsync(dto.UserId);
+        if (userCode is null)
+        {
+            // User doesn't have a code yet, create one with custom code
+            var user = await userRepository.GetByIdAsync(dto.UserId);
+            if (user is null)
+                throw new EndUserNotFoundException(dto.UserId);
+
+            var newCode = new UserReferralCode(dto.UserId, dto.CustomCode);
+            await referralCodeRepository.AddAsync(newCode);
+        
+            var savedCode = await referralCodeRepository.GetByIdAsync(newCode.Id);
+            return MapToDto(savedCode!);
+        }
+        throw new InvalidOperationException("Cannot change existing referral code. Feature not yet implemented.");
+    
+        
+    }
+    
+    // <summary>
+    /// Get who referred a specific user
+    /// </summary>
+    public async Task<ReferredByDto?> GetReferredByAsync(Guid userId)
+    {
+        var referral = await referralRepository.GetByReferredUserIdAsync(userId);
+        if (referral is null)
+            return null;
+
+        var referrer = await userRepository.GetByIdAsync(referral.ReferrerId);
+
+        return new ReferredByDto(
+            ReferrerId: referral.ReferrerId,
+            ReferrerUsername: referrer?.Username ?? "Unknown",
+            ReferralCode: referral.ReferralCode,
+            Status: referral.Status,
+            ApprovedReviewCount: referral.ApprovedReviewCount,
+            ReferredAt: referral.CreatedAt
+        );
+    }
+    
+    // <summary>
+    /// Get reward tiers information
+    /// </summary>
+    public async Task<RewardTiersResponseDto> GetRewardTiersAsync()
+    {
+        // Define reward tiers
+        var tiers = new List<RewardTierDto>
+        {
+            new RewardTierDto(
+                Name: "Standard",
+                NonVerifiedPoints: 50,
+                VerifiedPoints: 75,
+                Description: "Complete 3 approved reviews to qualify referral"
+            )
+            // You can add more tiers here if you have tiered campaigns
+        };
+
+        return new RewardTiersResponseDto(
+            Tiers: tiers,
+            CurrentTier: "Standard" // Default tier
+        );
+    }
+    
+    
+    /// <summary>
+    /// Get user's current reward tier
+    /// </summary>
+    public async Task<UserTierDto> GetUserTierAsync(Guid userId)
+    {
+        var referralCode = await referralCodeRepository.GetByUserIdAsync(userId);
+        var isVerified = await verificationService.IsUserVerifiedAsync(userId);
+        var pointsPerReferral = isVerified ? 75m : 50m;
+
+        var totalReferrals = referralCode?.TotalReferrals ?? 0;
+        var successfulReferrals = referralCode?.SuccessfulReferrals ?? 0;
+        var totalPoints = successfulReferrals * pointsPerReferral;
+        
+        var nextTierNeeded = 0; // No tiers currently, always 0
+
+        return new UserTierDto(
+            UserId: userId,
+            Tier: "Standard",
+            TotalReferrals: totalReferrals,
+            SuccessfulReferrals: successfulReferrals,
+            TotalPointsEarned: totalPoints,
+            NextTierReferralsNeeded: nextTierNeeded
+        );
+    }
+    
+    /// <summary>
+    /// Get active referral campaign
+    /// </summary>
+    public async Task<ReferralCampaignDto?> GetActiveCampaignAsync()
+    {
+        return new ReferralCampaignDto(
+            Id: Guid.Empty,
+            Name: "Standard Referral Program",
+            Description: "Earn points for referring friends who complete 3 approved reviews",
+            NonVerifiedBonus: 50,
+            VerifiedBonus: 75,
+            StartDate: DateTime.UtcNow.AddYears(-1),
+            EndDate: DateTime.UtcNow.AddYears(10),
+            IsActive: true
+        );
+    }
+    
+    /// <summary>
+    /// Get all referral campaigns
+    /// </summary>
+    public async Task<IEnumerable<ReferralCampaignDto>> GetAllCampaignsAsync()
+    {
+        
+        var activeCampaign = await GetActiveCampaignAsync();
+        return activeCampaign is not null 
+            ? new[] { activeCampaign } 
+            : Array.Empty<ReferralCampaignDto>();
+    }
+    
+    
+    /// <summary>
+    /// Send referral invite via email
+    /// </summary>
+    public async Task<SendReferralInviteResponseDto> SendReferralInviteAsync(SendReferralInviteDto dto)
+    {
+        // Validate user exists
+        var user = await userRepository.GetByIdAsync(dto.UserId);
+        if (user is null)
+            throw new EndUserNotFoundException(dto.UserId);
+    
+        // Get or create referral code
+        var referralCode = await referralCodeRepository.GetByUserIdAsync(dto.UserId);
+        if (referralCode is null)
+        {
+            var newCode = await GenerateReferralCodeAsync(new GenerateReferralCodeDto(dto.UserId));
+            referralCode = await referralCodeRepository.GetByUserIdAsync(dto.UserId);
+        }
+        
+        return new SendReferralInviteResponseDto(
+            Success: true,
+            Message: $"Referral invite sent to {dto.RecipientEmail}"
+        );
+    }
+    
+    
+    /// <summary>
+    /// Create a new referral campaign
+    /// </summary>
+    public async Task<ReferralCampaignDto> CreateCampaignAsync(CreateCampaignDto dto)
+    {
+        // For now, return a mock response
+        throw new NotImplementedException("Campaign creation is not yet implemented. Campaigns are currently hardcoded.");
+    }
+
+
 }

@@ -4,6 +4,10 @@ namespace UserService.Application.Interfaces;
 
 public interface IReferralService
 {
+    // ========================================================================
+    // REFERRAL CODE MANAGEMENT
+    // ========================================================================
+    
     /// <summary>
     /// Get user's referral code
     /// </summary>
@@ -15,9 +19,37 @@ public interface IReferralService
     Task<UserReferralCodeDto> GenerateReferralCodeAsync(GenerateReferralCodeDto dto);
 
     /// <summary>
+    /// Get referral code details by code
+    /// </summary>
+    Task<ReferralCodeDetailsDto?> GetReferralCodeDetailsAsync(string code);
+
+    /// <summary>
+    /// Set a custom referral code for a user
+    /// </summary>
+    Task<UserReferralCodeDto> SetCustomReferralCodeAsync(SetCustomReferralCodeDto dto);
+
+    /// <summary>
+    /// Validate a referral code
+    /// </summary>
+    Task<bool> ValidateReferralCodeAsync(string code);
+
+    /// <summary>
+    /// Generate a unique referral code based on username
+    /// </summary>
+    Task<string> GenerateUniqueCodeAsync(string username);
+
+    // ========================================================================
+    // REFERRAL USAGE
+    // ========================================================================
+
+    /// <summary>
     /// Apply a referral code when user signs up
     /// </summary>
     Task<ApplyReferralCodeResponseDto> ApplyReferralCodeAsync(ApplyReferralCodeDto dto);
+
+    // ========================================================================
+    // REFERRAL TRACKING
+    // ========================================================================
 
     /// <summary>
     /// Get all referrals made by a user
@@ -28,6 +60,16 @@ public interface IReferralService
     /// Get referral statistics for a user
     /// </summary>
     Task<ReferralStatsDto> GetReferralStatsAsync(Guid userId);
+
+    /// <summary>
+    /// Get who referred a specific user
+    /// </summary>
+    Task<ReferredByDto?> GetReferredByAsync(Guid userId);
+
+    /// <summary>
+    /// Check if user was referred
+    /// </summary>
+    Task<bool> WasUserReferredAsync(Guid userId);
 
     /// <summary>
     /// Process a review approval for a referred user
@@ -45,23 +87,50 @@ public interface IReferralService
     /// </summary>
     Task ProcessQualifiedReferralsAsync();
 
+    // ========================================================================
+    // LEADERBOARD & REWARDS
+    // ========================================================================
+
     /// <summary>
     /// Get top referrers leaderboard
     /// </summary>
     Task<IEnumerable<TopReferrerDto>> GetTopReferrersAsync(int limit = 10);
 
     /// <summary>
-    /// Validate a referral code
+    /// Get reward tiers information
     /// </summary>
-    Task<bool> ValidateReferralCodeAsync(string code);
+    Task<RewardTiersResponseDto> GetRewardTiersAsync();
 
     /// <summary>
-    /// Check if user was referred
+    /// Get user's current reward tier
     /// </summary>
-    Task<bool> WasUserReferredAsync(Guid userId);
+    Task<UserTierDto> GetUserTierAsync(Guid userId);
+
+    // ========================================================================
+    // CAMPAIGNS
+    // ========================================================================
 
     /// <summary>
-    /// Generate a unique referral code based on username
+    /// Get active referral campaign
     /// </summary>
-    Task<string> GenerateUniqueCodeAsync(string username);
+    Task<ReferralCampaignDto?> GetActiveCampaignAsync();
+
+    /// <summary>
+    /// Get all referral campaigns
+    /// </summary>
+    Task<IEnumerable<ReferralCampaignDto>> GetAllCampaignsAsync();
+
+    /// <summary>
+    /// Create a new referral campaign
+    /// </summary>
+    Task<ReferralCampaignDto> CreateCampaignAsync(CreateCampaignDto dto);
+
+    // ========================================================================
+    // INVITES
+    // ========================================================================
+
+    /// <summary>
+    /// Send referral invite via email
+    /// </summary>
+    Task<SendReferralInviteResponseDto> SendReferralInviteAsync(SendReferralInviteDto dto);
 }

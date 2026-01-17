@@ -100,10 +100,10 @@ public class AuthController(
         var providers = new[]
         {
             new { id = "google-oauth2", name = "Google", icon = "google" },
-            new { id = "facebook", name = "Facebook", icon = "facebook" },
-            new { id = "apple", name = "Apple", icon = "apple" },
-            new { id = "github", name = "GitHub", icon = "github" },
-            new { id = "twitter", name = "Twitter/X", icon = "twitter" },
+            new { id = "Facebook", name = "Facebook", icon = "facebook" },
+            new { id = "Apple", name = "Apple", icon = "apple" },
+            new { id = "GitHub", name = "GitHub", icon = "github" },
+            new { id = "Twitter", name = "Twitter/X", icon = "twitter" },
             new { id = "linkedin", name = "LinkedIn", icon = "linkedin" }
         };
 
