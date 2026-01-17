@@ -293,6 +293,10 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         Guid userId, 
         [FromBody] UpdateEndUserProfileDto dto)
     {
+        if (!ModelState.IsValid)  
+            return BadRequest(ModelState);
+        
+        
         try
         {
             var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

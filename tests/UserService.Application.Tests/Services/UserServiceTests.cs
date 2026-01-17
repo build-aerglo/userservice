@@ -684,7 +684,7 @@ public class UserServiceTests
         _mockUserSettingsRepository.Verify(r => r.UpdateAsync(It.IsAny<UserSettings>()), Times.Once);
     }
 
-    [Test]
+[Test]
     public async Task UpdateEndUserProfileAsync_ShouldAutoCreateSettings_WhenMissing()
     {
         // Arrange
@@ -704,11 +704,12 @@ public class UserServiceTests
         _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
         _mockEndUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(profile);
     
-        // ✅ FIXED: Return null only on first call
+        
         UserSettings? createdSettings = null;
         _mockUserSettingsRepository
-            .Setup(r => r.GetByUserIdAsync(userId))
-            .ReturnsAsync((UserSettings?)null);
+            .SetupSequence(r => r.GetByUserIdAsync(userId))
+            .ReturnsAsync((UserSettings?)null)  // First call - doesn't exist
+            .ReturnsAsync(() => createdSettings ?? new UserSettings(userId)); // Second call - returns created
     
         _mockUserSettingsRepository
             .Setup(r => r.AddAsync(It.IsAny<UserSettings>()))
@@ -724,11 +725,10 @@ public class UserServiceTests
         // Assert
         Assert.That(result, Is.Not.Null);
     
-        // ✅ FIXED: Verify AddAsync is called exactly once
-        // The service might be calling it twice due to a bug - check your service implementation
+        // ✅ FIX: Should be called exactly once during UpdateEndUserProfileAsync
         _mockUserSettingsRepository.Verify(
             r => r.AddAsync(It.Is<UserSettings>(s => s.UserId == userId)), 
-            Times.Once  // Should be called only once
+            Times.Once
         );
     }
 
