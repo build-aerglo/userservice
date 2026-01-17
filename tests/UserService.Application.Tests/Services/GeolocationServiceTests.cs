@@ -46,7 +46,7 @@ public class GeolocationServiceTests
         Assert.That(result!.State, Is.EqualTo("Lagos"));
         Assert.That(result.IsEnabled, Is.True);
     }
-
+    
     [Test]
     public async Task UpdateGeolocationAsync_ShouldCreateNew_WhenNotExists()
     {
@@ -56,10 +56,13 @@ public class GeolocationServiceTests
         var dto = new UpdateGeolocationDto(userId, 6.5244, 3.3792, "Lagos", "Ikeja", "Lagos City");
 
         _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
-        _mockGeolocationRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync((UserGeolocation?)null);
+        
+        
+        _mockGeolocationRepository.SetupSequence(r => r.GetByUserIdAsync(userId))
+            .ReturnsAsync((UserGeolocation?)null)  
+            .ReturnsAsync(new UserGeolocation(userId, 6.5244, 3.3792, "Lagos", "Ikeja", "Lagos City")); // After AddAsync
+        
         _mockGeolocationRepository.Setup(r => r.AddAsync(It.IsAny<UserGeolocation>())).Returns(Task.CompletedTask);
-        _mockGeolocationRepository.Setup(r => r.GetByUserIdAsync(userId))
-            .ReturnsAsync(new UserGeolocation(userId, 6.5244, 3.3792, "Lagos", "Ikeja", "Lagos City"));
 
         // Act
         var result = await _service.UpdateGeolocationAsync(dto);

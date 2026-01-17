@@ -393,6 +393,7 @@ public class UserControllerTests
         Assert.That(error!.StatusCode, Is.EqualTo(500));
     }
     
+    [Test]
     public async Task GetEndUserProfileDetail_ShouldReturnOk_WhenUserExists()
     {
         // Arrange
@@ -548,68 +549,69 @@ public class UserControllerTests
     // PUT ENDPOINT TESTS
     // ========================================================================
 
-    [Test]
-    public async Task UpdateEndUserProfileDetail_ShouldReturnOk_WhenUpdateSuccessful()
-    {
-        // Arrange
-        var userId = Guid.NewGuid();
-        var updateDto = new UpdateEndUserProfileDto(
-            Username: "Lizzy",
-            Phone: "9876543210",
-            Address: "456 New Street",
-            SocialMedia: "twitter.com/johndoe",
-            NotificationPreferences: new NotificationPreferencesDto(
-                EmailNotifications: true,
-                SmsNotifications: true,
-                PushNotifications: false,
-                MarketingEmails: true
-            ),
-            DarkMode: true
-        );
+   [Test]
+public async Task UpdateEndUserProfileDetail_ShouldReturnOk_WhenUpdateSuccessful()
+{
+    // Arrange
+    var userId = Guid.NewGuid();
+    var updateDto = new UpdateEndUserProfileDto(
+        Username: "Lizzy",
+        Phone: "9876543210",
+        Address: "456 New Street",
+        SocialMedia: "twitter.com/johndoe",
+        NotificationPreferences: new NotificationPreferencesDto(
+            EmailNotifications: true,
+            SmsNotifications: true,
+            PushNotifications: false,
+            MarketingEmails: true
+        ),
+        DarkMode: true
+    );
 
-        var expectedResponse = new EndUserProfileDetailDto(
-            UserId: userId,
-            Username: "john_doe",
-            Email: "john@example.com",
-            Phone: "9876543210",
-            Address: "456 New Street",
-            JoinDate: DateTime.UtcNow.AddDays(-30),
-            EndUserProfileId: Guid.NewGuid(),
-            SocialMedia: "twitter.com/johndoe",
-            NotificationPreferences: new NotificationPreferencesDto(
-                EmailNotifications: true,
-                SmsNotifications: true,
-                PushNotifications: false,
-                MarketingEmails: true
-            ),
-            DarkMode: true,
-            CreatedAt: DateTime.UtcNow.AddDays(-30),
-            UpdatedAt: DateTime.UtcNow
-        );
+    var expectedResponse = new EndUserProfileDetailDto(
+        UserId: userId,
+        Username: "john_doe",
+        Email: "john@example.com",
+        Phone: "9876543210",
+        Address: "456 New Street",
+        JoinDate: DateTime.UtcNow.AddDays(-30),
+        EndUserProfileId: Guid.NewGuid(),
+        SocialMedia: "twitter.com/johndoe",
+        NotificationPreferences: new NotificationPreferencesDto(
+            EmailNotifications: true,
+            SmsNotifications: true,
+            PushNotifications: false,
+            MarketingEmails: true
+        ),
+        DarkMode: true,
+        CreatedAt: DateTime.UtcNow.AddDays(-30),
+        UpdatedAt: DateTime.UtcNow
+    );
 
-        _mockUserService
-            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
-            .ReturnsAsync(expectedResponse);
+    // ✅ FIX: Use It.IsAny<> instead of exact DTO matching
+    _mockUserService
+        .Setup(s => s.UpdateEndUserProfileAsync(userId, It.IsAny<UpdateEndUserProfileDto>()))
+        .ReturnsAsync(expectedResponse);
 
-        // Act
-        var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
+    // Act
+    var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
 
-        // Assert
-        var okResult = result as OkObjectResult;
-        Assert.That(okResult, Is.Not.Null);
-        Assert.That(okResult!.StatusCode, Is.EqualTo(200));
+    // Assert
+    var okResult = result as OkObjectResult;
+    Assert.That(okResult, Is.Not.Null);
+    Assert.That(okResult!.StatusCode, Is.EqualTo(200));
 
-        var json = JsonSerializer.Serialize(okResult.Value);
-        var response = JsonSerializer.Deserialize<EndUserProfileDetailDto>(json);
+    var json = JsonSerializer.Serialize(okResult.Value);
+    var response = JsonSerializer.Deserialize<EndUserProfileDetailDto>(json);
 
-        Assert.That(response, Is.Not.Null);
-        Assert.That(response!.UserId, Is.EqualTo(userId));
-        Assert.That(response.Phone, Is.EqualTo("9876543210"));
-        Assert.That(response.Address, Is.EqualTo("456 New Street"));
-        Assert.That(response.SocialMedia, Is.EqualTo("twitter.com/johndoe"));
-        Assert.That(response.NotificationPreferences.SmsNotifications, Is.True);
-        Assert.That(response.DarkMode, Is.True);
-    }
+    Assert.That(response, Is.Not.Null);
+    Assert.That(response!.UserId, Is.EqualTo(userId));
+    Assert.That(response.Phone, Is.EqualTo("9876543210"));
+    Assert.That(response.Address, Is.EqualTo("456 New Street"));
+    Assert.That(response.SocialMedia, Is.EqualTo("twitter.com/johndoe"));
+    Assert.That(response.NotificationPreferences.SmsNotifications, Is.True);
+    Assert.That(response.DarkMode, Is.True);
+}
 
     [Test]
     public async Task UpdateEndUserProfileDetail_ShouldReturnOk_WhenPartialUpdate()
@@ -622,7 +624,7 @@ public class UserControllerTests
             Address: null,
             SocialMedia: null,
             NotificationPreferences: null,
-            DarkMode: true  // Only updating dark mode
+            DarkMode: true
         );
 
         var expectedResponse = new EndUserProfileDetailDto(
@@ -640,9 +642,10 @@ public class UserControllerTests
             UpdatedAt: DateTime.UtcNow
         );
 
-        _mockUserService
-            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
-            .ReturnsAsync(expectedResponse);
+           // ✅ FIX: Use It.IsAny<>
+    _mockUserService
+        .Setup(s => s.UpdateEndUserProfileAsync(userId, It.IsAny<UpdateEndUserProfileDto>()))
+        .ReturnsAsync(expectedResponse);
 
         // Act
         var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
@@ -656,7 +659,7 @@ public class UserControllerTests
 
         Assert.That(response, Is.Not.Null);
         Assert.That(response!.DarkMode, Is.True);
-        Assert.That(response.Phone, Is.EqualTo("1234567890")); // Unchanged
+        Assert.That(response.Phone, Is.EqualTo("1234567890"));
     }
 
     [Test]
@@ -673,12 +676,15 @@ public class UserControllerTests
             DarkMode: null
         );
 
+        // ✅ FIX: Use It.IsAny<>
         _mockUserService
-            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
+            .Setup(s => s.UpdateEndUserProfileAsync(userId, It.IsAny<UpdateEndUserProfileDto>()))
             .ThrowsAsync(new EndUserNotFoundException(userId));
 
         // Act
         var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
+        
+   
 
         // Assert
         var notFoundResult = result as NotFoundObjectResult;
@@ -704,11 +710,383 @@ public class UserControllerTests
 
         // Act
         var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
-
+        
+    
         // Assert
         var badRequestResult = result as BadRequestObjectResult;
         Assert.That(badRequestResult, Is.Not.Null);
         Assert.That(badRequestResult!.StatusCode, Is.EqualTo(400));
+    }
+
+    [Test]
+    public async Task CreateSupportUser_ShouldAllowNullAddress()
+    {
+        // ARRANGE
+        var dto = new CreateSupportUserDto(
+            Username: "no_address_support",
+            Email: "noaddr@support.com",
+            Password: "password123",
+            Phone: "5555555555",
+            Address: null
+        );
+
+        var response = new SupportUserResponseDto(
+            UserId: Guid.NewGuid(),
+            SupportUserProfileId: Guid.NewGuid(),
+            Username: "no_address_support",
+            Email: "noaddr@support.com",
+            Phone: "5555555555",
+            Address: null,
+            Auth0UserId: "auth0|test",
+            CreatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.CreateSupportUserAsync(dto))
+            .ReturnsAsync(response);
+
+        var mockUrlHelper = new Mock<IUrlHelper>();
+        mockUrlHelper
+            .Setup(u => u.Action(It.IsAny<UrlActionContext>()))
+            .Returns("/api/user/" + response.UserId);
+
+        _controller.Url = mockUrlHelper.Object;
+
+        // ACT
+        var result = await _controller.CreateSupportUser(dto);
+
+        // ASSERT
+        var createdResult = result as CreatedResult;
+        Assert.That(createdResult, Is.Not.Null);
+
+        var json = JsonSerializer.Serialize(createdResult!.Value);
+        var returnedValue = JsonSerializer.Deserialize<SupportUserResponseDto>(json);
+        Assert.That(returnedValue!.Address, Is.Null);
+    }
+
+    // UPDATE SUPPORT USER TESTS
+    [Test]
+    public async Task UpdateSupportUser_ShouldReturnOk_WhenSuccessful()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "updated@support.com",
+            Phone: "9876543210",
+            Address: "456 Updated St"
+        );
+
+        var response = new SupportUserResponseDto(
+            UserId: userId,
+            SupportUserProfileId: Guid.NewGuid(),
+            Username: "support_admin",
+            Email: "updated@support.com",
+            Phone: "9876543210",
+            Address: "456 Updated St",
+            Auth0UserId: "auth0|test",
+            CreatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSupportUserAsync(userId, dto))
+            .ReturnsAsync(response);
+
+        // ACT
+        var result = await _controller.UpdateSupportUser(userId, dto);
+
+        // ASSERT
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        Assert.That(okResult!.StatusCode, Is.EqualTo(200));
+
+        var json = JsonSerializer.Serialize(okResult.Value);
+        var returnedValue = JsonSerializer.Deserialize<SupportUserResponseDto>(json);
+        Assert.That(returnedValue, Is.Not.Null);
+        Assert.That(returnedValue!.Email, Is.EqualTo("updated@support.com"));
+        Assert.That(returnedValue.Phone, Is.EqualTo("9876543210"));
+        Assert.That(returnedValue.Address, Is.EqualTo("456 Updated St"));
+
+        _mockUserService.Verify(s => s.UpdateSupportUserAsync(userId, dto), Times.Once);
+    }
+
+    [Test]
+    public async Task UpdateSupportUser_ShouldReturnNotFound_WhenUserDoesNotExist()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "notfound@support.com",
+            Phone: "1234567890",
+            Address: null
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSupportUserAsync(userId, dto))
+            .ThrowsAsync(new SupportUserNotFoundException(userId));
+
+        // ACT
+        var result = await _controller.UpdateSupportUser(userId, dto);
+
+        // ASSERT
+        var notFoundResult = result as NotFoundObjectResult;
+        Assert.That(notFoundResult, Is.Not.Null);
+        Assert.That(notFoundResult!.StatusCode, Is.EqualTo(404));
+        Assert.That(notFoundResult.Value?.ToString(), Does.Contain(userId.ToString()));
+    }
+
+    [Test]
+    public async Task UpdateSupportUser_ShouldReturnInternalServerError_WhenUpdateFails()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "fail@support.com",
+            Phone: "1234567890",
+            Address: "Fail St"
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSupportUserAsync(userId, dto))
+            .ThrowsAsync(new SupportUserUpdateFailedException("Failed to update user record."));
+
+        // ACT
+        var result = await _controller.UpdateSupportUser(userId, dto);
+
+        // ASSERT
+        var errorResult = result as ObjectResult;
+        Assert.That(errorResult, Is.Not.Null);
+        Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
+        Assert.That(errorResult.Value?.ToString(), Does.Contain("Failed to update user record."));
+    }
+
+    [Test]
+    public async Task UpdateSupportUser_ShouldReturnInternalServerError_WhenUnexpectedErrorOccurs()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "unexpected@support.com",
+            Phone: "9999999999",
+            Address: "Unexpected St"
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSupportUserAsync(userId, dto))
+            .ThrowsAsync(new Exception("Unexpected failure"));
+
+        // ACT
+        var result = await _controller.UpdateSupportUser(userId, dto);
+
+        // ASSERT
+        var errorResult = result as ObjectResult;
+        Assert.That(errorResult, Is.Not.Null);
+        Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
+        Assert.That(errorResult.Value?.ToString(), Does.Contain("Internal server error occurred."));
+    }
+
+    [Test]
+    public async Task UpdateSupportUser_ShouldReturnBadRequest_WhenModelStateIsInvalid()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "",
+            Phone: "1234567890",
+            Address: null
+        );
+
+        _controller.ModelState.AddModelError("Email", "Email cannot be empty");
+
+        // ACT
+        var result = await _controller.UpdateSupportUser(userId, dto);
+
+        // ASSERT
+        var badRequestResult = result as BadRequestObjectResult;
+        Assert.That(badRequestResult, Is.Not.Null);
+        Assert.That(badRequestResult!.StatusCode, Is.EqualTo(400));
+    }
+
+    [Test]
+    public async Task UpdateSupportUser_WithPartialUpdate_ShouldSucceed()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "partial@support.com",
+            Phone: null,
+            Address: null
+        );
+
+        var response = new SupportUserResponseDto(
+            UserId: userId,
+            SupportUserProfileId: Guid.NewGuid(),
+            Username: "support_admin",
+            Email: "partial@support.com",
+            Phone: "1234567890",
+            Address: "123 Original St",
+            Auth0UserId: "auth0|test",
+            CreatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSupportUserAsync(userId, dto))
+            .ReturnsAsync(response);
+
+        // ACT
+        var result = await _controller.UpdateSupportUser(userId, dto);
+
+        // ASSERT
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var json = JsonSerializer.Serialize(okResult!.Value);
+        var returnedValue = JsonSerializer.Deserialize<SupportUserResponseDto>(json);
+        Assert.That(returnedValue!.Email, Is.EqualTo("partial@support.com"));
+        Assert.That(returnedValue.Phone, Is.EqualTo("1234567890"));
+    }
+
+    [Test]
+    public async Task UpdateSupportUser_WithAllNullFields_ShouldStillSucceed()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: null,
+            Phone: null,
+            Address: null
+        );
+
+        var response = new SupportUserResponseDto(
+            UserId: userId,
+            SupportUserProfileId: Guid.NewGuid(),
+            Username: "support_admin",
+            Email: "original@support.com",
+            Phone: "1234567890",
+            Address: "123 Original St",
+            Auth0UserId: "auth0|test",
+            CreatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSupportUserAsync(userId, dto))
+            .ReturnsAsync(response);
+
+        // ACT
+        var result = await _controller.UpdateSupportUser(userId, dto);
+
+        // ASSERT
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        Assert.That(okResult!.StatusCode, Is.EqualTo(200));
+    }
+
+    [Test]
+    public async Task UpdateSupportUser_ShouldReturnInternalServerError_WhenUserIsNotSupportUser()
+    {
+        // ARRANGE
+        var userId = Guid.NewGuid();
+        var dto = new UpdateSupportUserDto(
+            Email: "test@support.com",
+            Phone: "1234567890",
+            Address: null
+        );
+
+        _mockUserService
+            .Setup(s => s.UpdateSupportUserAsync(userId, dto))
+            .ThrowsAsync(new SupportUserUpdateFailedException($"User with ID {userId} is not a support user."));
+
+        // ACT
+        var result = await _controller.UpdateSupportUser(userId, dto);
+
+        // ASSERT
+        var errorResult = result as ObjectResult;
+        Assert.That(errorResult, Is.Not.Null);
+        Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
+        Assert.That(errorResult.Value?.ToString(), Does.Contain("is not a support user"));
+    }
+
+    // ---------------------- END USER TESTS ----------------------
+    [Test]
+    public async Task CreateEndUser_WithAllFields_ShouldReturnCreated()
+    {
+        // ARRANGE
+        var dto = new CreateEndUserDto(
+            Username: "jane_doe",
+            Email: "jane@example.com",
+            Password: "password123",
+            Phone: "1234567890",
+            Address: "123 Main St",
+            SocialMedia: "https://twitter.com/jane_doe"
+        );
+
+        var response = new EndUserResponseDto(
+            UserId: Guid.NewGuid(),
+            EndUserProfileId: Guid.NewGuid(),
+            Username: "jane_doe",
+            Email: "jane@example.com",
+            Phone: "1234567890",
+            Address: "123 Main St",
+            SocialMedia: "https://twitter.com/jane_doe",
+            Auth0UserId: "auth0|test",
+            CreatedAt: DateTime.UtcNow
+        );
+
+        _mockUserService
+            .Setup(s => s.CreateEndUserAsync(dto))
+            .ReturnsAsync(response);
+
+        var mockUrlHelper = new Mock<IUrlHelper>();
+        mockUrlHelper
+            .Setup(u => u.Action(It.IsAny<UrlActionContext>()))
+            .Returns("/api/user/" + response.UserId);
+
+        _controller.Url = mockUrlHelper.Object;
+
+        // ACT
+        var result = await _controller.CreateEndUser(dto);
+
+        // ASSERT
+        var createdResult = result as CreatedResult;
+        Assert.That(createdResult, Is.Not.Null);
+        Assert.That(createdResult!.StatusCode, Is.EqualTo(201));
+
+        var json = JsonSerializer.Serialize(createdResult.Value);
+        var returnedValue = JsonSerializer.Deserialize<EndUserResponseDto>(json);
+        Assert.That(returnedValue, Is.Not.Null);
+        Assert.That(returnedValue!.Username, Is.EqualTo("jane_doe"));
+        Assert.That(returnedValue.Email, Is.EqualTo("jane@example.com"));
+        Assert.That(returnedValue.SocialMedia, Is.EqualTo("https://twitter.com/jane_doe"));
+
+        _mockUserService.Verify(s => s.CreateEndUserAsync(dto), Times.Once);
+    }
+
+    [Test]
+    public async Task CreateEndUser_ShouldReturnConflict_WhenEmailAlreadyExists()
+    {
+        // ARRANGE
+        var dto = new CreateEndUserDto(
+            Username: "duplicate_user",
+            Email: "duplicate@example.com",
+            Password: "password123",
+            Phone: "9999999999",
+            Address: "Duplicate St",
+            SocialMedia: null
+        );
+
+        _mockUserService
+            .Setup(s => s.CreateEndUserAsync(dto))
+            .ThrowsAsync(new DuplicateUserEmailException($"Email '{dto.Email}' already exists."));
+
+        // ACT
+        var result = await _controller.CreateEndUser(dto);
+
+        // ASSERT
+        var conflictResult = result as ObjectResult;
+        Assert.That(conflictResult, Is.Not.Null);
+        Assert.That(conflictResult!.StatusCode, Is.EqualTo(409));
+
+        var errorValue = conflictResult.Value?.ToString();
+        Assert.That(errorValue, Does.Contain("already exists"));
     }
 
     [Test]
@@ -726,7 +1104,7 @@ public class UserControllerTests
         );
 
         _mockUserService
-            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
+            .Setup(s => s.UpdateEndUserProfileAsync(userId, It.IsAny<UpdateEndUserProfileDto>()))
             .ThrowsAsync(new Exception("Database connection failed"));
 
         // Act
@@ -767,15 +1145,16 @@ public class UserControllerTests
             UpdatedAt: DateTime.UtcNow
         );
 
+        // ✅ FIX: Use It.IsAny<>
         _mockUserService
-            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
+            .Setup(s => s.UpdateEndUserProfileAsync(userId, It.IsAny<UpdateEndUserProfileDto>()))
             .ReturnsAsync(expectedResponse);
 
         // Act
         await _controller.UpdateEndUserProfileDetail(userId, updateDto);
 
         // Assert
-        _mockUserService.Verify(s => s.UpdateEndUserProfileAsync(userId, updateDto), Times.Once);
+        _mockUserService.Verify(s => s.UpdateEndUserProfileAsync(userId, It.IsAny<UpdateEndUserProfileDto>()), Times.Once);
     }
 
     [Test]
@@ -818,8 +1197,9 @@ public class UserControllerTests
         );
 
         _mockUserService
-            .Setup(s => s.UpdateEndUserProfileAsync(userId, updateDto))
+            .Setup(s => s.UpdateEndUserProfileAsync(userId, It.IsAny<UpdateEndUserProfileDto>()))
             .ReturnsAsync(expectedResponse);
+
 
         // Act
         var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
@@ -828,19 +1208,14 @@ public class UserControllerTests
         var okResult = result as OkObjectResult;
         Assert.That(okResult, Is.Not.Null);
 
-        var json = JsonSerializer.Serialize(okResult.Value);
+        var json = JsonSerializer.Serialize(okResult!.Value);
         var response = JsonSerializer.Deserialize<EndUserProfileDetailDto>(json);
 
         Assert.That(response, Is.Not.Null);
         Assert.That(response!.NotificationPreferences.EmailNotifications, Is.False);
         Assert.That(response.NotificationPreferences.SmsNotifications, Is.True);
         Assert.That(response.NotificationPreferences.MarketingEmails, Is.True);
-        Assert.That(response.Phone, Is.EqualTo("1234567890")); // Unchanged
-        Assert.That(response.DarkMode, Is.False); // Unchanged
+        Assert.That(response.Phone, Is.EqualTo("1234567890"));
+        Assert.That(response.DarkMode, Is.False);
     }
-
-
-
-
-
 }

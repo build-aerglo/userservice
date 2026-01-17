@@ -20,7 +20,7 @@ public class SupportUserProfile
     }
 
     // Method to update timestamp (if needed for future updates)
-    public void Touch()
+    public void UpdateTimestamp()
     {
         UpdatedAt = DateTime.UtcNow;
     }

@@ -154,7 +154,7 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
 
         // ✅ 2. Save user
         await userRepository.AddAsync(user);
-        
+
         // ✅ 3. Confirm user was saved
         var savedUser = await userRepository.GetByIdAsync(user.Id);
         if (savedUser is null)
@@ -164,7 +164,7 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         var supportUserProfile = new SupportUserProfile(userId: user.Id);
 
         await supportUserProfileRepository.AddAsync(supportUserProfile);
-        
+
         // ✅ 5. Confirm support profile was saved
         var savedSupportProfile = await supportUserProfileRepository.GetByIdAsync(supportUserProfile.Id);
         if (savedSupportProfile is null)
@@ -183,9 +183,53 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         );
     }
 
+    public async Task<SupportUserResponseDto> UpdateSupportUserAsync(Guid userId, UpdateSupportUserDto dto)
+    {
+        // Get the existing user
+        var user = await userRepository.GetByIdAsync(userId);
+        if (user is null)
+            throw new SupportUserNotFoundException(userId);
+
+        // Verify user is a support user
+        if (user.UserType != "support_user")
+            throw new SupportUserUpdateFailedException($"User with ID {userId} is not a support user.");
+
+        // Get the support user profile
+        var supportProfile = await supportUserProfileRepository.GetByUserIdAsync(userId);
+        if (supportProfile is null)
+            throw new SupportUserNotFoundException(userId);
+
+        // Update user details
+        user.Update(dto.Email, dto.Phone, dto.Address);
+
+        // Save updated user
+        await userRepository.UpdateAsync(user);
+
+        // Update support profile timestamp
+        supportProfile.UpdateTimestamp();
+        await supportUserProfileRepository.UpdateAsync(supportProfile);
+
+        // Verify update
+        var updatedUser = await userRepository.GetByIdAsync(userId);
+        if (updatedUser is null)
+            throw new SupportUserUpdateFailedException("Failed to update user record.");
+
+        // Map to response DTO
+        return new SupportUserResponseDto(
+            UserId: updatedUser.Id,
+            SupportUserProfileId: supportProfile.Id,
+            Username: updatedUser.Username,
+            Email: updatedUser.Email,
+            Phone: updatedUser.Phone,
+            Address: updatedUser.Address,
+            Auth0UserId: updatedUser.Auth0UserId,
+            CreatedAt: updatedUser.CreatedAt
+        );
+    }
+
 
 	//Business User Services
-    
+
     public async Task<(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload)
     {   
         // fetch business

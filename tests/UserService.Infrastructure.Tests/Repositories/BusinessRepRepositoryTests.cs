@@ -18,7 +18,6 @@ public class BusinessRepRepositoryTests
     [OneTimeSetUp]
     public async Task GlobalSetup()
     {
-        // ✅ Load appsettings.json for the real connection string
         var builder = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
@@ -30,7 +29,6 @@ public class BusinessRepRepositoryTests
         _repository = new BusinessRepRepository(_configuration);
         _userRepository = new UserRepository(_configuration);
 
-        // ✅ Ensure tables exist before running tests
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
 
@@ -51,21 +49,19 @@ public class BusinessRepRepositoryTests
     [SetUp]
     public async Task Setup()
     {
-        // ✅ Clean test data before each test
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.ExecuteAsync("DELETE FROM business_reps;");
         await conn.ExecuteAsync("DELETE FROM users WHERE user_type = 'business_user';");
     }
 
-    // ✅ Test: Add and retrieve a business rep
     [Test]
     public async Task AddAsync_ShouldInsertAndRetrieveBusinessRep()
     {
         // Arrange
-        var user = new User("rep_add", "rep_add@biz.com", "1234567890", "123456","business_user", "123 Main St","test");
+        var user = new User("rep_add", "rep_add@biz.com", "1234567890", "123456", "business_user", "123 Main St", "test");
         await _userRepository.AddAsync(user);
 
-        var businessId = Guid.NewGuid(); // Mocked business id (validated by BusinessService in reality)
+        var businessId = Guid.NewGuid();
         var businessRep = new BusinessRep(businessId, user.Id, "Branch A", "Address A");
 
         // Act
@@ -79,11 +75,10 @@ public class BusinessRepRepositoryTests
         Assert.That(fetched.BranchName, Is.EqualTo("Branch A"));
     }
 
-    // ✅ Test: GetByUserId returns the right rep
     [Test]
     public async Task GetByUserIdAsync_ShouldReturnBusinessRep_WhenExists()
     {
-        var user = new User("rep_user", "rep_user@biz.com", "3333333333", "123456","business_user", "User St","test");
+        var user = new User("rep_user", "rep_user@biz.com", "3333333333", "123456", "business_user", "User St", "test");
         await _userRepository.AddAsync(user);
 
         var businessRep = new BusinessRep(Guid.NewGuid(), user.Id, "Branch X", "Street X");
@@ -96,11 +91,10 @@ public class BusinessRepRepositoryTests
         Assert.That(result.BranchName, Is.EqualTo("Branch X"));
     }
 
-    // ✅ Test: Update branch info
     [Test]
     public async Task UpdateAsync_ShouldModifyBranchInfo()
     {
-        var user = new User("rep_update", "rep_update@biz.com", "4444444444", "123456","business_user", "Addr","test");
+        var user = new User("rep_update", "rep_update@biz.com", "4444444444", "123456", "business_user", "Addr", "test");
         await _userRepository.AddAsync(user);
 
         var businessRep = new BusinessRep(Guid.NewGuid(), user.Id, "Old Branch", "Old Location");
@@ -114,11 +108,10 @@ public class BusinessRepRepositoryTests
         Assert.That(updated.BranchAddress, Is.EqualTo("New Location"));
     }
 
-    // ✅ Test: Delete
     [Test]
     public async Task DeleteAsync_ShouldRemoveBusinessRep()
     {
-        var user = new User("rep_delete", "rep_delete@biz.com", "5555555555", "123456","business_user", "Addr D","test");
+        var user = new User("rep_delete", "rep_delete@biz.com", "5555555555", "123456", "business_user", "Addr D", "test");
         await _userRepository.AddAsync(user);
 
         var businessRep = new BusinessRep(Guid.NewGuid(), user.Id, "Del Branch", "Del Address");
@@ -130,14 +123,13 @@ public class BusinessRepRepositoryTests
         Assert.That(result, Is.Null);
     }
 
-    // ✅ Test: GetByBusinessId returns all reps for the same business
     [Test]
     public async Task GetByBusinessIdAsync_ShouldReturnAllRepsForBusiness()
     {
         var businessId = Guid.NewGuid();
 
-        var user1 = new User("rep1", "rep1@biz.com", "1111111111", "123456","business_user", "Addr1","test");
-        var user2 = new User("rep2", "rep2@biz.com", "2222222222", "123456","business_user", "Addr2","test");
+        var user1 = new User("rep1", "rep1@biz.com", "1111111111", "123456", "business_user", "Addr1", "test");
+        var user2 = new User("rep2", "rep2@biz.com", "2222222222", "123456", "business_user", "Addr2", "test");
         await _userRepository.AddAsync(user1);
         await _userRepository.AddAsync(user2);
 
@@ -151,12 +143,11 @@ public class BusinessRepRepositoryTests
         Assert.That(results.Any(r => r.BranchName == "Branch 2"), Is.True);
     }
 
-    // ✅ Test: Update with User details (Integration test pattern)
     [Test]
     public async Task UpdateAsync_WithUserDetails_ShouldModifyBothUserAndBusinessRep()
     {
         // ARRANGE
-        var user = new User("rep_full_update", "rep_full@biz.com", "6666666666","123456", "business_user", "Initial Address","test");
+        var user = new User("rep_full_update", "rep_full@biz.com", "6666666666", "123456", "business_user", "Initial Address", "test");
         await _userRepository.AddAsync(user);
 
         var businessId = Guid.NewGuid();
@@ -177,13 +168,11 @@ public class BusinessRepRepositoryTests
 
         Assert.Multiple(() =>
         {
-            // User assertions
             Assert.That(updatedUser, Is.Not.Null);
             Assert.That(updatedUser!.Email, Is.EqualTo("updated_rep@biz.com"));
             Assert.That(updatedUser.Phone, Is.EqualTo("7777777777"));
             Assert.That(updatedUser.Address, Is.EqualTo("Updated Address"));
 
-            // BusinessRep assertions
             Assert.That(updatedBusinessRep, Is.Not.Null);
             Assert.That(updatedBusinessRep!.BranchName, Is.EqualTo("Updated Branch"));
             Assert.That(updatedBusinessRep.BranchAddress, Is.EqualTo("Updated Branch Address"));
@@ -191,29 +180,27 @@ public class BusinessRepRepositoryTests
         });
     }
 
-    // ✅  Test GetParentRepByBusinessIdAsync - Returns earliest created rep
+   
     [Test]
     public async Task GetParentRepByBusinessIdAsync_ShouldReturnEarliestRep_WhenMultipleRepsExist()
     {
         // Arrange
         var businessId = Guid.NewGuid();
+        var timestamp = DateTime.UtcNow.Ticks;
 
-        var user1 = new User("parent_rep", "parent@biz.com", "1111111111", "123456","business_user", "Addr1", "test");
-        var user2 = new User("child_rep2", "child2@biz.com", "3333333333", "123456","business_user", "Addr3", "test");
-        var user3 = new User("child_rep2", "child2@biz.com", "3333333333", "123456","business_user", "Addr3", "test");
+        var user1 = new User("parent_rep", $"parent_{timestamp}@biz.com", "1111111111", "123456", "business_user", "Addr1", "test");
+        var user2 = new User("child_rep1", $"child1_{timestamp}@biz.com", "2222222222", "123456", "business_user", "Addr2", "test");
+        var user3 = new User("child_rep2", $"child2_{timestamp}@biz.com", "3333333333", "123456", "business_user", "Addr3", "test");
         
         await _userRepository.AddAsync(user1);
         await _userRepository.AddAsync(user2);
         await _userRepository.AddAsync(user3);
 
-        // Add parent rep first (created earliest)
         var parentRep = new BusinessRep(businessId, user1.Id, "Parent Branch", "Parent Location");
         await _repository.AddAsync(parentRep);
         
-        // Small delay to ensure different timestamps
         await Task.Delay(100);
         
-        // Add child reps
         await _repository.AddAsync(new BusinessRep(businessId, user2.Id, "Child Branch 1", "Child Location 1"));
         await _repository.AddAsync(new BusinessRep(businessId, user3.Id, "Child Branch 2", "Child Location 2"));
 
@@ -227,7 +214,6 @@ public class BusinessRepRepositoryTests
         Assert.That(result.Id, Is.EqualTo(parentRep.Id));
     }
 
-    // ✅ Test GetParentRepByBusinessIdAsync - Returns null when no reps exist
     [Test]
     public async Task GetParentRepByBusinessIdAsync_ShouldReturnNull_WhenNoRepsExist()
     {
@@ -241,13 +227,13 @@ public class BusinessRepRepositoryTests
         Assert.That(result, Is.Null);
     }
 
-    // ✅ NEW: Test GetParentRepByBusinessIdAsync - Returns the only rep when one exists
     [Test]
     public async Task GetParentRepByBusinessIdAsync_ShouldReturnOnlyRep_WhenSingleRepExists()
     {
         // Arrange
         var businessId = Guid.NewGuid();
-        var user = new User("only_rep", "only@biz.com", "9999999999", "12345","business_user", "Only Addr", "test");
+        var timestamp = DateTime.UtcNow.Ticks;
+        var user = new User("only_rep", $"only_{timestamp}@biz.com", "9999999999", "12345", "business_user", "Only Addr", "test");
         await _userRepository.AddAsync(user);
 
         var businessRep = new BusinessRep(businessId, user.Id, "Only Branch", "Only Location");
