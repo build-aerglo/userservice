@@ -39,6 +39,11 @@ builder.Services.AddScoped<IReferralRepository, ReferralRepository>();
 builder.Services.AddScoped<IUserGeolocationRepository, UserGeolocationRepository>();
 builder.Services.AddScoped<IGeolocationHistoryRepository, GeolocationHistoryRepository>();
 
+
+builder.Services.AddScoped<IPointRuleRepository, PointRuleRepository>();
+builder.Services.AddScoped<IPointMultiplierRepository, PointMultiplierRepository>();
+builder.Services.AddScoped<IPointRedemptionRepository, PointRedemptionRepository>();
+
 // ---------- Auth0 Login HTTP Client (TLS forced) ----------
 builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(client =>
 {
@@ -78,7 +83,38 @@ builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(cl
 })
 .ConfigurePrimaryHttpMessageHandler(() =>
 {
-    // 👇 THIS FIXES YOUR ERROR: Allow HTTP, do NOT enforce SSL
+    // Allow HTTP, do NOT enforce SSL
+    return new HttpClientHandler
+    {
+        ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    };
+});
+
+
+builder.Services.AddHttpClient<IAfricaTalkingClient, AfricaTalkingClient>(client =>
+{
+    var baseUrl = builder.Configuration["AfricaTalking:BaseUrl"];
+    client.BaseAddress = new Uri(baseUrl);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
+    // Allow HTTP, do NOT enforce SSL
+    return new HttpClientHandler
+    {
+        ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    };
+});
+
+builder.Services.AddHttpClient<IReviewServiceClient, ReviewServiceClient>(client =>
+{
+    var baseUrl = builder.Configuration["Services:ReviewServiceBaseUrl"];
+    client.BaseAddress = new Uri(baseUrl);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
+    // Allow HTTP, do NOT enforce SSL
     return new HttpClientHandler
     {
         ServerCertificateCustomValidationCallback =

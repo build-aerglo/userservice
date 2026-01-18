@@ -10,4 +10,7 @@ public interface IUserRepository
     Task AddAsync(User user);
     Task UpdateAsync(User user);
     Task<Guid?> GetUserOrBusinessIdByEmailAsync(string email);
+    Task UpdateLastLoginAsync(Guid userId, DateTime loginTime);
+    Task<User?> GetByEmailAsync(string email);
+    
 }
