@@ -3,33 +3,70 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserService.Application.DTOs;
 using UserService.Application.DTOs.Auth;
-using UserService.Application.Services;
+using UserService.Application.Interfaces;
 using UserService.Application.Services.Auth0;
 using UserService.Domain.Exceptions;
+using UserService.Domain.Repositories;
 
 namespace UserService.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(
-    IAuth0UserLoginService auth0Login,
-    IAuth0SocialLoginService socialLogin,
-    IRefreshTokenCookieService refreshCookie)
-    : ControllerBase
+public class AuthController : ControllerBase
 {
+    private readonly IAuth0UserLoginService _auth0Login;
+    private readonly IAuth0SocialLoginService _socialLogin;
+    private readonly IRefreshTokenCookieService _refreshCookie;
+    private readonly IUserRepository _userRepository;
+    private readonly IPointsService _pointsService;
+    private readonly ILogger<AuthController> _logger;
+
+    public AuthController(
+        IAuth0UserLoginService auth0Login,
+        IAuth0SocialLoginService socialLogin,
+        IRefreshTokenCookieService refreshCookie,
+        IUserRepository userRepository,
+        IPointsService pointsService,
+        ILogger<AuthController> logger)
+    {
+        _auth0Login = auth0Login;
+        _socialLogin = socialLogin;
+        _refreshCookie = refreshCookie;
+        _userRepository = userRepository;
+        _pointsService = pointsService;
+        _logger = logger;
+    }
+
     [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest dto)
     {
         try
         {
-            var token = await auth0Login.LoginAsync(dto.Email, dto.Password);
+            var token = await _auth0Login.LoginAsync(dto.Email, dto.Password);
 
             if (token.Refresh_Token == null)
                 return Unauthorized(new { error = "Refresh token not returned. Check Auth0 config." });
 
-            refreshCookie.SetRefreshToken(Response, token.Refresh_Token);
-
+            _refreshCookie.SetRefreshToken(Response, token.Refresh_Token);
+            
+            // Track login for streak
+            var user = await _userRepository.GetByEmailAsync(dto.Email);
+            if (user != null)
+            {
+                await _userRepository.UpdateLastLoginAsync(user.Id, DateTime.UtcNow);
+    
+                try
+                {
+                    await _pointsService.UpdateLoginStreakAsync(user.Id, DateTime.UtcNow);
+                    await _pointsService.CheckAndAwardStreakMilestoneAsync(user.Id);
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't fail login if streak update fails
+                    _logger?.LogWarning(ex, "Failed to update login streak for user {UserId}", user.Id);
+                }
+            }
             return Ok(new
             {
                 access_token = token.Access_Token,
@@ -61,15 +98,15 @@ public class AuthController(
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh()
     {
-        var refreshToken = refreshCookie.GetRefreshToken(Request);
+        var refreshToken = _refreshCookie.GetRefreshToken(Request);
 
         if (refreshToken is null)
             return Unauthorized("Missing refresh token cookie");
 
-        var token = await auth0Login.RefreshAsync(refreshToken);
+        var token = await _auth0Login.RefreshAsync(refreshToken);
 
         if (!string.IsNullOrWhiteSpace(token.Refresh_Token))
-            refreshCookie.SetRefreshToken(Response, token.Refresh_Token);
+            _refreshCookie.SetRefreshToken(Response, token.Refresh_Token);
 
         return Ok(new
         {
@@ -82,7 +119,7 @@ public class AuthController(
     [HttpPost("logout")]
     public IActionResult Logout()
     {
-        refreshCookie.ClearRefreshToken(Response);
+        _refreshCookie.ClearRefreshToken(Response);
         return NoContent();
     }
 
@@ -90,9 +127,6 @@ public class AuthController(
     // SOCIAL LOGIN ENDPOINTS
     // ========================================================================
 
-    /// <summary>
-    /// Get available social login providers
-    /// </summary>
     [AllowAnonymous]
     [HttpGet("social/providers")]
     public IActionResult GetSocialProviders()
@@ -100,26 +134,23 @@ public class AuthController(
         var providers = new[]
         {
             new { id = "google-oauth2", name = "Google", icon = "google" },
-            new { id = "Facebook", name = "Facebook", icon = "facebook" },
-            new { id = "Apple", name = "Apple", icon = "apple" },
-            new { id = "GitHub", name = "GitHub", icon = "github" },
-            new { id = "Twitter", name = "Twitter/X", icon = "twitter" },
+            new { id = "facebook", name = "Facebook", icon = "facebook" },
+            new { id = "apple", name = "Apple", icon = "apple" },
+            new { id = "github", name = "GitHub", icon = "github" },
+            new { id = "twitter", name = "Twitter/X", icon = "twitter" },
             new { id = "linkedin", name = "LinkedIn", icon = "linkedin" }
         };
 
         return Ok(providers);
     }
 
-    /// <summary>
-    /// Get authorization URL for social login
-    /// </summary>
     [AllowAnonymous]
     [HttpPost("social/authorize")]
     public IActionResult GetAuthorizationUrl([FromBody] SocialAuthUrlRequest request)
     {
         try
         {
-            var response = socialLogin.GetAuthorizationUrl(request);
+            var response = _socialLogin.GetAuthorizationUrl(request);
             return Ok(response);
         }
         catch (InvalidSocialProviderException ex)
@@ -132,16 +163,13 @@ public class AuthController(
         }
     }
 
-    /// <summary>
-    /// Complete social login with authorization code
-    /// </summary>
     [AllowAnonymous]
     [HttpPost("social/callback")]
     public async Task<IActionResult> SocialLoginCallback([FromBody] SocialLoginRequest request)
     {
         try
         {
-            var response = await socialLogin.AuthenticateAsync(request);
+            var response = await _socialLogin.AuthenticateAsync(request);
 
             return Ok(new
             {
@@ -183,9 +211,6 @@ public class AuthController(
         }
     }
 
-    /// <summary>
-    /// Link a social account to an existing user
-    /// </summary>
     [Authorize]
     [HttpPost("social/link")]
     public async Task<IActionResult> LinkSocialAccount([FromBody] LinkSocialAccountRequest request)
@@ -196,7 +221,7 @@ public class AuthController(
             if (userId == null)
                 return Unauthorized(new { error = "invalid_token", message = "User ID not found in token" });
 
-            var linkedAccount = await socialLogin.LinkAccountAsync(userId.Value, request);
+            var linkedAccount = await _socialLogin.LinkAccountAsync(userId.Value, request);
             return Ok(linkedAccount);
         }
         catch (InvalidSocialProviderException ex)
@@ -227,9 +252,6 @@ public class AuthController(
         }
     }
 
-    /// <summary>
-    /// Unlink a social account from the current user
-    /// </summary>
     [Authorize]
     [HttpDelete("social/link/{provider}")]
     public async Task<IActionResult> UnlinkSocialAccount(string provider)
@@ -240,7 +262,7 @@ public class AuthController(
             if (userId == null)
                 return Unauthorized(new { error = "invalid_token", message = "User ID not found in token" });
 
-            await socialLogin.UnlinkAccountAsync(userId.Value, provider);
+            await _socialLogin.UnlinkAccountAsync(userId.Value, provider);
             return NoContent();
         }
         catch (InvalidSocialProviderException ex)
@@ -262,9 +284,6 @@ public class AuthController(
         }
     }
 
-    /// <summary>
-    /// Get all linked social accounts for the current user
-    /// </summary>
     [Authorize]
     [HttpGet("social/linked")]
     public async Task<IActionResult> GetLinkedAccounts()
@@ -273,7 +292,7 @@ public class AuthController(
         if (userId == null)
             return Unauthorized(new { error = "invalid_token", message = "User ID not found in token" });
 
-        var accounts = await socialLogin.GetLinkedAccountsAsync(userId.Value);
+        var accounts = await _socialLogin.GetLinkedAccountsAsync(userId.Value);
         return Ok(accounts);
     }
 
