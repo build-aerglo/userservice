@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using UserService.Application.DTOs.Points;
 using UserService.Application.Interfaces;
 using UserService.Domain.Entities;
@@ -6,28 +7,23 @@ using UserService.Domain.Repositories;
 
 namespace UserService.Application.Services;
 
-public class PointsService(
-    IUserPointsRepository pointsRepository,
-    IPointTransactionRepository transactionRepository,
-    IUserRepository userRepository,
-    IUserBadgeRepository badgeRepository,
-    IUserVerificationRepository verificationRepository
-) : IPointsService
+public class PointsService : IPointsService
 {
-    // Points constants based on business rules
-    private const decimal StarsOnlyPointsNonVerified = 2m;
-    private const decimal StarsOnlyPointsVerified = 3m;
-    private const decimal HeaderPoints = 1m;
-    private const decimal BodyShortPointsNonVerified = 2m;    // ≤50 chars
-    private const decimal BodyShortPointsVerified = 3m;
-    private const decimal BodyMediumPointsNonVerified = 3m;   // 51-150 chars
-    private const decimal BodyMediumPointsVerified = 4.5m;
-    private const decimal BodyLongPointsNonVerified = 5m;     // 151-500 chars
-    private const decimal BodyLongPointsVerified = 6.5m;
-    private const decimal BodyExtraLongPointsNonVerified = 6m; // 500+ chars
-    private const decimal BodyExtraLongPointsVerified = 7.5m;
-    private const decimal ImagePointsNonVerified = 4m;
-    private const decimal ImagePointsVerified = 6m;
+    private readonly IUserPointsRepository _pointsRepository;
+    private readonly IPointTransactionRepository _transactionRepository;
+    private readonly IUserRepository _userRepository;
+    private readonly IUserBadgeRepository _badgeRepository;
+    private readonly IUserVerificationRepository _verificationRepository;
+    private readonly IPointRuleRepository _pointRuleRepository;
+    private readonly IPointMultiplierRepository _pointMultiplierRepository;
+    private readonly IPointRedemptionRepository _redemptionRepository;
+    private readonly IAfricaTalkingClient _africaTalkingClient;
+    private readonly IReviewServiceClient _reviewServiceClient;
+    private readonly ILogger<PointsService> _logger;
+
+    // Image Points - UPDATED to 3.0/4.5 per image
+    private const decimal ImagePointsNonVerified = 3.0m;
+    private const decimal ImagePointsVerified = 4.5m;
     private const int MaxImagePoints = 3;
 
     // Milestone points
@@ -39,20 +35,49 @@ public class PointsService(
     private const decimal Reviews25Verified = 30m;
     private const decimal HelpfulVotes100NonVerified = 50m;
     private const decimal HelpfulVotes100Verified = 75m;
-    private const decimal LoyaltyBonusNonVerified = 500m;  // 500 days + 10 reviews
+    private const decimal LoyaltyBonusNonVerified = 500m;
     private const decimal LoyaltyBonusVerified = 750m;
+
+    public PointsService(
+        IUserPointsRepository pointsRepository,
+        IPointTransactionRepository transactionRepository,
+        IUserRepository userRepository,
+        IUserBadgeRepository badgeRepository,
+        IUserVerificationRepository verificationRepository,
+        IPointRuleRepository pointRuleRepository,
+        IPointMultiplierRepository pointMultiplierRepository,
+        IPointRedemptionRepository redemptionRepository,
+        IAfricaTalkingClient africaTalkingClient,
+        IReviewServiceClient reviewServiceClient,
+        ILogger<PointsService> logger)
+    {
+        _pointsRepository = pointsRepository;
+        _transactionRepository = transactionRepository;
+        _userRepository = userRepository;
+        _badgeRepository = badgeRepository;
+        _verificationRepository = verificationRepository;
+        _pointRuleRepository = pointRuleRepository;
+        _pointMultiplierRepository = pointMultiplierRepository;
+        _redemptionRepository = redemptionRepository;
+        _africaTalkingClient = africaTalkingClient;
+        _reviewServiceClient = reviewServiceClient;
+        _logger = logger;
+    }
+
+    // ========================================================================
+    // CORE POINTS OPERATIONS
+    // ========================================================================
 
     public async Task<UserPointsDto> GetUserPointsAsync(Guid userId)
     {
-        var userPoints = await pointsRepository.GetByUserIdAsync(userId);
+        var userPoints = await _pointsRepository.GetByUserIdAsync(userId);
         if (userPoints is null)
         {
-            // Initialize points for user if not exists
             await InitializeUserPointsAsync(userId);
-            userPoints = await pointsRepository.GetByUserIdAsync(userId);
+            userPoints = await _pointsRepository.GetByUserIdAsync(userId);
         }
 
-        var rank = await pointsRepository.GetUserRankAsync(userId);
+        var rank = await _pointsRepository.GetUserRankAsync(userId);
 
         return new UserPointsDto(
             UserId: userId,
@@ -60,18 +85,18 @@ public class PointsService(
             Tier: userPoints.GetTier(),
             CurrentStreak: userPoints.CurrentStreak,
             LongestStreak: userPoints.LongestStreak,
-            LastActivityDate: userPoints.LastActivityDate,
+            LastActivityDate: userPoints.LastLoginDate,
             Rank: rank
         );
     }
 
     public async Task<PointsHistoryResponseDto> GetPointsHistoryAsync(Guid userId, int limit = 50, int offset = 0)
     {
-        var userPoints = await pointsRepository.GetByUserIdAsync(userId);
+        var userPoints = await _pointsRepository.GetByUserIdAsync(userId);
         if (userPoints is null)
             throw new UserPointsNotFoundException(userId);
 
-        var transactions = await transactionRepository.GetByUserIdAsync(userId, limit, offset);
+        var transactions = await _transactionRepository.GetByUserIdAsync(userId, limit, offset);
         var transactionDtos = transactions.Select(MapToDto).ToList();
 
         return new PointsHistoryResponseDto(
@@ -87,18 +112,18 @@ public class PointsService(
         if (dto.Points <= 0)
             throw new InvalidPointsAmountException(dto.Points);
 
-        var userPoints = await pointsRepository.GetByUserIdAsync(dto.UserId);
+        var userPoints = await _pointsRepository.GetByUserIdAsync(dto.UserId);
         if (userPoints is null)
         {
             await InitializeUserPointsAsync(dto.UserId);
-            userPoints = await pointsRepository.GetByUserIdAsync(dto.UserId);
+            userPoints = await _pointsRepository.GetByUserIdAsync(dto.UserId);
+            if (userPoints is null)
+                throw new UserPointsNotFoundException(dto.UserId);
         }
 
-        // Add points
-        userPoints!.AddPoints(dto.Points);
-        await pointsRepository.UpdateAsync(userPoints);
+        userPoints.AddPoints(dto.Points);
+        await _pointsRepository.UpdateAsync(userPoints);
 
-        // Create transaction record
         var transaction = new PointTransaction(
             userId: dto.UserId,
             points: dto.Points,
@@ -108,7 +133,7 @@ public class PointsService(
             referenceType: dto.ReferenceType
         );
 
-        await transactionRepository.AddAsync(transaction);
+        await _transactionRepository.AddAsync(transaction);
 
         return MapToDto(transaction);
     }
@@ -118,18 +143,16 @@ public class PointsService(
         if (dto.Points <= 0)
             throw new InvalidPointsAmountException(dto.Points);
 
-        var userPoints = await pointsRepository.GetByUserIdAsync(dto.UserId);
+        var userPoints = await _pointsRepository.GetByUserIdAsync(dto.UserId);
         if (userPoints is null)
             throw new UserPointsNotFoundException(dto.UserId);
 
         if (userPoints.TotalPoints < dto.Points)
             throw new InsufficientPointsException(dto.UserId, dto.Points, userPoints.TotalPoints);
 
-        // Deduct points
         userPoints.DeductPoints(dto.Points);
-        await pointsRepository.UpdateAsync(userPoints);
+        await _pointsRepository.UpdateAsync(userPoints);
 
-        // Create transaction record with negative points
         var transaction = new PointTransaction(
             userId: dto.UserId,
             points: -dto.Points,
@@ -137,48 +160,46 @@ public class PointsService(
             description: dto.Reason
         );
 
-        await transactionRepository.AddAsync(transaction);
+        await _transactionRepository.AddAsync(transaction);
 
         return MapToDto(transaction);
     }
 
+    public async Task InitializeUserPointsAsync(Guid userId)
+    {
+        var existingPoints = await _pointsRepository.GetByUserIdAsync(userId);
+        if (existingPoints is not null)
+            return;
+
+        var userPoints = new UserPoints(userId);
+        await _pointsRepository.AddAsync(userPoints);
+    }
+
+    // ========================================================================
+    // REVIEW POINTS
+    // ========================================================================
+
     public async Task<ReviewPointsResultDto> CalculateReviewPointsAsync(CalculateReviewPointsDto dto)
     {
         var isVerified = await IsUserVerifiedAsync(dto.UserId);
-
-        // Use the dto's verification status if provided, otherwise check the database
         var verified = dto.IsVerifiedUser || isVerified;
 
-        decimal starPoints = 0;
-        decimal headerPoints = 0;
         decimal bodyPoints = 0;
         decimal imagePoints = 0;
 
-        // Stars only points
-        if (dto.HasStars)
-        {
-            starPoints = verified ? StarsOnlyPointsVerified : StarsOnlyPointsNonVerified;
-        }
-
-        // Header points
-        if (dto.HasHeader)
-        {
-            headerPoints = HeaderPoints;
-        }
-
-        // Body points based on length
+        // Body points based on length (includes stars)
         if (dto.BodyLength > 0)
         {
             bodyPoints = (dto.BodyLength, verified) switch
             {
-                ( <= 50, false) => BodyShortPointsNonVerified,
-                ( <= 50, true) => BodyShortPointsVerified,
-                ( <= 150, false) => BodyMediumPointsNonVerified,
-                ( <= 150, true) => BodyMediumPointsVerified,
-                ( <= 500, false) => BodyLongPointsNonVerified,
-                ( <= 500, true) => BodyLongPointsVerified,
-                (_, false) => BodyExtraLongPointsNonVerified,
-                (_, true) => BodyExtraLongPointsVerified
+                ( <= 50, false) => 2.0m,
+                ( <= 50, true) => 3.0m,
+                ( <= 150, false) => 3.0m,
+                ( <= 150, true) => 4.5m,
+                ( <= 500, false) => 5.0m,
+                ( <= 500, true) => 6.5m,
+                (_, false) => 6.0m,
+                (_, true) => 7.5m
             };
         }
 
@@ -186,16 +207,16 @@ public class PointsService(
         var imagesToCount = Math.Min(dto.ImageCount, MaxImagePoints);
         imagePoints = imagesToCount * (verified ? ImagePointsVerified : ImagePointsNonVerified);
 
-        var totalPoints = starPoints + headerPoints + bodyPoints + imagePoints;
+        var totalPoints = bodyPoints + imagePoints;
 
-        var breakdown = $"Stars: {starPoints}, Header: {headerPoints}, Body: {bodyPoints}, Images: {imagePoints}";
+        var breakdown = $"Body: {bodyPoints}, Images: {imagePoints}";
         if (verified)
             breakdown += " (Verified bonus applied)";
 
         return new ReviewPointsResultDto(
             TotalPoints: totalPoints,
-            StarPoints: starPoints,
-            HeaderPoints: headerPoints,
+            StarPoints: 0,
+            HeaderPoints: 0,
             BodyPoints: bodyPoints,
             ImagePoints: imagePoints,
             VerifiedBonus: verified,
@@ -217,28 +238,31 @@ public class PointsService(
         ));
     }
 
-    public async Task UpdateStreakAsync(Guid userId, DateTime activityDate)
+    // ========================================================================
+    // STREAK MANAGEMENT
+    // ========================================================================
+
+    public async Task UpdateLoginStreakAsync(Guid userId, DateTime loginDate)
     {
-        var userPoints = await pointsRepository.GetByUserIdAsync(userId);
+        var userPoints = await _pointsRepository.GetByUserIdAsync(userId);
         if (userPoints is null)
         {
             await InitializeUserPointsAsync(userId);
-            userPoints = await pointsRepository.GetByUserIdAsync(userId);
+            userPoints = await _pointsRepository.GetByUserIdAsync(userId);
         }
 
-        userPoints!.UpdateStreak(activityDate);
-        await pointsRepository.UpdateAsync(userPoints);
+        userPoints!.UpdateLoginStreak(loginDate);
+        await _pointsRepository.UpdateAsync(userPoints);
     }
 
     public async Task<PointTransactionDto?> CheckAndAwardStreakMilestoneAsync(Guid userId)
     {
-        var userPoints = await pointsRepository.GetByUserIdAsync(userId);
+        var userPoints = await _pointsRepository.GetByUserIdAsync(userId);
         if (userPoints is null || userPoints.CurrentStreak != 100)
             return null;
 
-        // Check if already awarded for this milestone
-        var existingTransactions = await transactionRepository.GetByUserIdAndTypeAsync(userId, TransactionTypes.Milestone);
-        if (existingTransactions.Any(t => t.Description.Contains("100-day streak")))
+        var existingTransactions = await _transactionRepository.GetByUserIdAndTypeAsync(userId, TransactionTypes.Milestone);
+        if (existingTransactions.Any(t => t.Description.Contains("100-day login streak")))
             return null;
 
         var isVerified = await IsUserVerifiedAsync(userId);
@@ -248,17 +272,20 @@ public class PointsService(
             UserId: userId,
             Points: points,
             TransactionType: TransactionTypes.Milestone,
-            Description: "100-day streak milestone bonus"
+            Description: "100-day login streak milestone bonus"
         ));
     }
+
+    // ========================================================================
+    // MILESTONES
+    // ========================================================================
 
     public async Task<PointTransactionDto?> CheckAndAwardReviewMilestoneAsync(Guid userId, int totalReviews)
     {
         if (totalReviews != 25)
             return null;
 
-        // Check if already awarded
-        var existingTransactions = await transactionRepository.GetByUserIdAndTypeAsync(userId, TransactionTypes.Milestone);
+        var existingTransactions = await _transactionRepository.GetByUserIdAndTypeAsync(userId, TransactionTypes.Milestone);
         if (existingTransactions.Any(t => t.Description.Contains("25 reviews")))
             return null;
 
@@ -278,8 +305,7 @@ public class PointsService(
         if (totalHelpfulVotes != 100)
             return null;
 
-        // Check if already awarded
-        var existingTransactions = await transactionRepository.GetByUserIdAndTypeAsync(userId, TransactionTypes.Milestone);
+        var existingTransactions = await _transactionRepository.GetByUserIdAndTypeAsync(userId, TransactionTypes.Milestone);
         if (existingTransactions.Any(t => t.Description.Contains("100 helpful votes")))
             return null;
 
@@ -308,16 +334,20 @@ public class PointsService(
         ));
     }
 
+    // ========================================================================
+    // LEADERBOARDS & TIERS
+    // ========================================================================
+
     public async Task<LeaderboardResponseDto> GetLeaderboardAsync(int limit = 10)
     {
-        var topUsers = await pointsRepository.GetTopUsersByPointsAsync(limit);
+        var topUsers = await _pointsRepository.GetTopUsersByPointsAsync(limit);
         var entries = new List<LeaderboardEntryDto>();
 
         int rank = 1;
         foreach (var userPoints in topUsers)
         {
-            var user = await userRepository.GetByIdAsync(userPoints.UserId);
-            var badgeCount = await badgeRepository.GetBadgeCountByUserIdAsync(userPoints.UserId);
+            var user = await _userRepository.GetByIdAsync(userPoints.UserId);
+            var badgeCount = await _badgeRepository.GetBadgeCountByUserIdAsync(userPoints.UserId);
 
             entries.Add(new LeaderboardEntryDto(
                 Rank: rank++,
@@ -338,14 +368,14 @@ public class PointsService(
 
     public async Task<LeaderboardResponseDto> GetLocationLeaderboardAsync(string state, int limit = 10)
     {
-        var topUsers = await pointsRepository.GetTopUsersByPointsInLocationAsync(state, limit);
+        var topUsers = await _pointsRepository.GetTopUsersByPointsInLocationAsync(state, limit);
         var entries = new List<LeaderboardEntryDto>();
 
         int rank = 1;
         foreach (var userPoints in topUsers)
         {
-            var user = await userRepository.GetByIdAsync(userPoints.UserId);
-            var badgeCount = await badgeRepository.GetBadgeCountByUserIdAsync(userPoints.UserId);
+            var user = await _userRepository.GetByIdAsync(userPoints.UserId);
+            var badgeCount = await _badgeRepository.GetBadgeCountByUserIdAsync(userPoints.UserId);
 
             entries.Add(new LeaderboardEntryDto(
                 Rank: rank++,
@@ -366,24 +396,288 @@ public class PointsService(
 
     public async Task<string> GetUserTierAsync(Guid userId)
     {
-        var userPoints = await pointsRepository.GetByUserIdAsync(userId);
+        var userPoints = await _pointsRepository.GetByUserIdAsync(userId);
         return userPoints?.GetTier() ?? PointTiers.Bronze;
     }
 
-    public async Task InitializeUserPointsAsync(Guid userId)
-    {
-        var existingPoints = await pointsRepository.GetByUserIdAsync(userId);
-        if (existingPoints is not null)
-            return;
+    // ========================================================================
+    // POINT REDEMPTION
+    // ========================================================================
 
-        var userPoints = new UserPoints(userId);
-        await pointsRepository.AddAsync(userPoints);
+    public async Task<RedemptionResponseDto> RedeemPointsAsync(RedeemPointsDto dto)
+    {
+        if (!IsValidNigerianPhoneNumber(dto.PhoneNumber))
+            throw new InvalidPhoneNumberException(dto.PhoneNumber);
+
+        var userPoints = await _pointsRepository.GetByUserIdAsync(dto.UserId);
+        if (userPoints is null)
+            throw new UserPointsNotFoundException(dto.UserId);
+
+        if (userPoints.TotalPoints < dto.Points)
+            throw new InsufficientPointsException(dto.UserId, dto.Points, userPoints.TotalPoints);
+
+        var airtimeAmount = dto.Points;
+
+        var redemption = new PointRedemption(
+            userId: dto.UserId,
+            pointsRedeemed: dto.Points,
+            amountInNaira: airtimeAmount,
+            phoneNumber: dto.PhoneNumber
+        );
+
+        await _redemptionRepository.AddAsync(redemption);
+
+        try
+        {
+            var result = await _africaTalkingClient.SendAirtimeAsync(dto.PhoneNumber, airtimeAmount);
+
+            if (result.Success)
+            {
+                redemption.MarkAsCompleted(result.TransactionId ?? Guid.NewGuid().ToString(), result.Message);
+                await _redemptionRepository.UpdateAsync(redemption);
+
+                userPoints.DeductPoints(dto.Points);
+                await _pointsRepository.UpdateAsync(userPoints);
+
+                var transaction = new PointTransaction(
+                    userId: dto.UserId,
+                    points: -dto.Points,
+                    transactionType: TransactionTypes.Redeem,
+                    description: $"Redeemed {dto.Points} points for ₦{airtimeAmount} airtime to {dto.PhoneNumber}",
+                    referenceId: redemption.Id,
+                    referenceType: ReferenceTypes.Redemption
+                );
+                await _transactionRepository.AddAsync(transaction);
+
+                _logger.LogInformation("Successfully redeemed {Points} points for user {UserId}", dto.Points, dto.UserId);
+            }
+            else
+            {
+                redemption.MarkAsFailed(result.ErrorMessage);
+                await _redemptionRepository.UpdateAsync(redemption);
+
+                _logger.LogError("Airtime redemption failed for user {UserId}: {Error}", dto.UserId, result.ErrorMessage);
+                throw new PointRedemptionFailedException($"Airtime purchase failed: {result.Message}");
+            }
+        }
+        catch (Exception ex) when (ex is not PointRedemptionFailedException)
+        {
+            redemption.MarkAsFailed(ex.Message);
+            await _redemptionRepository.UpdateAsync(redemption);
+            throw new PointRedemptionFailedException($"Failed to process redemption: {ex.Message}");
+        }
+
+        return MapRedemptionToDto(redemption);
     }
+
+    public async Task<RedemptionHistoryDto> GetRedemptionHistoryAsync(Guid userId, int limit = 50, int offset = 0)
+    {
+        var redemptions = await _redemptionRepository.GetByUserIdAsync(userId, limit, offset);
+        var redemptionDtos = redemptions.Select(MapRedemptionToDto).ToList();
+
+        return new RedemptionHistoryDto(
+            UserId: userId,
+            Redemptions: redemptionDtos,
+            TotalCount: redemptionDtos.Count
+        );
+    }
+
+    // ========================================================================
+    // POINT RULES MANAGEMENT
+    // ========================================================================
+
+    public async Task<IEnumerable<PointRuleDto>> GetAllPointRulesAsync()
+    {
+        var rules = await _pointRuleRepository.GetAllAsync();
+        return rules.Select(MapPointRuleToDto);
+    }
+
+    public async Task<PointRuleDto> GetPointRuleByActionTypeAsync(string actionType)
+    {
+        var rule = await _pointRuleRepository.GetByActionTypeAsync(actionType);
+        if (rule is null)
+            throw new PointRuleNotFoundException(actionType);
+        
+        return MapPointRuleToDto(rule);
+    }
+
+    public async Task<PointRuleDto> CreatePointRuleAsync(CreatePointRuleDto dto, Guid? createdBy)
+    {
+        var rule = new PointRule(
+            actionType: dto.ActionType,
+            description: dto.Description,
+            basePointsNonVerified: dto.BasePointsNonVerified,
+            basePointsVerified: dto.BasePointsVerified,
+            conditions: dto.Conditions,
+            createdBy: createdBy
+        );
+
+        await _pointRuleRepository.AddAsync(rule);
+        return MapPointRuleToDto(rule);
+    }
+
+    public async Task<PointRuleDto> UpdatePointRuleAsync(Guid id, UpdatePointRuleDto dto, Guid? updatedBy)
+    {
+        var rule = await _pointRuleRepository.GetByIdAsync(id);
+        if (rule is null)
+            throw new PointRuleNotFoundException(id.ToString());
+
+        rule.Update(
+            description: dto.Description,
+            basePointsNonVerified: dto.BasePointsNonVerified,
+            basePointsVerified: dto.BasePointsVerified,
+            conditions: dto.Conditions,
+            isActive: dto.IsActive,
+            updatedBy: updatedBy
+        );
+
+        await _pointRuleRepository.UpdateAsync(rule);
+        return MapPointRuleToDto(rule);
+    }
+
+    // ========================================================================
+    // POINT MULTIPLIERS MANAGEMENT
+    // ========================================================================
+
+    public async Task<IEnumerable<PointMultiplierDto>> GetActivePointMultipliersAsync()
+    {
+        var multipliers = await _pointMultiplierRepository.GetActiveMultipliersAsync();
+        return multipliers.Select(MapMultiplierToDto);
+    }
+
+    public async Task<IEnumerable<PointMultiplierDto>> GetAllPointMultipliersAsync()
+    {
+        var multipliers = await _pointMultiplierRepository.GetAllAsync();
+        return multipliers.Select(MapMultiplierToDto);
+    }
+
+    public async Task<PointMultiplierDto> CreatePointMultiplierAsync(CreatePointMultiplierDto dto, Guid? createdBy)
+    {
+        var multiplier = new PointMultiplier(
+            name: dto.Name,
+            description: dto.Description,
+            multiplier: dto.Multiplier,
+            startDate: dto.StartDate,
+            endDate: dto.EndDate,
+            actionTypes: dto.ActionTypes,
+            createdBy: createdBy
+        );
+
+        await _pointMultiplierRepository.AddAsync(multiplier);
+        return MapMultiplierToDto(multiplier);
+    }
+
+    public async Task<PointMultiplierDto> UpdatePointMultiplierAsync(Guid id, UpdatePointMultiplierDto dto, Guid? updatedBy)
+    {
+        var multiplier = await _pointMultiplierRepository.GetByIdAsync(id);
+        if (multiplier is null)
+            throw new PointMultiplierNotFoundException(id);
+
+        multiplier.Update(
+            name: dto.Name,
+            description: dto.Description,
+            multiplier: dto.Multiplier,
+            startDate: dto.StartDate,
+            endDate: dto.EndDate,
+            actionTypes: dto.ActionTypes,
+            isActive: dto.IsActive,
+            updatedBy: updatedBy
+        );
+
+        await _pointMultiplierRepository.UpdateAsync(multiplier);
+        return MapMultiplierToDto(multiplier);
+    }
+
+    // ========================================================================
+    // SUMMARY & QUERIES
+    // ========================================================================
+
+    public async Task<UserPointsSummaryDto> GetUserPointsSummaryAsync(Guid userId, int transactionLimit = 10)
+    {
+        var userPoints = await _pointsRepository.GetByUserIdAsync(userId);
+        if (userPoints is null)
+        {
+            await InitializeUserPointsAsync(userId);
+            userPoints = await _pointsRepository.GetByUserIdAsync(userId);
+        }
+
+        var rank = await _pointsRepository.GetUserRankAsync(userId);
+        var recentTransactions = await _transactionRepository.GetByUserIdAsync(userId, transactionLimit, 0);
+        var transactionDtos = recentTransactions.Select(MapToDto).ToList();
+
+        return new UserPointsSummaryDto(
+            UserId: userId,
+            TotalPoints: userPoints!.TotalPoints,
+            Tier: userPoints.GetTier(),
+            CurrentStreak: userPoints.CurrentStreak,
+            LongestStreak: userPoints.LongestStreak,
+            LastLoginDate: userPoints.LastLoginDate,
+            Rank: rank,
+            RecentTransactions: transactionDtos
+        );
+    }
+
+    public async Task<PointTransactionsByTypeDto> GetTransactionsByTypeAsync(Guid userId, string transactionType)
+    {
+        var transactions = await _transactionRepository.GetByUserIdAndTypeAsync(userId, transactionType);
+        var transactionDtos = transactions.Select(MapToDto).ToList();
+        var totalPoints = transactionDtos.Sum(t => t.Points);
+
+        return new PointTransactionsByTypeDto(
+            UserId: userId,
+            TransactionType: transactionType,
+            Transactions: transactionDtos,
+            TotalPoints: totalPoints,
+            Count: transactionDtos.Count
+        );
+    }
+
+    public async Task<PointTransactionsByDateRangeDto> GetTransactionsByDateRangeAsync(
+        Guid userId, 
+        DateTime startDate, 
+        DateTime endDate)
+    {
+        var transactions = (await _transactionRepository.GetByUserIdAsync(userId, 1000, 0))
+            .Where(t => t.CreatedAt >= startDate && t.CreatedAt <= endDate)
+            .ToList();
+        
+        var transactionDtos = transactions.Select(MapToDto).ToList();
+        var totalEarned = transactionDtos.Where(t => t.Points > 0).Sum(t => t.Points);
+        var totalDeducted = Math.Abs(transactionDtos.Where(t => t.Points < 0).Sum(t => t.Points));
+
+        return new PointTransactionsByDateRangeDto(
+            UserId: userId,
+            StartDate: startDate,
+            EndDate: endDate,
+            Transactions: transactionDtos,
+            TotalPointsEarned: totalEarned,
+            TotalPointsDeducted: totalDeducted,
+            Count: transactionDtos.Count
+        );
+    }
+
+    // ========================================================================
+    // PRIVATE HELPER METHODS
+    // ========================================================================
 
     private async Task<bool> IsUserVerifiedAsync(Guid userId)
     {
-        var verification = await verificationRepository.GetByUserIdAsync(userId);
-        return verification?.IsVerified ?? false;
+        var verification = await _verificationRepository.GetByUserIdAsync(userId);
+        return verification?.PhoneVerified == true || verification?.EmailVerified == true;
+    }
+
+    private bool IsValidNigerianPhoneNumber(string phoneNumber)
+    {
+        phoneNumber = phoneNumber.Replace(" ", "").Replace("-", "");
+        
+        if (phoneNumber.StartsWith("+234"))
+            return phoneNumber.Length == 14;
+        if (phoneNumber.StartsWith("234"))
+            return phoneNumber.Length == 13;
+        if (phoneNumber.StartsWith("0"))
+            return phoneNumber.Length == 11;
+        
+        return false;
     }
 
     private static PointTransactionDto MapToDto(PointTransaction transaction)
@@ -397,6 +691,47 @@ public class PointsService(
             ReferenceId: transaction.ReferenceId,
             ReferenceType: transaction.ReferenceType,
             CreatedAt: transaction.CreatedAt
+        );
+    }
+
+    private static RedemptionResponseDto MapRedemptionToDto(PointRedemption redemption)
+    {
+        return new RedemptionResponseDto(
+            RedemptionId: redemption.Id,
+            PointsRedeemed: redemption.PointsRedeemed,
+            AmountInNaira: redemption.AmountInNaira,
+            PhoneNumber: redemption.PhoneNumber,
+            Status: redemption.Status,
+            TransactionReference: redemption.TransactionReference,
+            CreatedAt: redemption.CreatedAt
+        );
+    }
+
+    private static PointRuleDto MapPointRuleToDto(PointRule rule)
+    {
+        return new PointRuleDto(
+            Id: rule.Id,
+            ActionType: rule.ActionType,
+            Description: rule.Description,
+            BasePointsNonVerified: rule.BasePointsNonVerified,
+            BasePointsVerified: rule.BasePointsVerified,
+            Conditions: rule.Conditions,
+            IsActive: rule.IsActive
+        );
+    }
+
+    private static PointMultiplierDto MapMultiplierToDto(PointMultiplier multiplier)
+    {
+        return new PointMultiplierDto(
+            Id: multiplier.Id,
+            Name: multiplier.Name,
+            Description: multiplier.Description,
+            Multiplier: multiplier.Multiplier,
+            ActionTypes: multiplier.ActionTypes,
+            StartDate: multiplier.StartDate,
+            EndDate: multiplier.EndDate,
+            IsActive: multiplier.IsActive,
+            IsCurrentlyActive: multiplier.IsCurrentlyActive()
         );
     }
 }
