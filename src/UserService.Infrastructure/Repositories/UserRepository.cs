@@ -112,4 +112,22 @@ public class UserRepository : IUserRepository
         using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, new { Id = id });
     }
+    
+    public async Task UpdateLastLoginAsync(Guid userId, DateTime loginTime)
+    {
+        const string sql = @"
+        UPDATE users 
+        SET last_login = @LoginTime 
+        WHERE id = @UserId;";
+    
+        using var conn = CreateConnection();
+        await conn.ExecuteAsync(sql, new { UserId = userId, LoginTime = loginTime });
+    }
+
+    public async Task<User?> GetByEmailAsync(string email)
+    {
+        const string sql = "SELECT * FROM users WHERE email = @Email;";
+        using var conn = CreateConnection();
+        return await conn.QueryFirstOrDefaultAsync<User>(sql, new { Email = email });
+    }
 }

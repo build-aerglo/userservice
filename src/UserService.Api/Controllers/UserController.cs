@@ -85,6 +85,40 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         catch (UserCreationFailedException ex) { return StatusCode(500, new { error = ex.Message }); }
     }
 
+
+		
+
+
+	[HttpPut("support/{userId:guid}")]
+    public async Task<IActionResult> UpdateSupportUser(Guid userId, [FromBody] UpdateSupportUserDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var result = await service.UpdateSupportUserAsync(userId, dto);
+            return Ok(result);
+        }
+        catch (SupportUserNotFoundException ex)
+        {
+            logger.LogWarning(ex, "Support user not found: {UserId}", userId);
+            return NotFound(new { error = ex.Message });
+        }
+        catch (SupportUserUpdateFailedException ex)
+        {
+            logger.LogError(ex, "Support user update failed: {UserId}", userId);
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error updating support user: {UserId}", userId);
+            return StatusCode(500, new { error = "Internal server error occurred." });
+        }
+    }
+    
+    [HttpPost("create-business-user")]
+
     // PUBLIC business registration
     [AllowAnonymous]
     [HttpPost("business")]
@@ -259,6 +293,10 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         Guid userId, 
         [FromBody] UpdateEndUserProfileDto dto)
     {
+        if (!ModelState.IsValid)  
+            return BadRequest(ModelState);
+        
+        
         try
         {
             var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

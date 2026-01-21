@@ -34,8 +34,8 @@ public class UserPointsRepository : IUserPointsRepository
     public async Task AddAsync(UserPoints userPoints)
     {
         const string sql = @"
-            INSERT INTO user_points (id, user_id, total_points, current_streak, longest_streak, last_activity_date, created_at, updated_at)
-            VALUES (@Id, @UserId, @TotalPoints, @CurrentStreak, @LongestStreak, @LastActivityDate, @CreatedAt, @UpdatedAt);";
+             INSERT INTO user_points (id, user_id, total_points, current_streak, longest_streak, last_login_date, created_at, updated_at)
+    VALUES (@Id, @UserId, @TotalPoints, @CurrentStreak, @LongestStreak, @LastLoginDate, @CreatedAt, @UpdatedAt);";
 
         using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, userPoints);
@@ -48,7 +48,7 @@ public class UserPointsRepository : IUserPointsRepository
             SET total_points = @TotalPoints,
                 current_streak = @CurrentStreak,
                 longest_streak = @LongestStreak,
-                last_activity_date = @LastActivityDate,
+                 last_login_date = @LastLoginDate,
                 updated_at = @UpdatedAt
             WHERE id = @Id;";
 
