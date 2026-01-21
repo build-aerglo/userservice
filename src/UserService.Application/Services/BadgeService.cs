@@ -12,7 +12,7 @@ public class BadgeService(
 ) : IBadgeService
 {
     // Platform launch date for Pioneer badge calculation
-    private static readonly DateTime PlatformLaunchDate = new(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime PlatformLaunchDate = new(2026, 1, 21, 0, 0, 0, DateTimeKind.Utc);
     private const int PioneerWindowDays = 100;
 
     public async Task<UserBadgesResponseDto> GetUserBadgesAsync(Guid userId)
