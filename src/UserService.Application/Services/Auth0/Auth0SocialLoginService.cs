@@ -271,8 +271,15 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
         if (!response.IsSuccessStatusCode)
             throw new SocialLoginException("auth0", "userinfo_failed", "Failed to get user info");
 
-        return await response.Content.ReadFromJsonAsync<Auth0UserInfo>()
+        var responseContent = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"[DEBUG] Auth0 UserInfo Response: {responseContent}");
+
+        var userInfo = JsonSerializer.Deserialize<Auth0UserInfo>(responseContent)
                ?? throw new SocialLoginException("auth0", "invalid_userinfo", "Invalid user info response");
+
+        Console.WriteLine($"[DEBUG] Parsed UserInfo - Sub: {userInfo.Sub}, Email: {userInfo.Email ?? "NULL"}, Name: {userInfo.Name ?? "NULL"}");
+
+        return userInfo;
     }
 
     private async Task<User> CreateEndUserFromSocialAsync(Auth0UserInfo userInfo, string provider)
