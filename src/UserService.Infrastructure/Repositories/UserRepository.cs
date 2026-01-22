@@ -85,11 +85,17 @@ public class UserRepository : IUserRepository
     public async Task AddAsync(User user)
     {
         const string sql = @"
-            INSERT INTO users (id, username, email, phone, user_type, address, join_date, created_at, updated_at)
-            VALUES (@Id, @Username, @Email, @Phone, @UserType, @Address, @JoinDate, @CreatedAt, @UpdatedAt);";
+            INSERT INTO users (id, username, email, phone, user_type, address, join_date, auth0_user_id, created_at, updated_at)
+            VALUES (@Id, @Username, @Email, @Phone, @UserType, @Address, @JoinDate, @Auth0UserId, @CreatedAt, @UpdatedAt)
+            ON CONFLICT (email) DO NOTHING;";
 
         using var conn = CreateConnection();
-        await conn.ExecuteAsync(sql, user);
+        var rowsAffected = await conn.ExecuteAsync(sql, user);
+
+        if (rowsAffected == 0)
+        {
+            throw new InvalidOperationException($"User with email {user.Email} already exists in the database.");
+        }
     }
 
     public async Task UpdateAsync(User user)

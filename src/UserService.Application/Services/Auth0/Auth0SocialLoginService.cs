@@ -282,6 +282,8 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
         var password = GenerateRandomPassword();
 
         var endUserRoleId = _config["Auth0:Roles:EndUser"]!;
+
+        // Create user in Auth0 (handles case where user already exists)
         var auth0UserId = await _auth0Management.CreateUserAndAssignRoleAsync(
             email, username, password, endUserRoleId);
 
@@ -294,13 +296,50 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             address: null,
             auth0UserId: auth0UserId);
 
-        await _userRepo.AddAsync(user);
+        try
+        {
+            // Try to insert user into PostgreSQL
+            await _userRepo.AddAsync(user);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
+        {
+            // User already exists in PostgreSQL, fetch the existing user
+            var existingUser = await _userRepo.GetByEmailAsync(email);
+            if (existingUser == null)
+            {
+                throw new SocialLoginException(
+                    provider,
+                    "user_creation_failed",
+                    $"User with email {email} should exist but could not be retrieved.");
+            }
+            return existingUser;
+        }
+        catch (Exception ex)
+        {
+            throw new SocialLoginException(
+                provider,
+                "user_creation_failed",
+                $"Failed to create user in database: {ex.Message}");
+        }
 
-        var endUserProfile = new EndUserProfile(user.Id, $"Registered via {SocialProvider.GetDisplayName(provider)}");
-        await _endUserProfileRepo.AddAsync(endUserProfile);
+        // Create associated records only for new users
+        try
+        {
+            var endUserProfile = new EndUserProfile(user.Id, $"Registered via {SocialProvider.GetDisplayName(provider)}");
+            await _endUserProfileRepo.AddAsync(endUserProfile);
 
-        var userSettings = new UserSettings(user.Id);
-        await _userSettingsRepo.AddAsync(userSettings);
+            var userSettings = new UserSettings(user.Id);
+            await _userSettingsRepo.AddAsync(userSettings);
+        }
+        catch (Exception ex)
+        {
+            // Log the error but don't fail the entire operation
+            // The user record is created, associated records can be created later
+            throw new SocialLoginException(
+                provider,
+                "profile_creation_failed",
+                $"User created but failed to create profile: {ex.Message}");
+        }
 
         return user;
     }
