@@ -279,13 +279,31 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
     {
         var email = userInfo.Email ?? $"{userInfo.Sub}@{provider}.social";
         var username = userInfo.Name ?? userInfo.Nickname ?? email.Split('@')[0];
-        var password = GenerateRandomPassword();
+
+        // For social login users, they ALREADY exist in Auth0
+        // userInfo.Sub contains their Auth0 user ID (e.g., "facebook|10164582978623829")
+        var auth0UserId = userInfo.Sub;
+
+        // First, check if user already exists in our database by auth0_user_id
+        var existingUserByAuth0Id = await _userRepo.GetByAuth0UserIdAsync(auth0UserId);
+        if (existingUserByAuth0Id != null)
+        {
+            // User already exists, return them
+            return existingUserByAuth0Id;
+        }
 
         var endUserRoleId = _config["Auth0:Roles:EndUser"]!;
 
-        // Create user in Auth0 (handles case where user already exists)
-        var auth0UserId = await _auth0Management.CreateUserAndAssignRoleAsync(
-            email, username, password, endUserRoleId);
+        // Assign role to the existing Auth0 social user
+        try
+        {
+            await _auth0Management.AssignRoleAsync(auth0UserId, endUserRoleId);
+        }
+        catch (Exception ex)
+        {
+            // Role might already be assigned or user might not exist, log but continue
+            // We don't want to fail the entire login process if role assignment fails
+        }
 
         var user = new User(
             username: username,
@@ -303,8 +321,14 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
         {
-            // User already exists in PostgreSQL, fetch the existing user
+            // User already exists in PostgreSQL by email, try to fetch by email first, then by auth0_user_id
             var existingUser = await _userRepo.GetByEmailAsync(email);
+            if (existingUser == null)
+            {
+                // Try by auth0_user_id as fallback
+                existingUser = await _userRepo.GetByAuth0UserIdAsync(auth0UserId);
+            }
+
             if (existingUser == null)
             {
                 throw new SocialLoginException(
