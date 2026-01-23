@@ -53,13 +53,15 @@ public class SocialIdentityRepository : ISocialIdentityRepository
     {
         const string sql = @"
             INSERT INTO social_identities (
-                id, user_id, provider, provider_user_id, email, name,
-                access_token, refresh_token, token_expires_at, created_at, updated_at
+                id, user_id, provider, provider_user_id, email, name, created_at, updated_at
             )
             VALUES (
-                @Id, @UserId, @Provider, @ProviderUserId, @Email, @Name,
-                @AccessToken, @RefreshToken, @TokenExpiresAt, @CreatedAt, @UpdatedAt
-            );";
+                @Id, @UserId, @Provider, @ProviderUserId, @Email, @Name, @CreatedAt, @UpdatedAt
+            )
+            ON CONFLICT (user_id, provider) DO UPDATE
+            SET email = EXCLUDED.email,
+                name = EXCLUDED.name,
+                updated_at = EXCLUDED.updated_at;";
 
         using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, socialIdentity);
@@ -71,9 +73,6 @@ public class SocialIdentityRepository : ISocialIdentityRepository
             UPDATE social_identities
             SET email = @Email,
                 name = @Name,
-                access_token = @AccessToken,
-                refresh_token = @RefreshToken,
-                token_expires_at = @TokenExpiresAt,
                 updated_at = @UpdatedAt
             WHERE id = @Id;";
 

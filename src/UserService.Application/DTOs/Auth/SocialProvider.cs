@@ -22,12 +22,12 @@ public static class SocialProvider
         return provider.ToLowerInvariant() switch
         {
             "google" or "google-oauth2" => "google-oauth2",
-            "facebook" => "Facebook",
-            "apple" => "Apple",
-            "github" => "GitHub",
-            "twitter" or "x" => "Twitter",
+            "facebook" => "facebook",
+            "apple" => "apple",
+            "github" => "github",
+            "twitter" or "x" => "twitter",
             "linkedin" => "linkedin",
-            _ => provider
+            _ => provider.ToLowerInvariant()
         };
     }
 

@@ -8,9 +8,6 @@ public class SocialIdentity
     public string ProviderUserId { get; private set; } = default!;
     public string? Email { get; private set; }
     public string? Name { get; private set; }
-    public string? AccessToken { get; private set; }
-    public string? RefreshToken { get; private set; }
-    public DateTime? TokenExpiresAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
@@ -21,10 +18,7 @@ public class SocialIdentity
         string provider,
         string providerUserId,
         string? email,
-        string? name,
-        string? accessToken = null,
-        string? refreshToken = null,
-        DateTime? tokenExpiresAt = null)
+        string? name)
     {
         Id = Guid.NewGuid();
         UserId = userId;
@@ -32,18 +26,7 @@ public class SocialIdentity
         ProviderUserId = providerUserId;
         Email = email;
         Name = name;
-        AccessToken = accessToken;
-        RefreshToken = refreshToken;
-        TokenExpiresAt = tokenExpiresAt;
         CreatedAt = DateTime.UtcNow;
-        UpdatedAt = DateTime.UtcNow;
-    }
-
-    public void UpdateTokens(string? accessToken, string? refreshToken, DateTime? expiresAt)
-    {
-        AccessToken = accessToken;
-        RefreshToken = refreshToken;
-        TokenExpiresAt = expiresAt;
         UpdatedAt = DateTime.UtcNow;
     }
 

@@ -100,10 +100,6 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             userId = existingIdentity.UserId;
             user = await _userRepo.GetByIdAsync(userId);
 
-            existingIdentity.UpdateTokens(
-                tokenResponse.AccessToken,
-                tokenResponse.RefreshToken,
-                tokenResponse.ExpiresAt);
             existingIdentity.UpdateProfile(userInfo.Email, userInfo.Name);
 
             await _socialIdentityRepo.UpdateAsync(existingIdentity);
@@ -132,10 +128,7 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
                 provider,
                 userInfo.Sub,
                 userInfo.Email,
-                userInfo.Name,
-                tokenResponse.AccessToken,
-                tokenResponse.RefreshToken,
-                tokenResponse.ExpiresAt);
+                userInfo.Name);
 
             await _socialIdentityRepo.AddAsync(socialIdentity);
         }
@@ -181,10 +174,7 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             provider,
             userInfo.Sub,
             userInfo.Email,
-            userInfo.Name,
-            tokenResponse.AccessToken,
-            tokenResponse.RefreshToken,
-            tokenResponse.ExpiresAt);
+            userInfo.Name);
 
         await _socialIdentityRepo.AddAsync(socialIdentity);
 
