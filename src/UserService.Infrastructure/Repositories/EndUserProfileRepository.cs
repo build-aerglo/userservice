@@ -22,7 +22,8 @@ public class EndUserProfileRepository : IEndUserProfileRepository
     {
         const string sql = @"
             INSERT INTO end_user (id, user_id, social_media, created_at, updated_at)
-            VALUES (@Id, @UserId, @SocialMedia, @CreatedAt, @UpdatedAt);";
+            VALUES (@Id, @UserId, @SocialMedia, @CreatedAt, @UpdatedAt)
+            ON CONFLICT (user_id) DO NOTHING;";
 
         await using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, profile);
