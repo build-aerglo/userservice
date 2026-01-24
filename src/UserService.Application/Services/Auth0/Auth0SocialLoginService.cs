@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Web;
 using Microsoft.Extensions.Configuration;
 using UserService.Application.DTOs.Auth;
@@ -375,11 +376,22 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
 
     private class Auth0UserInfo
     {
+        [JsonPropertyName("sub")]
         public string Sub { get; set; } = default!;
+
+        [JsonPropertyName("email")]
         public string? Email { get; set; }
-        public bool? Email_Verified { get; set; }
+
+        [JsonPropertyName("email_verified")]
+        public bool? EmailVerified { get; set; }
+
+        [JsonPropertyName("name")]
         public string? Name { get; set; }
+
+        [JsonPropertyName("nickname")]
         public string? Nickname { get; set; }
+
+        [JsonPropertyName("picture")]
         public string? Picture { get; set; }
     }
 }
