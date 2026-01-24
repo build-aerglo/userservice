@@ -111,17 +111,30 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
         }
         else
         {
+            Console.WriteLine($"[AuthenticateAsync] No existing social identity found for {provider}:{userInfo.Sub}");
+            Console.WriteLine($"[AuthenticateAsync] Checking for existing user with email: {userInfo.Email}");
+
             var existingUserByEmail = userInfo.Email != null
                 ? await _userRepo.GetUserOrBusinessIdByEmailAsync(userInfo.Email)
                 : null;
 
             if (existingUserByEmail.HasValue)
             {
+                Console.WriteLine($"[AuthenticateAsync] Found existing user by email: {existingUserByEmail.Value}");
                 userId = existingUserByEmail.Value;
                 user = await _userRepo.GetByIdAsync(userId);
+
+                if (user == null)
+                {
+                    throw new SocialLoginException(provider, "user_not_found",
+                        $"User with ID {userId} not found in database");
+                }
+
+                Console.WriteLine($"[AuthenticateAsync] Linking {provider} account to existing user {userId}");
             }
             else
             {
+                Console.WriteLine($"[AuthenticateAsync] No existing user found. Creating new user for {userInfo.Email}");
                 var newUser = await CreateEndUserFromSocialAsync(userInfo, provider);
                 userId = newUser.Id;
                 user = newUser;
@@ -139,6 +152,7 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
                 tokenResponse.ExpiresAt);
 
             await _socialIdentityRepo.AddAsync(socialIdentity);
+            Console.WriteLine($"[AuthenticateAsync] Social identity created for {provider}:{userInfo.Sub} -> User:{userId}");
         }
 
         var roles = ExtractRolesFromToken(tokenResponse.IdToken);
@@ -280,11 +294,12 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
     {
         var email = userInfo.Email ?? $"{userInfo.Sub}@{provider}.social";
         var username = userInfo.Name ?? userInfo.Nickname ?? email.Split('@')[0];
-        var password = GenerateRandomPassword();
 
-        var endUserRoleId = _config["Auth0:Roles:EndUser"]!;
-        var auth0UserId = await _auth0Management.CreateUserAndAssignRoleAsync(
-            email, username, password, endUserRoleId);
+        // For social logins, Auth0 already manages the user
+        // The sub is the Auth0 user ID (e.g., "github|237497180", "apple|xxxxx")
+        var auth0UserId = userInfo.Sub;
+
+        Console.WriteLine($"[CreateEndUserFromSocialAsync] Creating user - Email: {email}, Username: {username}, Auth0Sub: {auth0UserId}");
 
         var user = new User(
             username: username,
@@ -295,7 +310,28 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             address: null,
             auth0UserId: auth0UserId);
 
-        await _userRepo.AddAsync(user);
+        try
+        {
+            await _userRepo.AddAsync(user);
+            Console.WriteLine($"[CreateEndUserFromSocialAsync] User created successfully with ID: {user.Id}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CreateEndUserFromSocialAsync] Error creating user: {ex.Message}");
+
+            // If user already exists (duplicate email/username), try to find and return existing user
+            if (ex.Message.Contains("duplicate") || ex.Message.Contains("unique"))
+            {
+                var existingUser = await _userRepo.GetByEmailAsync(email);
+                if (existingUser != null)
+                {
+                    Console.WriteLine($"[CreateEndUserFromSocialAsync] Found existing user with ID: {existingUser.Id}");
+                    return existingUser;
+                }
+            }
+
+            throw new SocialLoginException(provider, "user_creation_failed", $"Failed to create user in database: {ex.Message}");
+        }
 
         var endUserProfile = new EndUserProfile(user.Id, $"Registered via {SocialProvider.GetDisplayName(provider)}");
         await _endUserProfileRepo.AddAsync(endUserProfile);
