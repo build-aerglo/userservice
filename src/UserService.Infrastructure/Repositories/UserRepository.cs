@@ -20,42 +20,45 @@ public class UserRepository : IUserRepository
     public async Task<Guid?> GetUserOrBusinessIdByEmailAsync(string email)
     {
         const string userSql = @"
-            SELECT id, user_type 
-            FROM users 
-            WHERE email = @Email;
+            SELECT id, user_type
+            FROM users
+            WHERE LOWER(email) = LOWER(@Email);
         ";
-    
+
         using var conn = CreateConnection();
-    
+
         // Get user record
         var user = await conn.QueryFirstOrDefaultAsync<(Guid Id, string UserType)>(
             userSql,
             new { Email = email }
         );
-    
+
         if (user.Id == Guid.Empty)
+        {
+            Console.WriteLine($"[GetUserOrBusinessIdByEmailAsync] No user found for email: {email}");
             return null; // user not found
-    
+        }
+
         // If NOT a business user → return user id
         if (!string.Equals(user.UserType, "business_user", StringComparison.OrdinalIgnoreCase))
         {
-            Console.WriteLine("Gotten from user table");
+            Console.WriteLine($"[GetUserOrBusinessIdByEmailAsync] Found end_user with ID: {user.Id}");
             return user.Id;
         }
-    
+
         // If business user → get business_id from business_reps
         const string repSql = @"
-            SELECT business_id 
-            FROM business_reps 
+            SELECT business_id
+            FROM business_reps
             WHERE user_id = @UserId;
         ";
-    
+
         var businessId = await conn.ExecuteScalarAsync<Guid?>(
             repSql,
             new { UserId = user.Id }
         );
 
-        Console.WriteLine("Gotten from business rep table");
+        Console.WriteLine($"[GetUserOrBusinessIdByEmailAsync] Found business_user with business_id: {businessId}");
         return businessId; // may return null if rep not found
     }
 
@@ -126,8 +129,10 @@ public class UserRepository : IUserRepository
 
     public async Task<User?> GetByEmailAsync(string email)
     {
-        const string sql = "SELECT * FROM users WHERE email = @Email;";
+        const string sql = "SELECT * FROM users WHERE LOWER(email) = LOWER(@Email);";
         using var conn = CreateConnection();
-        return await conn.QueryFirstOrDefaultAsync<User>(sql, new { Email = email });
+        var user = await conn.QueryFirstOrDefaultAsync<User>(sql, new { Email = email });
+        Console.WriteLine($"[GetByEmailAsync] Searched for email '{email}', found: {user != null}");
+        return user;
     }
 }

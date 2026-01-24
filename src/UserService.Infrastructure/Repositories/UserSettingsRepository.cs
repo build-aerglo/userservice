@@ -34,7 +34,8 @@ public class UserSettingsRepository : IUserSettingsRepository
             )
             VALUES (
                 @UserId, @NotificationPreferences::jsonb, @DarkMode, @CreatedAt, @UpdatedAt
-            );";
+            )
+            ON CONFLICT (user_id) DO NOTHING;";
 
         await using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, userSettings);
