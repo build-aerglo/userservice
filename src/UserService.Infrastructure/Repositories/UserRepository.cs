@@ -20,42 +20,45 @@ public class UserRepository : IUserRepository
     public async Task<Guid?> GetUserOrBusinessIdByEmailAsync(string email)
     {
         const string userSql = @"
-            SELECT id, user_type 
-            FROM users 
-            WHERE email = @Email;
+            SELECT id, user_type
+            FROM users
+            WHERE LOWER(email) = LOWER(@Email);
         ";
-    
+
         using var conn = CreateConnection();
-    
+
         // Get user record
         var user = await conn.QueryFirstOrDefaultAsync<(Guid Id, string UserType)>(
             userSql,
             new { Email = email }
         );
-    
+
         if (user.Id == Guid.Empty)
+        {
+            Console.WriteLine($"[GetUserOrBusinessIdByEmailAsync] No user found for email: {email}");
             return null; // user not found
-    
+        }
+
         // If NOT a business user → return user id
         if (!string.Equals(user.UserType, "business_user", StringComparison.OrdinalIgnoreCase))
         {
-            Console.WriteLine("Gotten from user table");
+            Console.WriteLine($"[GetUserOrBusinessIdByEmailAsync] Found end_user with ID: {user.Id}");
             return user.Id;
         }
-    
+
         // If business user → get business_id from business_reps
         const string repSql = @"
-            SELECT business_id 
-            FROM business_reps 
+            SELECT business_id
+            FROM business_reps
             WHERE user_id = @UserId;
         ";
-    
+
         var businessId = await conn.ExecuteScalarAsync<Guid?>(
             repSql,
             new { UserId = user.Id }
         );
 
-        Console.WriteLine("Gotten from business rep table");
+        Console.WriteLine($"[GetUserOrBusinessIdByEmailAsync] Found business_user with business_id: {businessId}");
         return businessId; // may return null if rep not found
     }
 
@@ -85,17 +88,11 @@ public class UserRepository : IUserRepository
     public async Task AddAsync(User user)
     {
         const string sql = @"
-            INSERT INTO users (id, username, email, phone, user_type, address, join_date, auth0_user_id, created_at, updated_at)
-            VALUES (@Id, @Username, @Email, @Phone, @UserType, @Address, @JoinDate, @Auth0UserId, @CreatedAt, @UpdatedAt)
-            ON CONFLICT (email) DO NOTHING;";
+            INSERT INTO users (id, username, email, phone, user_type, address, join_date, created_at, updated_at)
+            VALUES (@Id, @Username, @Email, @Phone, @UserType, @Address, @JoinDate, @CreatedAt, @UpdatedAt);";
 
         using var conn = CreateConnection();
-        var rowsAffected = await conn.ExecuteAsync(sql, user);
-
-        if (rowsAffected == 0)
-        {
-            throw new InvalidOperationException($"User with email {user.Email} already exists in the database.");
-        }
+        await conn.ExecuteAsync(sql, user);
     }
 
     public async Task UpdateAsync(User user)

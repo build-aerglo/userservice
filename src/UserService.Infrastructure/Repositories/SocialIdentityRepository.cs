@@ -59,7 +59,14 @@ public class SocialIdentityRepository : ISocialIdentityRepository
             VALUES (
                 @Id, @UserId, @Provider, @ProviderUserId, @Email, @Name,
                 @AccessToken, @RefreshToken, @TokenExpiresAt, @CreatedAt, @UpdatedAt
-            );";
+            )
+            ON CONFLICT (user_id, provider) DO UPDATE
+            SET email = EXCLUDED.email,
+                name = EXCLUDED.name,
+                access_token = EXCLUDED.access_token,
+                refresh_token = EXCLUDED.refresh_token,
+                token_expires_at = EXCLUDED.token_expires_at,
+                updated_at = EXCLUDED.updated_at;";
 
         using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, socialIdentity);
