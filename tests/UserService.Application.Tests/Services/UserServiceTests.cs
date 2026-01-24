@@ -611,6 +611,10 @@ public class UserServiceTests
         Assert.ThrowsAsync<EndUserNotFoundException>(() => _service.GetEndUserProfileDetailAsync(userId));
     }
 
+    // ========================================================================
+    // UPDATE ENDPOINT SERVICE TESTS
+    // ========================================================================
+
     [Test]
     public async Task UpdateEndUserProfileAsync_ShouldUpdateAllFields_WhenAllProvided()
     {
@@ -666,7 +670,7 @@ public class UserServiceTests
             Address: null,
             SocialMedia: null,
             NotificationPreferences: null,
-            DarkMode: true
+            DarkMode: true  // Only updating dark mode
         );
 
         _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
@@ -679,59 +683,51 @@ public class UserServiceTests
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        _mockUserRepository.Verify(r => r.UpdateAsync(It.IsAny<User>()), Times.Never);
-        _mockEndUserProfileRepository.Verify(r => r.UpdateAsync(It.IsAny<EndUserProfile>()), Times.Never);
-        _mockUserSettingsRepository.Verify(r => r.UpdateAsync(It.IsAny<UserSettings>()), Times.Once);
+        _mockUserRepository.Verify(r => r.UpdateAsync(It.IsAny<User>()), Times.Never); // Should not update user
+        _mockEndUserProfileRepository.Verify(r => r.UpdateAsync(It.IsAny<EndUserProfile>()), Times.Never); // Should not update profile
+        _mockUserSettingsRepository.Verify(r => r.UpdateAsync(It.IsAny<UserSettings>()), Times.Once); // Should only update settings
     }
 
-[Test]
-    public async Task UpdateEndUserProfileAsync_ShouldAutoCreateSettings_WhenMissing()
-    {
-        // Arrange
-        var userId = Guid.NewGuid();
-        var user = new User("john_doe", "john@example.com", "1234567890", "password", "end_user", "123 Main St", "auth0|123");
-        var profile = new EndUserProfile(userId, "instagram.com/johndoe");
+   [Test]
+public async Task UpdateEndUserProfileAsync_ShouldAutoCreateSettings_WhenMissing()
+{
+    // Arrange
+    var userId = Guid.NewGuid();
+    var user = new User("john_doe", "john@example.com", "1234567890", "password", "end_user", "123 Main St", "auth0|123");
+    var profile = new EndUserProfile(userId, "instagram.com/johndoe");
 
-        var updateDto = new UpdateEndUserProfileDto(
-            Username: "Lizzy",
-            Phone: "9876543210",
-            Address: null,
-            SocialMedia: null,
-            NotificationPreferences: null,
-            DarkMode: true
-        );
+    var updateDto = new UpdateEndUserProfileDto(
+        Username: "Lizzy",
+        Phone: "9876543210",
+        Address: null,
+        SocialMedia: null,
+        NotificationPreferences: null,
+        DarkMode: true
+    );
 
-        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
-        _mockEndUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(profile);
+    var createdSettings = new UserSettings(userId);
     
-        
-        UserSettings? createdSettings = null;
-        _mockUserSettingsRepository
-            .SetupSequence(r => r.GetByUserIdAsync(userId))
-            .ReturnsAsync((UserSettings?)null)  // First call - doesn't exist
-            .ReturnsAsync(() => createdSettings ?? new UserSettings(userId)); // Second call - returns created
+    _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
+    _mockEndUserProfileRepository.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(profile);
     
-        _mockUserSettingsRepository
-            .Setup(r => r.AddAsync(It.IsAny<UserSettings>()))
-            .Callback<UserSettings>(s => createdSettings = s)
-            .Returns(Task.CompletedTask);
+    _mockUserSettingsRepository
+        .SetupSequence(r => r.GetByUserIdAsync(userId))
+        .ReturnsAsync((UserSettings?)null)  // First check: doesn't exist
+        .ReturnsAsync(createdSettings)      // Second check: now exists
+        .ReturnsAsync(createdSettings);     // Any additional checks: still exists
     
-        _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
-        _mockUserSettingsRepository.Setup(r => r.UpdateAsync(It.IsAny<UserSettings>())).Returns(Task.CompletedTask);
+    _mockUserSettingsRepository.Setup(r => r.AddAsync(It.IsAny<UserSettings>())).Returns(Task.CompletedTask);
+    _mockUserRepository.Setup(r => r.UpdateAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+    _mockUserSettingsRepository.Setup(r => r.UpdateAsync(It.IsAny<UserSettings>())).Returns(Task.CompletedTask);
 
-        // Act
-        var result = await _service.UpdateEndUserProfileAsync(userId, updateDto);
+    // Act
+    var result = await _service.UpdateEndUserProfileAsync(userId, updateDto);
 
-        // Assert
-        Assert.That(result, Is.Not.Null);
-    
-        // ✅ FIX: Should be called exactly once during UpdateEndUserProfileAsync
-        _mockUserSettingsRepository.Verify(
-            r => r.AddAsync(It.Is<UserSettings>(s => s.UserId == userId)), 
-            Times.Once
-        );
-    }
-
+    // Assert
+    Assert.That(result, Is.Not.Null);
+    _mockUserSettingsRepository.Verify(r => r.AddAsync(It.Is<UserSettings>(s => s.UserId == userId)), Times.Once);
+    _mockUserSettingsRepository.Verify(r => r.UpdateAsync(It.IsAny<UserSettings>()), Times.Once); // Should also update
+}
     [Test]
     public void UpdateEndUserProfileAsync_ShouldThrowException_WhenUserNotFound()
     {
