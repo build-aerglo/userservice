@@ -12,5 +12,6 @@ public interface IUserRepository
     Task<Guid?> GetUserOrBusinessIdByEmailAsync(string email);
     Task UpdateLastLoginAsync(Guid userId, DateTime loginTime);
     Task<User?> GetByEmailAsync(string email);
-    
+    Task<User?> GetByAuth0UserIdAsync(string auth0UserId);
+
 }

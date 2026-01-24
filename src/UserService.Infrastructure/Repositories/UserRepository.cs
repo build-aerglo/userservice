@@ -135,4 +135,11 @@ public class UserRepository : IUserRepository
         Console.WriteLine($"[GetByEmailAsync] Searched for email '{email}', found: {user != null}");
         return user;
     }
+
+    public async Task<User?> GetByAuth0UserIdAsync(string auth0UserId)
+    {
+        const string sql = "SELECT * FROM users WHERE auth0_user_id = @Auth0UserId;";
+        using var conn = CreateConnection();
+        return await conn.QueryFirstOrDefaultAsync<User>(sql, new { Auth0UserId = auth0UserId });
+    }
 }

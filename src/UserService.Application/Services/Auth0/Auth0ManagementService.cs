@@ -50,7 +50,7 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
         var connection = config["Auth0:DbConnection"] ?? "Username-Password-Authentication";
 
         // ----------------------------------------------------------------------
-        // 1) CREATE USER (no password — via email reset link)
+        // 1) CREATE USER
         // ----------------------------------------------------------------------
         var createBody = new
         {
@@ -64,17 +64,44 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
             $"https://{domain}/api/v2/users",
             new StringContent(JsonSerializer.Serialize(createBody), Encoding.UTF8, "application/json")
         );
-        
+
         var respContent = await createResp.Content.ReadAsStringAsync();
+        string auth0UserId;
 
         if (!createResp.IsSuccessStatusCode)
         {
-            throw new Exception($"Create user failed: {createResp.StatusCode} - {respContent}");
+            // Handle 409 Conflict - user already exists
+            if (createResp.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                // User already exists in Auth0, get their user_id
+                var existingUserId = await GetUserByEmailAsync(email);
+                if (existingUserId == null)
+                {
+                    throw new Exception($"User with email {email} exists in Auth0 but could not be retrieved.");
+                }
+
+                auth0UserId = existingUserId;
+
+                // Ensure role is assigned (might already be assigned, but this is idempotent)
+                try
+                {
+                    await AssignRoleAsync(auth0UserId, roleId);
+                }
+                catch
+                {
+                    // Role might already be assigned, continue
+                }
+
+                return auth0UserId;
+            }
+            else
+            {
+                throw new Exception($"Create user failed: {createResp.StatusCode} - {respContent}");
+            }
         }
 
-        createResp.EnsureSuccessStatusCode();
         var userJson = JsonDocument.Parse(await createResp.Content.ReadAsStringAsync());
-        var auth0UserId = userJson.RootElement.GetProperty("user_id").GetString()!;
+        auth0UserId = userJson.RootElement.GetProperty("user_id").GetString()!;
 
         // ----------------------------------------------------------------------
         // 2) ASSIGN ROLE
@@ -129,5 +156,35 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
         );
 
         resp.EnsureSuccessStatusCode();
+    }
+
+    // =============================================================================================
+    // GET USER BY EMAIL
+    // =============================================================================================
+    public async Task<string?> GetUserByEmailAsync(string email)
+    {
+        await UseMgmtAuthAsync();
+
+        var domain = config["Auth0:Domain"]!;
+        var encodedEmail = Uri.EscapeDataString(email);
+
+        var resp = await http.GetAsync(
+            $"https://{domain}/api/v2/users-by-email?email={encodedEmail}"
+        );
+
+        if (!resp.IsSuccessStatusCode)
+            return null;
+
+        var content = await resp.Content.ReadAsStringAsync();
+        var users = JsonDocument.Parse(content);
+
+        // Auth0 returns an array of users matching the email
+        if (users.RootElement.GetArrayLength() > 0)
+        {
+            var firstUser = users.RootElement[0];
+            return firstUser.GetProperty("user_id").GetString();
+        }
+
+        return null;
     }
 }
