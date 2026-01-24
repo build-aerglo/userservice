@@ -129,8 +129,10 @@ public class UserRepository : IUserRepository
 
     public async Task<User?> GetByEmailAsync(string email)
     {
-        const string sql = "SELECT * FROM users WHERE email = @Email;";
+        const string sql = "SELECT * FROM users WHERE LOWER(email) = LOWER(@Email);";
         using var conn = CreateConnection();
-        return await conn.QueryFirstOrDefaultAsync<User>(sql, new { Email = email });
+        var user = await conn.QueryFirstOrDefaultAsync<User>(sql, new { Email = email });
+        Console.WriteLine($"[GetByEmailAsync] Searched for email '{email}', found: {user != null}");
+        return user;
     }
 }

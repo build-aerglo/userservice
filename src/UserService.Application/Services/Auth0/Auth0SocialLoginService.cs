@@ -112,11 +112,15 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
         else
         {
             Console.WriteLine($"[AuthenticateAsync] No existing social identity found for {provider}:{userInfo.Sub}");
+            Console.WriteLine($"[AuthenticateAsync] UserInfo.Email: '{userInfo.Email}' (Length: {userInfo.Email?.Length ?? 0})");
             Console.WriteLine($"[AuthenticateAsync] Checking for existing user with email: {userInfo.Email}");
 
-            var existingUserByEmail = userInfo.Email != null
-                ? await _userRepo.GetUserOrBusinessIdByEmailAsync(userInfo.Email)
+            var trimmedEmail = userInfo.Email?.Trim();
+            var existingUserByEmail = trimmedEmail != null
+                ? await _userRepo.GetUserOrBusinessIdByEmailAsync(trimmedEmail)
                 : null;
+
+            Console.WriteLine($"[AuthenticateAsync] GetUserOrBusinessIdByEmailAsync returned: {(existingUserByEmail.HasValue ? existingUserByEmail.Value.ToString() : "NULL")}");
 
             if (existingUserByEmail.HasValue)
             {
@@ -130,11 +134,11 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
                         $"User with ID {userId} not found in database");
                 }
 
-                Console.WriteLine($"[AuthenticateAsync] Linking {provider} account to existing user {userId}");
+                Console.WriteLine($"[AuthenticateAsync] Linking {provider} account to existing user {userId}, Email: {user.Email}");
             }
             else
             {
-                Console.WriteLine($"[AuthenticateAsync] No existing user found. Creating new user for {userInfo.Email}");
+                Console.WriteLine($"[AuthenticateAsync] No existing user found. Creating new user for {trimmedEmail}");
                 var newUser = await CreateEndUserFromSocialAsync(userInfo, provider);
                 userId = newUser.Id;
                 user = newUser;
@@ -293,13 +297,17 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
     private async Task<User> CreateEndUserFromSocialAsync(Auth0UserInfo userInfo, string provider)
     {
         var email = userInfo.Email ?? $"{userInfo.Sub}@{provider}.social";
-        var username = userInfo.Name ?? userInfo.Nickname ?? email.Split('@')[0];
 
-        // For social logins, Auth0 already manages the user
-        // The sub is the Auth0 user ID (e.g., "github|237497180", "apple|xxxxx")
+        // Generate username from name/nickname, fallback to email prefix
+        var baseUsername = userInfo.Name ?? userInfo.Nickname ?? email.Split('@')[0];
+
+        // Make username unique by appending a short hash of the auth0UserId
+        // This prevents conflicts when multiple providers return the same name/email
         var auth0UserId = userInfo.Sub;
+        var uniqueSuffix = Math.Abs(auth0UserId.GetHashCode()).ToString().Substring(0, 6);
+        var username = $"{baseUsername}_{uniqueSuffix}";
 
-        Console.WriteLine($"[CreateEndUserFromSocialAsync] Creating user - Email: {email}, Username: {username}, Auth0Sub: {auth0UserId}");
+        Console.WriteLine($"[CreateEndUserFromSocialAsync] Creating user - Email: {email}, BaseUsername: {baseUsername}, Username: {username}, Auth0Sub: {auth0UserId}");
 
         var user = new User(
             username: username,
@@ -320,14 +328,34 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             Console.WriteLine($"[CreateEndUserFromSocialAsync] Error creating user: {ex.Message}");
 
             // If user already exists (duplicate email/username), try to find and return existing user
-            if (ex.Message.Contains("duplicate") || ex.Message.Contains("unique"))
+            if (ex.Message.Contains("duplicate") || ex.Message.Contains("unique") || ex.Message.Contains("23505"))
             {
+                Console.WriteLine($"[CreateEndUserFromSocialAsync] Duplicate detected, searching for existing user by email: {email}");
+
                 var existingUser = await _userRepo.GetByEmailAsync(email);
                 if (existingUser != null)
                 {
-                    Console.WriteLine($"[CreateEndUserFromSocialAsync] Found existing user with ID: {existingUser.Id}");
+                    Console.WriteLine($"[CreateEndUserFromSocialAsync] Found existing user by email with ID: {existingUser.Id}");
                     return existingUser;
                 }
+
+                // Also try to find by base username if email lookup failed
+                Console.WriteLine($"[CreateEndUserFromSocialAsync] Email lookup failed, trying to find user by checking database directly");
+
+                // Try case-insensitive email search one more time
+                var userId = await _userRepo.GetUserOrBusinessIdByEmailAsync(email);
+                if (userId.HasValue)
+                {
+                    Console.WriteLine($"[CreateEndUserFromSocialAsync] Found user ID via GetUserOrBusinessIdByEmailAsync: {userId.Value}");
+                    var foundUser = await _userRepo.GetByIdAsync(userId.Value);
+                    if (foundUser != null)
+                    {
+                        Console.WriteLine($"[CreateEndUserFromSocialAsync] Retrieved user: {foundUser.Id}");
+                        return foundUser;
+                    }
+                }
+
+                Console.WriteLine($"[CreateEndUserFromSocialAsync] Could not find existing user, re-throwing exception");
             }
 
             throw new SocialLoginException(provider, "user_creation_failed", $"Failed to create user in database: {ex.Message}");
