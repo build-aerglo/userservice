@@ -16,7 +16,7 @@ public class BadgeService(
     private const int PioneerWindowDays = 100;
 
     public async Task<UserBadgesResponseDto> GetUserBadgesAsync(Guid userId)
-    {
+    {   
         var user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             throw new EndUserNotFoundException(userId);
@@ -131,11 +131,12 @@ public class BadgeService(
         return await AssignBadgeAsync(new AssignBadgeDto(userId, tierBadge));
     }
 
-    public async Task<bool> CheckAndAssignPioneerBadgeAsync(Guid userId, DateTime joinDate, DateTime platformLaunchDate)
+    public async Task<bool> CheckAndAssignPioneerBadgeAsync(Guid userId, DateTime joinDate)
     {
-        var daysSinceLaunch = (joinDate - platformLaunchDate).Days;
+        var daysSinceLaunch = (joinDate - PlatformLaunchDate).Days;
 
-        if (daysSinceLaunch > PioneerWindowDays)
+        // User must have joined after launch and within the pioneer window
+        if (daysSinceLaunch < 0 || daysSinceLaunch > PioneerWindowDays)
             return false;
 
         // Check if already has Pioneer badge
@@ -212,15 +213,15 @@ public class BadgeService(
         if (user is null)
             return;
 
-        // Calculate days since join
+        // Calculate days since join and review count (for now, assume 0 reviews)
         var daysSinceJoin = (DateTime.UtcNow - user.JoinDate).Days;
+        var reviewCount = 0; // TODO: Get from ReviewService
 
-        // Tier badge will be calculated based on actual review count
-        // This would normally come from ReviewService, but for now we'll
-        // need to receive this information from the caller
+        // Calculate and assign tier badge
+        await CalculateTierBadgeAsync(userId, reviewCount, daysSinceJoin);
 
         // Check for Pioneer badge
-        await CheckAndAssignPioneerBadgeAsync(userId, user.JoinDate, PlatformLaunchDate);
+        await CheckAndAssignPioneerBadgeAsync(userId, user.JoinDate);
 
         // Other badges (Top Contributor, Category Expert, Most Helpful)
         // require data from other services and should be called with that data

@@ -15,6 +15,7 @@ public class UserService(
     ISupportUserProfileRepository supportUserProfileRepository,
     IEndUserProfileRepository endUserProfileRepository,
     IUserSettingsRepository userSettingsRepository,
+    IBadgeService badgeService,
     IAuth0ManagementService _auth0,
     IConfiguration _config
 ) : IUserService
@@ -290,6 +291,10 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         var savedUser = await userRepository.GetByIdAsync(user.Id);
         if (savedUser is null)
             throw new UserCreationFailedException("Failed to create user record.");
+        
+        // Assign Pioneer badge if eligible
+        await badgeService.CheckAndAssignPioneerBadgeAsync(user.Id, user.JoinDate);
+
 
         // ✅ 5. Create end user profile
         var endUserProfile = new EndUserProfile(

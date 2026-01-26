@@ -20,6 +20,7 @@ public class UserServiceTests
     private Mock<IEndUserProfileRepository> _mockEndUserProfileRepository = null!;
     private Mock<IUserSettingsRepository> _mockUserSettingsRepository = null!;
     private Mock<IAuth0ManagementService> _mockAuth0 = null!;
+    private Mock<IBadgeService> _mockBadgeService = null!;
     private Mock<IConfiguration> _mockConfig = null!;
     private Application.Services.UserService _service = null!;
 
@@ -32,6 +33,7 @@ public class UserServiceTests
         _mockSupportUserProfileRepository = new Mock<ISupportUserProfileRepository>();
         _mockEndUserProfileRepository = new Mock<IEndUserProfileRepository>();
         _mockUserSettingsRepository = new Mock<IUserSettingsRepository>();
+        _mockBadgeService = new Mock<IBadgeService>();
         _mockAuth0 = new Mock<IAuth0ManagementService>();
         _mockConfig = new Mock<IConfiguration>();
 
@@ -44,11 +46,16 @@ public class UserServiceTests
         _mockAuth0.Setup(a =>
             a.CreateUserAndAssignRoleAsync(
                 It.IsAny<string>(), // email
-                It.IsAny<string>(), // password
                 It.IsAny<string>(), // username
+                It.IsAny<string>(), // password
                 It.IsAny<string>()  // roleId
             ))
             .ReturnsAsync("auth0|dummy-id");
+
+        // Mock badge service methods
+        _mockBadgeService.Setup(b => 
+            b.CheckAndAssignPioneerBadgeAsync(It.IsAny<Guid>(), It.IsAny<DateTime>()))
+            .ReturnsAsync(true);
 
         _service = new Application.Services.UserService(
             _mockUserRepository.Object,
@@ -57,6 +64,7 @@ public class UserServiceTests
             _mockSupportUserProfileRepository.Object,
             _mockEndUserProfileRepository.Object,
             _mockUserSettingsRepository.Object,
+            _mockBadgeService.Object,
             _mockAuth0.Object,
             _mockConfig.Object
         );
@@ -684,7 +692,7 @@ public class UserServiceTests
         _mockUserSettingsRepository.Verify(r => r.UpdateAsync(It.IsAny<UserSettings>()), Times.Once);
     }
 
-[Test]
+    [Test]
     public async Task UpdateEndUserProfileAsync_ShouldAutoCreateSettings_WhenMissing()
     {
         // Arrange
