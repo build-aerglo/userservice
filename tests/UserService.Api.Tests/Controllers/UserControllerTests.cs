@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -10,6 +11,7 @@ using UserService.Domain.Entities;
 using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 
 namespace UserService.Api.Tests.Controllers;
 
@@ -913,225 +915,289 @@ public class UserControllerTests
     // END USER PROFILE TESTS - UPDATE
     // ========================================================================
 
+    
     [Test]
     public async Task UpdateEndUserProfileDetail_ShouldReturnOk_WhenUpdateSuccessful()
+{
+    // Arrange
+    var userId = Guid.NewGuid();
+
+    var updateDto = new UpdateEndUserProfileDto(
+        Username: "updated_john",
+        Phone: "9876543210",
+        Address: "456 New Street",
+        SocialMedia: "twitter.com/johndoe",
+        NotificationPreferences: new NotificationPreferencesDto(
+            EmailNotifications: true,
+            SmsNotifications: true,
+            PushNotifications: false,
+            MarketingEmails: true
+        ),
+        DarkMode: true
+    );
+
+    var expectedResponse = new EndUserProfileDetailDto(
+        UserId: userId,
+        Username: "updated_john",
+        Email: "john@example.com",
+        Phone: "9876543210",
+        Address: "456 New Street",
+        JoinDate: DateTime.UtcNow.AddDays(-30),
+        EndUserProfileId: Guid.NewGuid(),
+        SocialMedia: "twitter.com/johndoe",
+        NotificationPreferences: new NotificationPreferencesDto(
+            EmailNotifications: true,
+            SmsNotifications: true,
+            PushNotifications: false,
+            MarketingEmails: true
+        ),
+        DarkMode: true,
+        CreatedAt: DateTime.UtcNow.AddDays(-30),
+        UpdatedAt: DateTime.UtcNow
+    );
+
+    _mockUserService
+        .Setup(s => s.UpdateEndUserProfileAsync(
+            userId,
+            It.IsAny<UpdateEndUserProfileDto>()))
+        .ReturnsAsync(expectedResponse);
+
+    // ✅ FIX: fake HttpContext + User
+    _controller.ControllerContext = new ControllerContext
     {
-        // Arrange
-        var userId = Guid.NewGuid();
-        var updateDto = new UpdateEndUserProfileDto(
-            Username: "updated_john",
-            Phone: "9876543210",
-            Address: "456 New Street",
-            SocialMedia: "twitter.com/johndoe",
-            NotificationPreferences: new NotificationPreferencesDto(
-                EmailNotifications: true,
-                SmsNotifications: true,
-                PushNotifications: false,
-                MarketingEmails: true
-            ),
-            DarkMode: true
-        );
-
-        var expectedResponse = new EndUserProfileDetailDto(
-            UserId: userId,
-            Username: "updated_john",
-            Email: "john@example.com",
-            Phone: "9876543210",
-            Address: "456 New Street",
-            JoinDate: DateTime.UtcNow.AddDays(-30),
-            EndUserProfileId: Guid.NewGuid(),
-            SocialMedia: "twitter.com/johndoe",
-            NotificationPreferences: new NotificationPreferencesDto(
-                EmailNotifications: true,
-                SmsNotifications: true,
-                PushNotifications: false,
-                MarketingEmails: true
-            ),
-            DarkMode: true,
-            CreatedAt: DateTime.UtcNow.AddDays(-30),
-            UpdatedAt: DateTime.UtcNow
-        );
-
-        _mockUserService
-            .Setup(s => s.UpdateEndUserProfileAsync(
-                userId,
-                It.Is<UpdateEndUserProfileDto>(dto =>
-                    dto.DarkMode == true &&
-                    dto.Username == null &&
-                    dto.Phone == null &&
-                    dto.NotificationPreferences == null
-                )))
-            .ReturnsAsync(expectedResponse);
-
-
-        // Act
-        var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
-
-        // Assert
-        var okResult = result as OkObjectResult;
-        if (okResult == null)
+        HttpContext = new DefaultHttpContext
         {
-            // If not OkResult, check if it's an error result
-            var errorResult = result as ObjectResult;
-            Assert.Fail($"Expected OkObjectResult but got {result?.GetType().Name} with status code {errorResult?.StatusCode}");
+            User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                    new[]
+                    {
+                        new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                        new Claim(ClaimTypes.Role, "end_user")
+                    },
+                    "TestAuth"
+                )
+            )
         }
-        
-        Assert.That(okResult.StatusCode, Is.EqualTo(200));
+    };
 
-        var json = JsonSerializer.Serialize(okResult.Value);
-        var response = JsonSerializer.Deserialize<EndUserProfileDetailDto>(json, new JsonSerializerOptions 
-        { 
-            PropertyNameCaseInsensitive = true 
-        });
+    // Act
+    var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
 
-        Assert.That(response, Is.Not.Null);
+    // Assert
+    var objectResult = result as ObjectResult;
+    Assert.That(objectResult, Is.Not.Null);
+    Assert.That(objectResult!.StatusCode ?? 200, Is.EqualTo(200));
+
+    var response = objectResult.Value as EndUserProfileDetailDto;
+    Assert.That(response, Is.Not.Null);
+
+    Assert.Multiple(() =>
+    {
         Assert.That(response!.UserId, Is.EqualTo(userId));
+        Assert.That(response.Username, Is.EqualTo("updated_john"));
         Assert.That(response.Phone, Is.EqualTo("9876543210"));
         Assert.That(response.Address, Is.EqualTo("456 New Street"));
         Assert.That(response.SocialMedia, Is.EqualTo("twitter.com/johndoe"));
-        Assert.That(response.NotificationPreferences.SmsNotifications, Is.True);
         Assert.That(response.DarkMode, Is.True);
-        
-        _mockUserService.Verify(s => s.UpdateEndUserProfileAsync(It.Is<Guid>(id => id == userId), It.Is<UpdateEndUserProfileDto>(dto => dto == updateDto)), Times.Once);
-    }
+        Assert.That(response.NotificationPreferences!.SmsNotifications, Is.True);
+    });
 
+    _mockUserService.Verify(
+        s => s.UpdateEndUserProfileAsync(
+            userId,
+            It.Is<UpdateEndUserProfileDto>(dto =>
+                dto.Username == "updated_john" &&
+                dto.Phone == "9876543210" &&
+                dto.Address == "456 New Street" &&
+                dto.SocialMedia == "twitter.com/johndoe" &&
+                dto.DarkMode == true &&
+                dto.NotificationPreferences != null &&
+                dto.NotificationPreferences.SmsNotifications
+            )
+        ),
+        Times.Once
+    );
+}
+
+    
     [Test]
     public async Task UpdateEndUserProfileDetail_ShouldReturnOk_WhenPartialUpdate()
+{
+    // Arrange
+    var userId = Guid.NewGuid();
+
+    var updateDto = new UpdateEndUserProfileDto(
+        Username: null,
+        Phone: null,
+        Address: null,
+        SocialMedia: null,
+        NotificationPreferences: null,
+        DarkMode: true
+    );
+
+    var expectedResponse = new EndUserProfileDetailDto(
+        UserId: userId,
+        Username: "john_doe",
+        Email: "john@example.com",
+        Phone: "1234567890",
+        Address: "123 Main St",
+        JoinDate: DateTime.UtcNow.AddDays(-30),
+        EndUserProfileId: Guid.NewGuid(),
+        SocialMedia: "instagram.com/johndoe",
+        NotificationPreferences: new NotificationPreferencesDto(true, false, true, false),
+        DarkMode: true,
+        CreatedAt: DateTime.UtcNow.AddDays(-30),
+        UpdatedAt: DateTime.UtcNow
+    );
+
+    _mockUserService
+        .Setup(s => s.UpdateEndUserProfileAsync(
+            userId,
+            It.IsAny<UpdateEndUserProfileDto>()))
+        .ReturnsAsync(expectedResponse);
+
+    _controller.ControllerContext = new ControllerContext
     {
-        // Arrange
-        var userId = Guid.NewGuid();
-        var updateDto = new UpdateEndUserProfileDto(
-            Username: null,
-            Phone: null,
-            Address: null,
-            SocialMedia: null,
-            NotificationPreferences: null,
-            DarkMode: true
-        );
-
-        var expectedResponse = new EndUserProfileDetailDto(
-            UserId: userId,
-            Username: "john_doe",
-            Email: "john@example.com",
-            Phone: "1234567890",
-            Address: "123 Main St",
-            JoinDate: DateTime.UtcNow.AddDays(-30),
-            EndUserProfileId: Guid.NewGuid(),
-            SocialMedia: "instagram.com/johndoe",
-            NotificationPreferences: new NotificationPreferencesDto(true, false, true, false),
-            DarkMode: true,
-            CreatedAt: DateTime.UtcNow.AddDays(-30),
-            UpdatedAt: DateTime.UtcNow
-        );
-
-        _mockUserService
-            .Setup(s => s.UpdateEndUserProfileAsync(
-                userId,
-                It.Is<UpdateEndUserProfileDto>(dto =>
-                    dto.DarkMode == true &&
-                    dto.Username == null &&
-                    dto.Phone == null &&
-                    dto.NotificationPreferences == null
-                )))
-            .ReturnsAsync(expectedResponse);
-
-        // Act
-        var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
-
-        // Assert
-        var okResult = result as OkObjectResult;
-        if (okResult == null)
+        HttpContext = new DefaultHttpContext
         {
-            var errorResult = result as ObjectResult;
-            Assert.Fail($"Expected OkObjectResult but got {result?.GetType().Name} with status code {errorResult?.StatusCode}");
+            User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                    new[]
+                    {
+                        new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                        new Claim(ClaimTypes.Role, "end_user")
+                    },
+                    "TestAuth"
+                )
+            )
         }
+    };
 
-        var json = JsonSerializer.Serialize(okResult.Value);
-        var response = JsonSerializer.Deserialize<EndUserProfileDetailDto>(json, new JsonSerializerOptions 
-        { 
-            PropertyNameCaseInsensitive = true 
-        });
+    // Act
+    var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
 
-        Assert.That(response, Is.Not.Null);
-        Assert.That(response!.DarkMode, Is.True);
-        Assert.That(response.Phone, Is.EqualTo("1234567890"));
-    }
+    // Assert
+    var objectResult = result as ObjectResult;
+    Assert.That(objectResult, Is.Not.Null);
+    Assert.That(objectResult!.StatusCode ?? 200, Is.EqualTo(200));
+
+    var response = objectResult.Value as EndUserProfileDetailDto;
+    Assert.That(response, Is.Not.Null);
+
+    Assert.That(response!.DarkMode, Is.True);
+    Assert.That(response.Phone, Is.EqualTo("1234567890"));
+
+    _mockUserService.Verify(
+        s => s.UpdateEndUserProfileAsync(
+            userId,
+            It.Is<UpdateEndUserProfileDto>(dto =>
+                dto.DarkMode == true &&
+                dto.Username == null &&
+                dto.Phone == null &&
+                dto.Address == null &&
+                dto.SocialMedia == null &&
+                dto.NotificationPreferences == null
+            )
+        ),
+        Times.Once
+    );
+}
+    
 
     [Test]
     public async Task UpdateEndUserProfileDetail_ShouldUpdateOnlyNotificationPreferences()
+{
+    // Arrange
+    var userId = Guid.NewGuid();
+
+    var updateDto = new UpdateEndUserProfileDto(
+        Username: null,
+        Phone: null,
+        Address: null,
+        SocialMedia: null,
+        NotificationPreferences: new NotificationPreferencesDto(
+            EmailNotifications: false,
+            SmsNotifications: true,
+            PushNotifications: false,
+            MarketingEmails: true
+        ),
+        DarkMode: null
+    );
+
+    var expectedResponse = new EndUserProfileDetailDto(
+        UserId: userId,
+        Username: "john_doe",
+        Email: "john@example.com",
+        Phone: "1234567890",
+        Address: "123 Main St",
+        JoinDate: DateTime.UtcNow.AddDays(-30),
+        EndUserProfileId: Guid.NewGuid(),
+        SocialMedia: "instagram.com/johndoe",
+        NotificationPreferences: new NotificationPreferencesDto(
+            false, true, false, true
+        ),
+        DarkMode: false,
+        CreatedAt: DateTime.UtcNow.AddDays(-30),
+        UpdatedAt: DateTime.UtcNow
+    );
+
+    _mockUserService
+        .Setup(s => s.UpdateEndUserProfileAsync(
+            userId,
+            It.IsAny<UpdateEndUserProfileDto>()))
+        .ReturnsAsync(expectedResponse);
+
+    _controller.ControllerContext = new ControllerContext
     {
-        // Arrange
-        var userId = Guid.NewGuid();
-        var updateDto = new UpdateEndUserProfileDto(
-            Username: null,
-            Phone: null,
-            Address: null,
-            SocialMedia: null,
-            NotificationPreferences: new NotificationPreferencesDto(
-                EmailNotifications: false,
-                SmsNotifications: true,
-                PushNotifications: false,
-                MarketingEmails: true
-            ),
-            DarkMode: null
-        );
-
-        var expectedResponse = new EndUserProfileDetailDto(
-            UserId: userId,
-            Username: "john_doe",
-            Email: "john@example.com",
-            Phone: "1234567890",
-            Address: "123 Main St",
-            JoinDate: DateTime.UtcNow.AddDays(-30),
-            EndUserProfileId: Guid.NewGuid(),
-            SocialMedia: "instagram.com/johndoe",
-            NotificationPreferences: new NotificationPreferencesDto(
-                EmailNotifications: false,
-                SmsNotifications: true,
-                PushNotifications: false,
-                MarketingEmails: true
-            ),
-            DarkMode: false,
-            CreatedAt: DateTime.UtcNow.AddDays(-30),
-            UpdatedAt: DateTime.UtcNow
-        );
-
-        _mockUserService
-            .Setup(s => s.UpdateEndUserProfileAsync(
-                userId,
-                It.Is<UpdateEndUserProfileDto>(dto =>
-                    dto.NotificationPreferences != null &&
-                    dto.NotificationPreferences.EmailNotifications == false &&
-                    dto.NotificationPreferences.SmsNotifications == true &&
-                    dto.DarkMode == null
-                )))
-            .ReturnsAsync(expectedResponse);
-
-
-        // Act
-        var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
-
-        // Assert
-        var okResult = result as OkObjectResult;
-        if (okResult == null)
+        HttpContext = new DefaultHttpContext
         {
-            var errorResult = result as ObjectResult;
-            Assert.Fail($"Expected OkObjectResult but got {result?.GetType().Name} with status code {errorResult?.StatusCode}");
+            User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                    new[]
+                    {
+                        new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                        new Claim(ClaimTypes.Role, "end_user")
+                    },
+                    "TestAuth"
+                )
+            )
         }
+    };
 
-        var json = JsonSerializer.Serialize(okResult.Value);
-        var response = JsonSerializer.Deserialize<EndUserProfileDetailDto>(json, new JsonSerializerOptions 
-        { 
-            PropertyNameCaseInsensitive = true 
-        });
+    // Act
+    var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
 
-        Assert.That(response, Is.Not.Null);
+    // Assert
+    var objectResult = result as ObjectResult;
+    Assert.That(objectResult, Is.Not.Null);
+    Assert.That(objectResult!.StatusCode ?? 200, Is.EqualTo(200));
+
+    var response = objectResult.Value as EndUserProfileDetailDto;
+    Assert.That(response, Is.Not.Null);
+
+    Assert.Multiple(() =>
+    {
         Assert.That(response!.NotificationPreferences.EmailNotifications, Is.False);
         Assert.That(response.NotificationPreferences.SmsNotifications, Is.True);
         Assert.That(response.NotificationPreferences.MarketingEmails, Is.True);
         Assert.That(response.Phone, Is.EqualTo("1234567890"));
         Assert.That(response.DarkMode, Is.False);
-    }
+    });
+
+    _mockUserService.Verify(
+        s => s.UpdateEndUserProfileAsync(
+            userId,
+            It.Is<UpdateEndUserProfileDto>(dto =>
+                dto.NotificationPreferences != null &&
+                dto.NotificationPreferences.EmailNotifications == false &&
+                dto.NotificationPreferences.SmsNotifications == true &&
+                dto.NotificationPreferences.MarketingEmails == true &&
+                dto.DarkMode == null
+            )
+        ),
+        Times.Once
+    );
+}
 
     [Test]
     public async Task UpdateEndUserProfileDetail_ShouldReturnNotFound_WhenUserDoesNotExist()
