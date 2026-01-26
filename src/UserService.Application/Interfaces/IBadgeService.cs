@@ -32,7 +32,7 @@ public interface IBadgeService
     /// <summary>
     /// Check if user qualifies for Pioneer badge (joined first 100 days of launch)
     /// </summary>
-    Task<bool> CheckAndAssignPioneerBadgeAsync(Guid userId, DateTime joinDate, DateTime platformLaunchDate);
+    Task<bool> CheckAndAssignPioneerBadgeAsync(Guid userId, DateTime joinDate);
 
     /// <summary>
     /// Check if user qualifies for Top Contributor badge in a location

@@ -13,6 +13,15 @@ public class UserBadgeRepository : IUserBadgeRepository
     public UserBadgeRepository(IConfiguration config)
     {
         _connectionString = config.GetConnectionString("PostgresConnection")!;
+        
+        // Configure Dapper to map snake_case columns to PascalCase properties
+        ConfigureDapperMapping();
+    }
+
+    private static void ConfigureDapperMapping()
+    {
+        // This tells Dapper to automatically convert snake_case to PascalCase
+        DefaultTypeMap.MatchNamesWithUnderscores = true;
     }
 
     private NpgsqlConnection CreateConnection() => new(_connectionString);

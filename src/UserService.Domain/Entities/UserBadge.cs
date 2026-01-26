@@ -6,7 +6,8 @@ namespace UserService.Domain.Entities;
 /// </summary>
 public class UserBadge
 {
-    protected UserBadge() { }
+    // Parameterless constructor for Dapper
+    public UserBadge() { }
 
     public UserBadge(
         Guid userId,
@@ -25,28 +26,29 @@ public class UserBadge
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public Guid Id { get; private set; }
-    public Guid UserId { get; private set; }
+    // Changed to public setters for Dapper mapping
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
 
     /// <summary>
     /// Badge type: pioneer, top_contributor, expert_category, most_helpful, newbie, expert, pro
     /// </summary>
-    public string BadgeType { get; private set; } = default!;
+    public string BadgeType { get; set; } = default!;
 
     /// <summary>
     /// Location for location-based badges (e.g., "Lagos" for Top Contributor in Lagos)
     /// </summary>
-    public string? Location { get; private set; }
+    public string? Location { get; set; }
 
     /// <summary>
     /// Category for category-based badges (e.g., "Restaurants" for Expert in Restaurants)
     /// </summary>
-    public string? Category { get; private set; }
+    public string? Category { get; set; }
 
-    public DateTime EarnedAt { get; private set; }
-    public bool IsActive { get; private set; }
-    public DateTime CreatedAt { get; private set; }
-    public DateTime UpdatedAt { get; private set; }
+    public DateTime EarnedAt { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 
     public void Deactivate()
     {
