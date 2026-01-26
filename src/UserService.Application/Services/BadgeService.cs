@@ -215,7 +215,7 @@ public class BadgeService(
 
         // Calculate days since join and review count (for now, assume 0 reviews)
         var daysSinceJoin = (DateTime.UtcNow - user.JoinDate).Days;
-        var reviewCount = 0; // TODO: Get from ReviewService
+        var reviewCount = 0; 
 
         // Calculate and assign tier badge
         await CalculateTierBadgeAsync(userId, reviewCount, daysSinceJoin);
