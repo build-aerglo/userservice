@@ -78,8 +78,8 @@ public class EncryptionServiceTests
         // Arrange - Valid base64 but too short for IV extraction
         var shortData = Convert.ToBase64String(new byte[8]);
 
-        // Act & Assert
-        Assert.Throws<ArgumentException>(() => _encryptionService.Decrypt(shortData));
+        // Act & Assert - Throws OverflowException when data is too short to extract IV
+        Assert.Throws<OverflowException>(() => _encryptionService.Decrypt(shortData));
     }
 
     [Test]

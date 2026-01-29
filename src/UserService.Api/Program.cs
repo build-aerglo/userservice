@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Security;
 using System.Security.Authentication;
+using Dapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -12,6 +13,9 @@ using UserService.Infrastructure.Clients;
 using UserService.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Enable Dapper snake_case to PascalCase mapping (e.g., auth0_user_id → Auth0UserId)
+DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 // MVC
 builder.Services.AddControllers();
