@@ -23,6 +23,11 @@ public class PasswordResetService(
             return (false, "Email does not exist");
         }
 
+        if (string.IsNullOrEmpty(user.Auth0UserId))
+        {
+            return (false, "User account is not linked to Auth0");
+        }
+
         var auth0Updated = await auth0ManagementService.UpdateEmailAsync(user.Auth0UserId, request.NewEmail);
         if (!auth0Updated)
         {
@@ -106,6 +111,11 @@ public class PasswordResetService(
         if (user is null)
         {
             return (false, "User not found");
+        }
+
+        if (string.IsNullOrEmpty(user.Auth0UserId))
+        {
+            return (false, "User account is not linked to Auth0");
         }
 
         string decryptedPassword;
