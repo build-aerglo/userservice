@@ -43,6 +43,7 @@ builder.Services.AddScoped<IGeolocationHistoryRepository, GeolocationHistoryRepo
 builder.Services.AddScoped<IPointRuleRepository, PointRuleRepository>();
 builder.Services.AddScoped<IPointMultiplierRepository, PointMultiplierRepository>();
 builder.Services.AddScoped<IPointRedemptionRepository, PointRedemptionRepository>();
+builder.Services.AddScoped<IPasswordResetRequestRepository, PasswordResetRequestRepository>();
 
 // ---------- Auth0 Login HTTP Client (TLS forced) ----------
 builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(client =>
@@ -72,6 +73,10 @@ builder.Services.AddScoped<IPointsService, PointsService>();
 builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddScoped<IReferralService, ReferralService>();
 builder.Services.AddScoped<IGeolocationService, GeolocationService>();
+
+// ---------- Password Reset & Encryption Services ----------
+builder.Services.AddScoped<IEncryptionService, EncryptionService>();
+builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
 
 // ==================================================================
 //  BUSINESS SERVICE CLIENT — ALLOW HTTP (FIX FOR SSL MISMATCH ERROR)
@@ -115,6 +120,21 @@ builder.Services.AddHttpClient<IReviewServiceClient, ReviewServiceClient>(client
 }).ConfigurePrimaryHttpMessageHandler(() =>
 {
     // Allow HTTP, do NOT enforce SSL
+    return new HttpClientHandler
+    {
+        ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    };
+});
+
+// ---------- Notification Service Client ----------
+builder.Services.AddHttpClient<INotificationServiceClient, NotificationServiceClient>(client =>
+{
+    var baseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"];
+    client.BaseAddress = new Uri(baseUrl);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
     return new HttpClientHandler
     {
         ServerCertificateCustomValidationCallback =

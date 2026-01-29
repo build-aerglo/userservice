@@ -130,4 +130,69 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
 
         resp.EnsureSuccessStatusCode();
     }
+
+    // =============================================================================================
+    // UPDATE USER EMAIL
+    // =============================================================================================
+    public async Task<bool> UpdateEmailAsync(string auth0UserId, string newEmail)
+    {
+        await UseMgmtAuthAsync();
+
+        var domain = config["Auth0:Domain"]!;
+
+        var payload = new
+        {
+            email = newEmail,
+            email_verified = false
+        };
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"https://{domain}/api/v2/users/{Uri.EscapeDataString(auth0UserId)}")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+        };
+
+        var resp = await http.SendAsync(request);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            var error = await resp.Content.ReadAsStringAsync();
+            Console.WriteLine($"[UpdateEmailAsync] Failed to update email in Auth0: {resp.StatusCode} - {error}");
+            return false;
+        }
+
+        return true;
+    }
+
+    // =============================================================================================
+    // UPDATE USER PASSWORD
+    // =============================================================================================
+    public async Task<bool> UpdatePasswordAsync(string auth0UserId, string newPassword)
+    {
+        await UseMgmtAuthAsync();
+
+        var domain = config["Auth0:Domain"]!;
+        var connection = config["Auth0:DbConnection"] ?? "Username-Password-Authentication";
+
+        var payload = new
+        {
+            password = newPassword,
+            connection
+        };
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"https://{domain}/api/v2/users/{Uri.EscapeDataString(auth0UserId)}")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+        };
+
+        var resp = await http.SendAsync(request);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            var error = await resp.Content.ReadAsStringAsync();
+            Console.WriteLine($"[UpdatePasswordAsync] Failed to update password in Auth0: {resp.StatusCode} - {error}");
+            return false;
+        }
+
+        return true;
+    }
 }

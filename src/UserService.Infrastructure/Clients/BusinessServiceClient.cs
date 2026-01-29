@@ -88,6 +88,38 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
         }
     }
 
+    /// <summary>
+    /// Updates the business email in the Business Service by old email.
+    /// </summary>
+    public async Task<bool> UpdateBusinessEmailAsync(string oldEmail, string newEmail)
+    {
+        try
+        {
+            var payload = new { oldEmail, newEmail };
+            var response = await httpClient.PatchAsJsonAsync("/api/business/email", payload);
+
+            if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.NoContent)
+            {
+                logger.LogInformation("Business email updated from {OldEmail} to {NewEmail}", oldEmail, newEmail);
+                return true;
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            logger.LogWarning("Failed to update business email: {StatusCode} | {Error}", response.StatusCode, error);
+            return false;
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Network error updating business email from {OldEmail}", oldEmail);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error updating business email from {OldEmail}", oldEmail);
+            return false;
+        }
+    }
+
     private sealed class BusinessFetchResponse
     {
         public Guid Id { get; set; }

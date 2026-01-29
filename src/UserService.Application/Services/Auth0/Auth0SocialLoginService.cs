@@ -316,7 +316,8 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             password: "",
             userType: "end_user",
             address: null,
-            auth0UserId: auth0UserId);
+            auth0UserId: auth0UserId,
+            loginType: "social_handle");
 
         try
         {

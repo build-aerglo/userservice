@@ -14,9 +14,17 @@ public interface IBusinessServiceClient
     /// <param name="businessId">Business ID (GUID)</param>
     /// <returns>True if business exists, otherwise false</returns>
     Task<bool> BusinessExistsAsync(Guid businessId);
-    
-    // <summary>
-    // Create a new business
-    //
+
+    /// <summary>
+    /// Create a new business
+    /// </summary>
     Task<Guid?> CreateBusinessAsync(BusinessUserDto business);
+
+    /// <summary>
+    /// Updates the business email by the old email address.
+    /// </summary>
+    /// <param name="oldEmail">The current business email</param>
+    /// <param name="newEmail">The new business email</param>
+    /// <returns>True if update was successful, otherwise false</returns>
+    Task<bool> UpdateBusinessEmailAsync(string oldEmail, string newEmail);
 }
