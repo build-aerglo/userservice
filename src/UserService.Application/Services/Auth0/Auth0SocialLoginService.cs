@@ -6,7 +6,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Web;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using UserService.Application.DTOs.Auth;
+using UserService.Application.Interfaces;
 using UserService.Domain.Entities;
 using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
@@ -22,6 +24,8 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
     private readonly IEndUserProfileRepository _endUserProfileRepo;
     private readonly IUserSettingsRepository _userSettingsRepo;
     private readonly IAuth0ManagementService _auth0Management;
+    private readonly IPointsService _pointsService; 
+    private readonly ILogger<Auth0SocialLoginService>? _logger;
 
     private readonly string _domain;
     private readonly string _clientId;
@@ -35,7 +39,9 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
         IUserRepository userRepo,
         IEndUserProfileRepository endUserProfileRepo,
         IUserSettingsRepository userSettingsRepo,
-        IAuth0ManagementService auth0Management)
+        IAuth0ManagementService auth0Management,
+        IPointsService pointsService, 
+        ILogger<Auth0SocialLoginService>? logger = null) 
     {
         _httpClient = httpClient;
         _config = config;
@@ -44,6 +50,8 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
         _endUserProfileRepo = endUserProfileRepo;
         _userSettingsRepo = userSettingsRepo;
         _auth0Management = auth0Management;
+        _pointsService = pointsService; 
+        _logger = logger;
 
         _domain = config["Auth0:Domain"]!;
         _clientId = config["Auth0:ClientId"]!;
@@ -159,6 +167,23 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             Console.WriteLine($"[AuthenticateAsync] Social identity created for {provider}:{userInfo.Sub} -> User:{userId}");
         }
 
+        // ✅ NEW: Track login for streak (same as regular login)
+        if (user != null)
+        {
+            await _userRepo.UpdateLastLoginAsync(user.Id, DateTime.UtcNow);
+
+            try
+            {
+                await _pointsService.UpdateLoginStreakAsync(user.Id, DateTime.UtcNow);
+                await _pointsService.CheckAndAwardStreakMilestoneAsync(user.Id);
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail login if streak update fails
+                _logger?.LogWarning(ex, "Failed to update login streak for user {UserId}", user.Id);
+            }
+        }
+
         var roles = ExtractRolesFromToken(tokenResponse.IdToken);
 
         return new SocialLoginResponse
@@ -209,24 +234,25 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
 
         return new LinkedSocialAccountDto
         {
-            Id = socialIdentity.Id,
             Provider = provider,
-            ProviderUserId = userInfo.Sub,
             Email = userInfo.Email,
             Name = userInfo.Name,
-            LinkedAt = socialIdentity.CreatedAt
+            LinkedAt = DateTime.UtcNow
         };
     }
 
     public async Task UnlinkAccountAsync(Guid userId, string provider)
     {
-        var normalizedProvider = SocialProvider.GetAuth0Connection(provider);
+        var auth0Connection = SocialProvider.GetAuth0Connection(provider);
 
-        var existingLink = await _socialIdentityRepo.GetByUserAndProviderAsync(userId, normalizedProvider);
-        if (existingLink == null)
-            throw new SocialAccountNotLinkedException(normalizedProvider);
+        if (!SocialProvider.IsValid(auth0Connection))
+            throw new InvalidSocialProviderException(provider);
 
-        await _socialIdentityRepo.DeleteByUserAndProviderAsync(userId, normalizedProvider);
+        var identity = await _socialIdentityRepo.GetByUserAndProviderAsync(userId, auth0Connection);
+        if (identity == null)
+            throw new SocialAccountNotLinkedException(provider);
+
+        await _socialIdentityRepo.DeleteAsync(identity.Id);
     }
 
     public async Task<IEnumerable<LinkedSocialAccountDto>> GetLinkedAccountsAsync(Guid userId)
@@ -235,9 +261,7 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
 
         return identities.Select(i => new LinkedSocialAccountDto
         {
-            Id = i.Id,
             Provider = i.Provider,
-            ProviderUserId = i.ProviderUserId,
             Email = i.Email,
             Name = i.Name,
             LinkedAt = i.CreatedAt
@@ -251,7 +275,7 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             grant_type = "authorization_code",
             client_id = _clientId,
             client_secret = _clientSecret,
-            code,
+            code = code,
             redirect_uri = redirectUri
         };
 
