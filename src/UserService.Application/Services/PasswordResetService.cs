@@ -79,12 +79,6 @@ public class PasswordResetService(
             return (false, "Failed to send OTP");
         }
 
-        // Delete any existing reset requests for this identifier
-        await passwordResetRequestRepository.DeleteByIdAsync(request.Id);
-
-        var resetRequest = new PasswordResetRequest(request.Id);
-        await passwordResetRequestRepository.AddAsync(resetRequest);
-
         return (true, "OTP sent successfully");
     }
 
@@ -120,10 +114,12 @@ public class PasswordResetService(
         try
         {
             decryptedPassword = encryptionService.Decrypt(request.Password);
+            Console.WriteLine($"[ResetPasswordAsync] Decrypted password successfully, length: {decryptedPassword.Length}");
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return (false, "Invalid password format");
+            Console.WriteLine($"[ResetPasswordAsync] Decryption failed: {ex.GetType().Name}: {ex.Message}");
+            return (false, $"Invalid password format: {ex.GetType().Name}");
         }
 
         var passwordUpdated = await auth0ManagementService.UpdatePasswordAsync(user.Auth0UserId, decryptedPassword);

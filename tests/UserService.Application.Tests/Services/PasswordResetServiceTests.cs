@@ -159,7 +159,6 @@ public class PasswordResetServiceTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.EqualTo("OTP sent successfully"));
         _mockNotificationClient.Verify(n => n.CreateOtpAsync("test@example.com", "email", "resetpassword"), Times.Once);
-        _mockPasswordResetRepo.Verify(r => r.AddAsync(It.IsAny<PasswordResetRequest>()), Times.Once);
     }
 
     // ========== ResetPasswordAsync Tests ==========
@@ -208,7 +207,7 @@ public class PasswordResetServiceTests
         var (success, message) = await _service.ResetPasswordAsync(request);
 
         Assert.That(success, Is.False);
-        Assert.That(message, Is.EqualTo("Invalid password format"));
+        Assert.That(message, Does.StartWith("Invalid password format:"));
     }
 
     [Test]
