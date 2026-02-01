@@ -20,60 +20,32 @@ public class PasswordResetRequestRepository : IPasswordResetRequestRepository
     public async Task AddAsync(PasswordResetRequest request)
     {
         const string sql = @"
-            INSERT INTO password_reset_requests
-                (id, user_id, identifier, identifier_type, is_verified, verified_at, expires_at, created_at, updated_at)
-            VALUES
-                (@Id, @UserId, @Identifier, @IdentifierType, @IsVerified, @VerifiedAt, @ExpiresAt, @CreatedAt, @UpdatedAt);";
+            INSERT INTO password_reset_requests (reset_id, id, created_at, expires_at)
+            VALUES (@ResetId, @Id, @CreatedAt, @ExpiresAt);";
 
         using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, request);
     }
 
-    public async Task<PasswordResetRequest?> GetByIdentifierAsync(string identifier)
+    public async Task<PasswordResetRequest?> GetByUserIdAsync(Guid userId)
     {
         const string sql = @"
             SELECT * FROM password_reset_requests
-            WHERE LOWER(identifier) = LOWER(@Identifier)
-            AND is_verified = true
+            WHERE id = @UserId
             AND expires_at > NOW()
             ORDER BY created_at DESC
             LIMIT 1;";
 
         using var conn = CreateConnection();
-        return await conn.QueryFirstOrDefaultAsync<PasswordResetRequest>(sql, new { Identifier = identifier });
+        return await conn.QueryFirstOrDefaultAsync<PasswordResetRequest>(sql, new { UserId = userId });
     }
 
-    public async Task<PasswordResetRequest?> GetLatestByIdentifierAsync(string identifier)
+    public async Task<PasswordResetRequest?> GetByResetIdAsync(Guid resetId)
     {
-        const string sql = @"
-            SELECT * FROM password_reset_requests
-            WHERE LOWER(identifier) = LOWER(@Identifier)
-            ORDER BY created_at DESC
-            LIMIT 1;";
+        const string sql = "SELECT * FROM password_reset_requests WHERE reset_id = @ResetId;";
 
         using var conn = CreateConnection();
-        return await conn.QueryFirstOrDefaultAsync<PasswordResetRequest>(sql, new { Identifier = identifier });
-    }
-
-    public async Task<PasswordResetRequest?> GetByIdAsync(Guid id)
-    {
-        const string sql = "SELECT * FROM password_reset_requests WHERE id = @Id;";
-
-        using var conn = CreateConnection();
-        return await conn.QueryFirstOrDefaultAsync<PasswordResetRequest>(sql, new { Id = id });
-    }
-
-    public async Task UpdateAsync(PasswordResetRequest request)
-    {
-        const string sql = @"
-            UPDATE password_reset_requests
-            SET is_verified = @IsVerified,
-                verified_at = @VerifiedAt,
-                updated_at = @UpdatedAt
-            WHERE id = @Id;";
-
-        using var conn = CreateConnection();
-        await conn.ExecuteAsync(sql, request);
+        return await conn.QueryFirstOrDefaultAsync<PasswordResetRequest>(sql, new { ResetId = resetId });
     }
 
     public async Task DeleteExpiredAsync()
@@ -82,5 +54,13 @@ public class PasswordResetRequestRepository : IPasswordResetRequestRepository
 
         using var conn = CreateConnection();
         await conn.ExecuteAsync(sql);
+    }
+
+    public async Task DeleteByUserIdAsync(Guid userId)
+    {
+        const string sql = "DELETE FROM password_reset_requests WHERE id = @UserId;";
+
+        using var conn = CreateConnection();
+        await conn.ExecuteAsync(sql, new { UserId = userId });
     }
 }
