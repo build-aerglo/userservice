@@ -27,17 +27,17 @@ public class PasswordResetRequestRepository : IPasswordResetRequestRepository
         await conn.ExecuteAsync(sql, request);
     }
 
-    public async Task<PasswordResetRequest?> GetByUserIdAsync(Guid userId)
+    public async Task<PasswordResetRequest?> GetByIdAsync(string identifier)
     {
         const string sql = @"
             SELECT * FROM password_reset_requests
-            WHERE id = @UserId
+            WHERE LOWER(id) = LOWER(@Identifier)
             AND expires_at > NOW()
             ORDER BY created_at DESC
             LIMIT 1;";
 
         using var conn = CreateConnection();
-        return await conn.QueryFirstOrDefaultAsync<PasswordResetRequest>(sql, new { UserId = userId });
+        return await conn.QueryFirstOrDefaultAsync<PasswordResetRequest>(sql, new { Identifier = identifier });
     }
 
     public async Task<PasswordResetRequest?> GetByResetIdAsync(Guid resetId)
@@ -56,11 +56,11 @@ public class PasswordResetRequestRepository : IPasswordResetRequestRepository
         await conn.ExecuteAsync(sql);
     }
 
-    public async Task DeleteByUserIdAsync(Guid userId)
+    public async Task DeleteByIdAsync(string identifier)
     {
-        const string sql = "DELETE FROM password_reset_requests WHERE id = @UserId;";
+        const string sql = "DELETE FROM password_reset_requests WHERE LOWER(id) = LOWER(@Identifier);";
 
         using var conn = CreateConnection();
-        await conn.ExecuteAsync(sql, new { UserId = userId });
+        await conn.ExecuteAsync(sql, new { Identifier = identifier });
     }
 }

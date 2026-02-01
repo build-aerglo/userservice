@@ -79,10 +79,10 @@ public class PasswordResetService(
             return (false, "Failed to send OTP");
         }
 
-        // Delete any existing reset requests for this user
-        await passwordResetRequestRepository.DeleteByUserIdAsync(user.Id);
+        // Delete any existing reset requests for this identifier
+        await passwordResetRequestRepository.DeleteByIdAsync(request.Id);
 
-        var resetRequest = new PasswordResetRequest(user.Id);
+        var resetRequest = new PasswordResetRequest(request.Id);
         await passwordResetRequestRepository.AddAsync(resetRequest);
 
         return (true, "OTP sent successfully");
@@ -90,16 +90,8 @@ public class PasswordResetService(
 
     public async Task<(bool Success, string Message)> ResetPasswordAsync(ResetPasswordRequest request)
     {
-        // Find user by email or phone
-        var user = await userRepository.GetByEmailOrPhoneAsync(request.Id);
-
-        if (user is null)
-        {
-            return (false, "User not found");
-        }
-
-        // Check if there's a valid reset request for this user
-        var resetRequest = await passwordResetRequestRepository.GetByUserIdAsync(user.Id);
+        // Check if there's a valid reset request for this identifier
+        var resetRequest = await passwordResetRequestRepository.GetByIdAsync(request.Id);
 
         if (resetRequest is null)
         {
@@ -109,6 +101,14 @@ public class PasswordResetService(
         if (resetRequest.IsExpired())
         {
             return (false, "Password reset request has expired");
+        }
+
+        // Find user by email or phone
+        var user = await userRepository.GetByEmailOrPhoneAsync(request.Id);
+
+        if (user is null)
+        {
+            return (false, "User not found");
         }
 
         if (string.IsNullOrEmpty(user.Auth0UserId))
@@ -134,7 +134,7 @@ public class PasswordResetService(
         }
 
         // Clean up the reset request after successful password change
-        await passwordResetRequestRepository.DeleteByUserIdAsync(user.Id);
+        await passwordResetRequestRepository.DeleteByIdAsync(request.Id);
 
         return (true, "Password updated");
     }

@@ -165,8 +165,24 @@ public class PasswordResetServiceTests
     // ========== ResetPasswordAsync Tests ==========
 
     [Test]
+    public async Task ResetPasswordAsync_ShouldReturnFalse_WhenNoResetRequest()
+    {
+        _mockPasswordResetRepo.Setup(r => r.GetByIdAsync(It.IsAny<string>())).ReturnsAsync((PasswordResetRequest?)null);
+
+        var request = new ResetPasswordRequest("test@example.com", "encryptedPassword");
+
+        var (success, message) = await _service.ResetPasswordAsync(request);
+
+        Assert.That(success, Is.False);
+        Assert.That(message, Is.EqualTo("No password reset request found"));
+    }
+
+    [Test]
     public async Task ResetPasswordAsync_ShouldReturnFalse_WhenUserNotFound()
     {
+        var resetRequest = new PasswordResetRequest("test@example.com");
+
+        _mockPasswordResetRepo.Setup(r => r.GetByIdAsync(It.IsAny<string>())).ReturnsAsync(resetRequest);
         _mockUserRepo.Setup(r => r.GetByEmailOrPhoneAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
 
         var request = new ResetPasswordRequest("test@example.com", "encryptedPassword");
@@ -178,28 +194,13 @@ public class PasswordResetServiceTests
     }
 
     [Test]
-    public async Task ResetPasswordAsync_ShouldReturnFalse_WhenNoResetRequest()
-    {
-        var user = CreateTestUser("end_user");
-        _mockUserRepo.Setup(r => r.GetByEmailOrPhoneAsync(It.IsAny<string>())).ReturnsAsync(user);
-        _mockPasswordResetRepo.Setup(r => r.GetByUserIdAsync(It.IsAny<Guid>())).ReturnsAsync((PasswordResetRequest?)null);
-
-        var request = new ResetPasswordRequest("test@example.com", "encryptedPassword");
-
-        var (success, message) = await _service.ResetPasswordAsync(request);
-
-        Assert.That(success, Is.False);
-        Assert.That(message, Is.EqualTo("No password reset request found"));
-    }
-
-    [Test]
     public async Task ResetPasswordAsync_ShouldReturnFalse_WhenDecryptionFails()
     {
         var user = CreateTestUser("end_user");
-        var resetRequest = new PasswordResetRequest(user.Id);
+        var resetRequest = new PasswordResetRequest("test@example.com");
 
+        _mockPasswordResetRepo.Setup(r => r.GetByIdAsync(It.IsAny<string>())).ReturnsAsync(resetRequest);
         _mockUserRepo.Setup(r => r.GetByEmailOrPhoneAsync(It.IsAny<string>())).ReturnsAsync(user);
-        _mockPasswordResetRepo.Setup(r => r.GetByUserIdAsync(It.IsAny<Guid>())).ReturnsAsync(resetRequest);
         _mockEncryption.Setup(e => e.Decrypt(It.IsAny<string>())).Throws(new FormatException("Invalid encryption"));
 
         var request = new ResetPasswordRequest("test@example.com", "invalidEncryptedPassword");
@@ -214,10 +215,10 @@ public class PasswordResetServiceTests
     public async Task ResetPasswordAsync_ShouldReturnFalse_WhenAuth0UpdateFails()
     {
         var user = CreateTestUser("end_user");
-        var resetRequest = new PasswordResetRequest(user.Id);
+        var resetRequest = new PasswordResetRequest("test@example.com");
 
+        _mockPasswordResetRepo.Setup(r => r.GetByIdAsync(It.IsAny<string>())).ReturnsAsync(resetRequest);
         _mockUserRepo.Setup(r => r.GetByEmailOrPhoneAsync(It.IsAny<string>())).ReturnsAsync(user);
-        _mockPasswordResetRepo.Setup(r => r.GetByUserIdAsync(It.IsAny<Guid>())).ReturnsAsync(resetRequest);
         _mockEncryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns("decryptedPassword");
         _mockAuth0.Setup(a => a.UpdatePasswordAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(false);
 
@@ -233,10 +234,10 @@ public class PasswordResetServiceTests
     public async Task ResetPasswordAsync_ShouldSucceed_WhenValidRequest()
     {
         var user = CreateTestUser("end_user");
-        var resetRequest = new PasswordResetRequest(user.Id);
+        var resetRequest = new PasswordResetRequest("test@example.com");
 
+        _mockPasswordResetRepo.Setup(r => r.GetByIdAsync(It.IsAny<string>())).ReturnsAsync(resetRequest);
         _mockUserRepo.Setup(r => r.GetByEmailOrPhoneAsync(It.IsAny<string>())).ReturnsAsync(user);
-        _mockPasswordResetRepo.Setup(r => r.GetByUserIdAsync(It.IsAny<Guid>())).ReturnsAsync(resetRequest);
         _mockEncryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns("decryptedPassword");
         _mockAuth0.Setup(a => a.UpdatePasswordAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(true);
 
@@ -247,7 +248,7 @@ public class PasswordResetServiceTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.EqualTo("Password updated"));
         _mockAuth0.Verify(a => a.UpdatePasswordAsync(user.Auth0UserId, "decryptedPassword"), Times.Once);
-        _mockPasswordResetRepo.Verify(r => r.DeleteByUserIdAsync(user.Id), Times.Once);
+        _mockPasswordResetRepo.Verify(r => r.DeleteByIdAsync("test@example.com"), Times.Once);
     }
 
     private User CreateTestUser(string userType)

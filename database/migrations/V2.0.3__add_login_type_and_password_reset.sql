@@ -18,18 +18,18 @@ COMMENT ON COLUMN users.login_type IS 'Login type: email-password, social_handle
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS password_reset_requests (
     reset_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id VARCHAR(255) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
 -- Indexes for password_reset_requests
-CREATE INDEX IF NOT EXISTS idx_password_reset_user_id ON password_reset_requests(id);
+CREATE INDEX IF NOT EXISTS idx_password_reset_id ON password_reset_requests(id);
 CREATE INDEX IF NOT EXISTS idx_password_reset_expires_at ON password_reset_requests(expires_at);
 
 COMMENT ON TABLE password_reset_requests IS 'Tracks password reset requests';
 COMMENT ON COLUMN password_reset_requests.reset_id IS 'Primary key for the reset request';
-COMMENT ON COLUMN password_reset_requests.id IS 'User ID (foreign key to users)';
+COMMENT ON COLUMN password_reset_requests.id IS 'User identifier (email or phone)';
 
 -- ============================================================================
 -- END OF MIGRATION
