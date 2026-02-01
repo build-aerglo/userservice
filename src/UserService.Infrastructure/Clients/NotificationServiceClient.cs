@@ -25,7 +25,9 @@ public class NotificationServiceClient(HttpClient httpClient, ILogger<Notificati
                 purpose
             };
 
-            var response = await httpClient.PostAsJsonAsync("/otp/create", payload);
+            logger.LogInformation("payload: {payload}", payload);
+
+            var response = await httpClient.PostAsJsonAsync("/api/otp/create", payload);
 
             if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Created)
             {
