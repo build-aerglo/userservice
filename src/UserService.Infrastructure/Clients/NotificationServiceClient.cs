@@ -1,5 +1,6 @@
 using System.Net;
-using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using UserService.Application.Interfaces;
 
@@ -11,6 +12,11 @@ namespace UserService.Infrastructure.Clients;
 public class NotificationServiceClient(HttpClient httpClient, ILogger<NotificationServiceClient> logger)
     : INotificationServiceClient
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     /// <summary>
     /// Creates an OTP via the Notification Service.
     /// </summary>
@@ -18,16 +24,13 @@ public class NotificationServiceClient(HttpClient httpClient, ILogger<Notificati
     {
         try
         {
-            var payload = new
-            {
-                id,
-                type,
-                purpose
-            };
+            var payload = new OtpCreateRequest(id, type, purpose);
+            var json = JsonSerializer.Serialize(payload, JsonOptions);
 
-            logger.LogInformation("payload: {payload}", payload);
+            logger.LogInformation("Sending OTP request: {Json}", json);
 
-            var response = await httpClient.PostAsJsonAsync("/api/otp/create", payload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var response = await httpClient.PostAsync("/api/otp/create", content);
 
             if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Created)
             {
@@ -50,4 +53,6 @@ public class NotificationServiceClient(HttpClient httpClient, ILogger<Notificati
             return false;
         }
     }
+
+    private record OtpCreateRequest(string Id, string Type, string Purpose);
 }
