@@ -10,6 +10,7 @@ public class PasswordResetService(
     IUserRepository userRepository,
     IPasswordResetRequestRepository passwordResetRequestRepository,
     IAuth0ManagementService auth0ManagementService,
+    IAuth0UserLoginService auth0UserLoginService,
     IBusinessServiceClient businessServiceClient,
     INotificationServiceClient notificationServiceClient,
     IEncryptionService encryptionService
@@ -133,5 +134,63 @@ public class PasswordResetService(
         await passwordResetRequestRepository.DeleteByIdAsync(request.Id);
 
         return (true, "Password updated");
+    }
+
+    public async Task<(bool Success, string Message)> UpdatePasswordAsync(UpdatePasswordRequest request)
+    {
+        var user = await userRepository.GetByEmailAsync(request.Email);
+
+        if (user is null)
+        {
+            return (false, "User not found");
+        }
+
+        if (string.IsNullOrEmpty(user.Auth0UserId))
+        {
+            return (false, "User account is not linked to Auth0");
+        }
+
+        string decryptedOldPassword;
+        string decryptedNewPassword;
+
+        try
+        {
+            decryptedOldPassword = encryptionService.Decrypt(request.OldPassword);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[UpdatePasswordAsync] Old password decryption failed: {ex.GetType().Name}: {ex.Message}");
+            return (false, "Invalid old password format");
+        }
+
+        try
+        {
+            decryptedNewPassword = encryptionService.Decrypt(request.NewPassword);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[UpdatePasswordAsync] New password decryption failed: {ex.GetType().Name}: {ex.Message}");
+            return (false, "Invalid new password format");
+        }
+
+        // Verify old password by attempting to login
+        try
+        {
+            await auth0UserLoginService.LoginAsync(request.Email, decryptedOldPassword);
+        }
+        catch (Exception)
+        {
+            return (false, "Current password is incorrect");
+        }
+
+        // Update to new password
+        var passwordUpdated = await auth0ManagementService.UpdatePasswordAsync(user.Auth0UserId, decryptedNewPassword);
+
+        if (!passwordUpdated)
+        {
+            return (false, "Failed to update password");
+        }
+
+        return (true, "Password updated successfully");
     }
 }

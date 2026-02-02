@@ -97,4 +97,30 @@ public class PasswordResetController : ControllerBase
             });
         }
     }
+
+    [AllowAnonymous]
+    [HttpPost("update-password")]
+    public async Task<IActionResult> UpdatePassword([FromBody] UpdatePasswordRequest request)
+    {
+        try
+        {
+            var (success, message) = await _passwordResetService.UpdatePasswordAsync(request);
+
+            if (!success)
+            {
+                return BadRequest(new { error = "password_update_failed", message });
+            }
+
+            return Ok(new { message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating password for {Email}", request.Email);
+            return StatusCode(500, new
+            {
+                error = "server_error",
+                message = "Unexpected error occurred while updating password."
+            });
+        }
+    }
 }

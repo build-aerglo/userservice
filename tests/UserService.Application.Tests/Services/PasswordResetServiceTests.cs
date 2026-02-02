@@ -14,6 +14,7 @@ public class PasswordResetServiceTests
     private Mock<IUserRepository> _mockUserRepo = null!;
     private Mock<IPasswordResetRequestRepository> _mockPasswordResetRepo = null!;
     private Mock<IAuth0ManagementService> _mockAuth0 = null!;
+    private Mock<IAuth0UserLoginService> _mockAuth0UserLogin = null!;
     private Mock<IBusinessServiceClient> _mockBusinessClient = null!;
     private Mock<INotificationServiceClient> _mockNotificationClient = null!;
     private Mock<IEncryptionService> _mockEncryption = null!;
@@ -25,6 +26,7 @@ public class PasswordResetServiceTests
         _mockUserRepo = new Mock<IUserRepository>();
         _mockPasswordResetRepo = new Mock<IPasswordResetRequestRepository>();
         _mockAuth0 = new Mock<IAuth0ManagementService>();
+        _mockAuth0UserLogin = new Mock<IAuth0UserLoginService>();
         _mockBusinessClient = new Mock<IBusinessServiceClient>();
         _mockNotificationClient = new Mock<INotificationServiceClient>();
         _mockEncryption = new Mock<IEncryptionService>();
@@ -33,6 +35,7 @@ public class PasswordResetServiceTests
             _mockUserRepo.Object,
             _mockPasswordResetRepo.Object,
             _mockAuth0.Object,
+            _mockAuth0UserLogin.Object,
             _mockBusinessClient.Object,
             _mockNotificationClient.Object,
             _mockEncryption.Object
@@ -248,6 +251,133 @@ public class PasswordResetServiceTests
         Assert.That(message, Is.EqualTo("Password updated"));
         _mockAuth0.Verify(a => a.UpdatePasswordAsync(user.Auth0UserId, "decryptedPassword"), Times.Once);
         _mockPasswordResetRepo.Verify(r => r.DeleteByIdAsync("test@example.com"), Times.Once);
+    }
+
+    // ========== UpdatePasswordAsync Tests ==========
+
+    [Test]
+    public async Task UpdatePasswordAsync_ShouldReturnFalse_WhenUserNotFound()
+    {
+        _mockUserRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync((User?)null);
+
+        var request = new UpdatePasswordRequest("notfound@example.com", "encryptedOld", "encryptedNew");
+
+        var (success, message) = await _service.UpdatePasswordAsync(request);
+
+        Assert.That(success, Is.False);
+        Assert.That(message, Is.EqualTo("User not found"));
+    }
+
+    [Test]
+    public async Task UpdatePasswordAsync_ShouldReturnFalse_WhenUserNotLinkedToAuth0()
+    {
+        var user = new User(
+            username: "testuser",
+            email: "test@example.com",
+            phone: "+2341234567890",
+            password: "password",
+            userType: "end_user",
+            address: null,
+            auth0UserId: null,
+            loginType: "email-password"
+        );
+        _mockUserRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync(user);
+
+        var request = new UpdatePasswordRequest("test@example.com", "encryptedOld", "encryptedNew");
+
+        var (success, message) = await _service.UpdatePasswordAsync(request);
+
+        Assert.That(success, Is.False);
+        Assert.That(message, Is.EqualTo("User account is not linked to Auth0"));
+    }
+
+    [Test]
+    public async Task UpdatePasswordAsync_ShouldReturnFalse_WhenOldPasswordDecryptionFails()
+    {
+        var user = CreateTestUser("end_user");
+        _mockUserRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync(user);
+        _mockEncryption.Setup(e => e.Decrypt("invalidOldPassword")).Throws(new FormatException("Invalid encryption"));
+
+        var request = new UpdatePasswordRequest("test@example.com", "invalidOldPassword", "encryptedNew");
+
+        var (success, message) = await _service.UpdatePasswordAsync(request);
+
+        Assert.That(success, Is.False);
+        Assert.That(message, Is.EqualTo("Invalid old password format"));
+    }
+
+    [Test]
+    public async Task UpdatePasswordAsync_ShouldReturnFalse_WhenNewPasswordDecryptionFails()
+    {
+        var user = CreateTestUser("end_user");
+        _mockUserRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync(user);
+        _mockEncryption.Setup(e => e.Decrypt("encryptedOld")).Returns("decryptedOld");
+        _mockEncryption.Setup(e => e.Decrypt("invalidNewPassword")).Throws(new FormatException("Invalid encryption"));
+
+        var request = new UpdatePasswordRequest("test@example.com", "encryptedOld", "invalidNewPassword");
+
+        var (success, message) = await _service.UpdatePasswordAsync(request);
+
+        Assert.That(success, Is.False);
+        Assert.That(message, Is.EqualTo("Invalid new password format"));
+    }
+
+    [Test]
+    public async Task UpdatePasswordAsync_ShouldReturnFalse_WhenCurrentPasswordIncorrect()
+    {
+        var user = CreateTestUser("end_user");
+        _mockUserRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync(user);
+        _mockEncryption.Setup(e => e.Decrypt("encryptedOld")).Returns("wrongPassword");
+        _mockEncryption.Setup(e => e.Decrypt("encryptedNew")).Returns("newPassword");
+        _mockAuth0UserLogin.Setup(a => a.LoginAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new Exception("Invalid credentials"));
+
+        var request = new UpdatePasswordRequest("test@example.com", "encryptedOld", "encryptedNew");
+
+        var (success, message) = await _service.UpdatePasswordAsync(request);
+
+        Assert.That(success, Is.False);
+        Assert.That(message, Is.EqualTo("Current password is incorrect"));
+    }
+
+    [Test]
+    public async Task UpdatePasswordAsync_ShouldReturnFalse_WhenAuth0UpdateFails()
+    {
+        var user = CreateTestUser("end_user");
+        _mockUserRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync(user);
+        _mockEncryption.Setup(e => e.Decrypt("encryptedOld")).Returns("oldPassword");
+        _mockEncryption.Setup(e => e.Decrypt("encryptedNew")).Returns("newPassword");
+        _mockAuth0UserLogin.Setup(a => a.LoginAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new UserService.Application.DTOs.TokenResponse());
+        _mockAuth0.Setup(a => a.UpdatePasswordAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(false);
+
+        var request = new UpdatePasswordRequest("test@example.com", "encryptedOld", "encryptedNew");
+
+        var (success, message) = await _service.UpdatePasswordAsync(request);
+
+        Assert.That(success, Is.False);
+        Assert.That(message, Is.EqualTo("Failed to update password"));
+    }
+
+    [Test]
+    public async Task UpdatePasswordAsync_ShouldSucceed_WhenValidRequest()
+    {
+        var user = CreateTestUser("end_user");
+        _mockUserRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>())).ReturnsAsync(user);
+        _mockEncryption.Setup(e => e.Decrypt("encryptedOld")).Returns("oldPassword");
+        _mockEncryption.Setup(e => e.Decrypt("encryptedNew")).Returns("newPassword");
+        _mockAuth0UserLogin.Setup(a => a.LoginAsync("test@example.com", "oldPassword"))
+            .ReturnsAsync(new UserService.Application.DTOs.TokenResponse());
+        _mockAuth0.Setup(a => a.UpdatePasswordAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(true);
+
+        var request = new UpdatePasswordRequest("test@example.com", "encryptedOld", "encryptedNew");
+
+        var (success, message) = await _service.UpdatePasswordAsync(request);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Is.EqualTo("Password updated successfully"));
+        _mockAuth0UserLogin.Verify(a => a.LoginAsync("test@example.com", "oldPassword"), Times.Once);
+        _mockAuth0.Verify(a => a.UpdatePasswordAsync(user.Auth0UserId, "newPassword"), Times.Once);
     }
 
     private User CreateTestUser(string userType)
