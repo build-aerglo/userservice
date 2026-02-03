@@ -22,7 +22,10 @@ public class BadgeService(
             throw new EndUserNotFoundException(userId);
 
         var badges = await badgeRepository.GetActiveByUserIdAsync(userId);
-        var badgeDtos = badges.Select(MapToDto).ToList();
+        var badgeDtos = badges
+            .Where(b => !IsTierBadge(b.BadgeType))
+            .Select(MapToDto)
+            .ToList();
 
         var currentTier = GetCurrentTier(badgeDtos);
 
