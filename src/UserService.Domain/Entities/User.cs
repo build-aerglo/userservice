@@ -12,14 +12,15 @@ public class User
     public DateTime JoinDate { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
-    
-    public string Auth0UserId { get; private set; }
 
-    // 🟢 This is the key addition — Dapper needs a parameterless constructor
+    public string Auth0UserId { get; private set; }
+    public string LoginType { get; private set; } = "email-password";
+
+    // Dapper needs a parameterless constructor
     protected User() { }
 
-    // ✅ Domain-level constructor (for creating new users in code)
-    public User(string username, string email, string phone, string password,string userType, string? address,string auth0UserId)
+    // Domain-level constructor (for creating new users in code)
+    public User(string username, string email, string phone, string password, string userType, string? address, string auth0UserId, string loginType = "email-password")
     {
         Id = Guid.NewGuid();
         Username = username;
@@ -32,6 +33,7 @@ public class User
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
         Auth0UserId = auth0UserId;
+        LoginType = loginType;
     }
 
     public void Update(string? email, string? phone, string? address)

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Security;
 using System.Security.Authentication;
+using Dapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -12,6 +13,9 @@ using UserService.Infrastructure.Clients;
 using UserService.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Enable Dapper snake_case to PascalCase mapping (e.g., auth0_user_id → Auth0UserId)
+DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 // MVC
 builder.Services.AddControllers();
@@ -43,6 +47,7 @@ builder.Services.AddScoped<IGeolocationHistoryRepository, GeolocationHistoryRepo
 builder.Services.AddScoped<IPointRuleRepository, PointRuleRepository>();
 builder.Services.AddScoped<IPointMultiplierRepository, PointMultiplierRepository>();
 builder.Services.AddScoped<IPointRedemptionRepository, PointRedemptionRepository>();
+builder.Services.AddScoped<IPasswordResetRequestRepository, PasswordResetRequestRepository>();
 
 // ---------- Auth0 Login HTTP Client (TLS forced) ----------
 builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(client =>
@@ -72,6 +77,10 @@ builder.Services.AddScoped<IPointsService, PointsService>();
 builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddScoped<IReferralService, ReferralService>();
 builder.Services.AddScoped<IGeolocationService, GeolocationService>();
+
+// ---------- Password Reset & Encryption Services ----------
+builder.Services.AddScoped<IEncryptionService, EncryptionService>();
+builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
 
 // ==================================================================
 //  BUSINESS SERVICE CLIENT — ALLOW HTTP (FIX FOR SSL MISMATCH ERROR)
@@ -115,6 +124,21 @@ builder.Services.AddHttpClient<IReviewServiceClient, ReviewServiceClient>(client
 }).ConfigurePrimaryHttpMessageHandler(() =>
 {
     // Allow HTTP, do NOT enforce SSL
+    return new HttpClientHandler
+    {
+        ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    };
+});
+
+// ---------- Notification Service Client ----------
+builder.Services.AddHttpClient<INotificationServiceClient, NotificationServiceClient>(client =>
+{
+    var baseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"];
+    client.BaseAddress = new Uri(baseUrl);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
     return new HttpClientHandler
     {
         ServerCertificateCustomValidationCallback =
