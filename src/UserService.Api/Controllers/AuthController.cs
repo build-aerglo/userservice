@@ -5,6 +5,7 @@ using UserService.Application.DTOs;
 using UserService.Application.DTOs.Auth;
 using UserService.Application.Interfaces;
 using UserService.Application.Services.Auth0;
+using UserService.Domain.Entities;
 using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
 
@@ -19,6 +20,7 @@ public class AuthController : ControllerBase
     private readonly IRefreshTokenCookieService _refreshCookie;
     private readonly IUserRepository _userRepository;
     private readonly IPointsService _pointsService;
+    private readonly IEmailUpdateRequestRepository _emailUpdateRequestRepository;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
@@ -27,6 +29,7 @@ public class AuthController : ControllerBase
         IRefreshTokenCookieService refreshCookie,
         IUserRepository userRepository,
         IPointsService pointsService,
+        IEmailUpdateRequestRepository emailUpdateRequestRepository,
         ILogger<AuthController> logger)
     {
         _auth0Login = auth0Login;
@@ -34,6 +37,7 @@ public class AuthController : ControllerBase
         _refreshCookie = refreshCookie;
         _userRepository = userRepository;
         _pointsService = pointsService;
+        _emailUpdateRequestRepository = emailUpdateRequestRepository;
         _logger = logger;
     }
 
@@ -294,6 +298,30 @@ public class AuthController : ControllerBase
 
         var accounts = await _socialLogin.GetLinkedAccountsAsync(userId.Value);
         return Ok(accounts);
+    }
+
+    // ========================================================================
+    // EMAIL UPDATE REQUEST ENDPOINT
+    // ========================================================================
+
+    [AllowAnonymous]
+    [HttpPost("request-email-update")]
+    public async Task<IActionResult> RequestEmailUpdate([FromBody] RequestEmailUpdateDto dto)
+    {
+        try
+        {
+            await _emailUpdateRequestRepository.DeleteByBusinessIdAsync(dto.BusinessId);
+
+            var request = new EmailUpdateRequest(dto.BusinessId, dto.EmailAddress, dto.Reason);
+            await _emailUpdateRequestRepository.AddAsync(request);
+
+            return Ok(new { message = "Email update request submitted successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing email update request for business {BusinessId}", dto.BusinessId);
+            return StatusCode(500, new { error = "server_error", message = "Unexpected error occurred while processing email update request." });
+        }
     }
 
     private Guid? GetCurrentUserId()

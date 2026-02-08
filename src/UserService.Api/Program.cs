@@ -48,6 +48,7 @@ builder.Services.AddScoped<IPointRuleRepository, PointRuleRepository>();
 builder.Services.AddScoped<IPointMultiplierRepository, PointMultiplierRepository>();
 builder.Services.AddScoped<IPointRedemptionRepository, PointRedemptionRepository>();
 builder.Services.AddScoped<IPasswordResetRequestRepository, PasswordResetRequestRepository>();
+builder.Services.AddScoped<IEmailUpdateRequestRepository, EmailUpdateRequestRepository>();
 
 // ---------- Auth0 Login HTTP Client (TLS forced) ----------
 builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(client =>
