@@ -9,8 +9,13 @@ namespace UserService.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class PointsController(IPointsService pointsService, ILogger<PointsController> logger) : ControllerBase
+public class PointsController(
+    IPointsService pointsService, 
+    ILogger<PointsController> logger,
+    IReviewServiceClient reviewServiceClient) : ControllerBase 
 {
+    private readonly IReviewServiceClient _reviewServiceClient;
+    
     /// <summary>
     /// Get user's points and statistics
     /// </summary>
@@ -240,6 +245,38 @@ public class PointsController(IPointsService pointsService, ILogger<PointsContro
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
+    
+    /// <summary>
+    /// Check and award helpful vote milestone (100 helpful votes)
+    /// Called by ReviewService when a reviewer reaches 100 total helpful votes
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("milestone/helpful-votes/{userId:guid}")]
+    public async Task<IActionResult> CheckHelpfulVoteMilestone(Guid userId)
+    {
+        try
+        {
+            // Get total helpful votes from ReviewService
+            var totalHelpfulVotes = await reviewServiceClient.GetTotalHelpfulVotesForUserAsync(userId);
+        
+            logger.LogInformation(
+                "Checking helpful vote milestone for user {UserId} with {TotalVotes} total votes", 
+                userId, 
+                totalHelpfulVotes);
+
+            var result = await pointsService.CheckAndAwardHelpfulVoteMilestoneAsync(userId, totalHelpfulVotes);
+        
+            return result is null
+                ? Ok(new { message = "No milestone reached", totalHelpfulVotes })
+                : Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error checking helpful vote milestone for user {UserId}", userId);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
 
     /// <summary>
     /// Initialize points for a new user
