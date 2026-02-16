@@ -836,4 +836,92 @@ public class UserServiceTests
         _mockEndUserProfileRepository.Verify(r => r.UpdateAsync(It.IsAny<EndUserProfile>()), Times.Once);
         _mockUserSettingsRepository.Verify(r => r.UpdateAsync(It.IsAny<UserSettings>()), Times.Once);
     }
+    
+   // ---------------------- END USER BADGES TEST ----------------------
+[Test]
+public async Task GetUserBadgesAsync_ShouldReturnBadges_WithBadgeInfo_DTO()
+{
+    // Arrange
+    var userId = Guid.NewGuid();
+
+    var dto = new EndUserSummaryDto
+    {
+        UserId = userId,
+        Email = "test@example.com",
+        TierBadge = new UserBadge(userId, BadgeTypes.Pro) 
+        { 
+            EarnedAt = DateTime.UtcNow, 
+            IsActive = true 
+        },
+        AchievementBadges = new List<UserBadge>
+        {
+            new UserBadge(userId, BadgeTypes.ExpertCategory, category: "Food") 
+            { 
+                EarnedAt = DateTime.UtcNow, 
+                IsActive = true 
+            }
+        }
+    };
+
+    _mockEndUserProfileRepository
+        .Setup(r => r.GetUserDataAsync(userId, null))
+        .ReturnsAsync(new EndUserSummary
+        {
+            UserId = dto.UserId,
+            Email = dto.Email,
+            Badges = dto.TierBadge != null 
+                ? new List<UserBadge> { dto.TierBadge }.Concat(dto.AchievementBadges ?? Enumerable.Empty<UserBadge>()).ToList() 
+                : dto.AchievementBadges
+        });
+
+    _mockBadgeService.Setup(b => b.IsTierBadge(It.IsAny<string>()))
+        .Returns((string badgeType) => badgeType == BadgeTypes.Pro);
+
+    _mockBadgeService.Setup(b => b.GetBadgeInfo(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>()))
+        .Returns((string badgeType, string? location, string? category) => 
+            (DisplayName: "display_" + badgeType,
+             Description: "desc_" + badgeType,
+             Icon: "icon_" + badgeType));
+
+    // Act
+    var userSummary = await _mockEndUserProfileRepository.Object.GetUserDataAsync(userId, null);
+
+    var allBadges = new List<UserBadge>();
+    if (dto.TierBadge != null) allBadges.Add(dto.TierBadge);
+    if (dto.AchievementBadges != null) allBadges.AddRange(dto.AchievementBadges);
+
+    var badgeInfoResults = new List<(string DisplayName, string Description, string Icon)>();
+    foreach (var badge in allBadges)
+    {
+        var info = _mockBadgeService.Object.GetBadgeInfo(badge.BadgeType, badge.Location, badge.Category);
+        badgeInfoResults.Add(info);
+    }
+
+    // NUnit-style assertions
+    Assert.That(userSummary, Is.Not.Null);
+    Assert.That(allBadges.Count, Is.EqualTo(2));
+
+    Assert.That(badgeInfoResults, Has.Count.EqualTo(2));
+    Assert.That(badgeInfoResults[0].DisplayName, Is.EqualTo("display_pro"));
+    Assert.That(badgeInfoResults[0].Description, Is.EqualTo("desc_pro"));
+    Assert.That(badgeInfoResults[0].Icon, Is.EqualTo("icon_pro"));
+
+    Assert.That(badgeInfoResults[1].DisplayName, Is.EqualTo("display_expert_category"));
+    Assert.That(badgeInfoResults[1].Description, Is.EqualTo("desc_expert_category"));
+    Assert.That(badgeInfoResults[1].Icon, Is.EqualTo("icon_expert_category"));
+}
+
+
+
+
+    [Test]
+    public void GetEndUserSummaryAsync_ShouldThrow_WhenUserNotFound()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync((User?)null);
+
+        // Act & Assert
+        Assert.ThrowsAsync<EndUserNotFoundException>(async () => await _service.GetEndUserSummaryAsync(userId));
+    }
 }

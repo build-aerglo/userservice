@@ -24,6 +24,8 @@ namespace UserService.Application.Services
 		Task<EndUserProfileDetailDto> UpdateEndUserProfileAsync(Guid userId, UpdateEndUserProfileDto dto);
 
 	 	Task<User?> GetUserByIdAsync(Guid userId);
-	    
+
+	    Task<EndUserSummaryDto> GetEndUserSummaryAsync(Guid userId);
+
     }
 }

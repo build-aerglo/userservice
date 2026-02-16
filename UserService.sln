@@ -14,6 +14,9 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UserService.Infrastructure", "src\UserService.Infrastructure\UserService.Infrastructure.csproj", "{32FAE2EC-E7A6-4012-AD1D-D5D095E9E24F}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{34D1AC84-E2CD-446D-B51E-B9306F32D3F8}"
+	ProjectSection(SolutionItems) = preProject
+		src\NewFile1.txt = src\NewFile1.txt
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{50FC0792-6A05-4263-8277-392753F4F80F}"
 EndProject

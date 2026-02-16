@@ -49,6 +49,10 @@ public class UserBadge
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    
+    public string? Icon { get; set; }
+    
+    public string? Description { get; set; }
 
     public void Deactivate()
     {

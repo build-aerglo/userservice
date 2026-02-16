@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using UserService.Application.DTOs;
+using UserService.Application.DTOs.Badge;
 using UserService.Application.Interfaces;
 using UserService.Application.Services.Auth0;
 using UserService.Domain.Entities;
@@ -450,6 +451,68 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         return await GetEndUserProfileDetailAsync(userId);
     }
 
+    public async Task<EndUserSummaryDto> GetEndUserSummaryAsync(Guid userId)
+{
+    var user = await userRepository.GetByIdAsync(userId);
+    if (user is null)
+        throw new EndUserNotFoundException(userId);
+    
+    // Get profile details by calling the existing method
+    var profileDetail = await GetEndUserProfileDetailAsync(userId);
 
+    // Console.WriteLine($"profile details: {profileDetail}", profileDetail);
+    
+    // Get the entity from repository
+    var entity = await endUserProfileRepository.GetUserDataAsync(userId, user.Email);
+    
+    // attach badge icons
+    var tierBadge = entity.Badges
+        .FirstOrDefault(b => badgeService.IsTierBadge(b.BadgeType));
+
+    var achievementBadges = entity.Badges
+        .Where(b => !badgeService.IsTierBadge(b.BadgeType))
+        .ToList();
+
+// Enrich achievement badges
+    foreach (var badge in achievementBadges)
+    {
+        var info = badgeService.GetBadgeInfo(badge.BadgeType, badge.Location, badge.Category);
+        badge.Icon = info.Icon;
+        badge.Description = info.Description;
+    }
+
+// Enrich tier badge
+    if (tierBadge != null)
+    {
+        var info = badgeService.GetBadgeInfo(tierBadge.BadgeType);
+        tierBadge.Icon = info.Icon;
+        tierBadge.Description = info.Description;
+    }
+            
+    // Map to DTO
+    var result = new EndUserSummaryDto
+    {
+        UserId = entity.UserId,
+        Email = entity.Email,
+        
+        // Use data from profileDetail
+        Profile = profileDetail,
+        Reviews = entity.Reviews,
+        TopCities = entity.TopCities,
+        TopCategories = entity.TopCategories,
+        TierBadge = tierBadge,
+        AchievementBadges = achievementBadges,
+        Points = entity.Points,
+        Rank = entity.Rank,
+        Streak = entity.Streak,
+        LifetimePoints = entity.LifetimePoints,
+        RecentActivity = entity.RecentActivity
+    };
+
+    // Enrich badges with display info
+    
+
+    return result;
+}
 
 }

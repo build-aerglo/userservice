@@ -9,4 +9,5 @@ public interface IEndUserProfileRepository
     Task<EndUserProfile?> GetByUserIdAsync(Guid userId);
     Task UpdateAsync(EndUserProfile profile);
     Task DeleteAsync(Guid id);
+    Task<EndUserSummary> GetUserDataAsync(Guid? userId, string? email);
 }
