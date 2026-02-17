@@ -22,12 +22,13 @@ public class BadgeService(
             throw new EndUserNotFoundException(userId);
 
         var badges = await badgeRepository.GetActiveByUserIdAsync(userId);
+
+        var currentTier = GetCurrentTier(badges);
+        
         var badgeDtos = badges
             .Where(b => !IsTierBadge(b.BadgeType))
             .Select(MapToDto)
             .ToList();
-
-        var currentTier = GetCurrentTier(badgeDtos);
 
         return new UserBadgesResponseDto(
             UserId: userId,
@@ -262,7 +263,7 @@ public class BadgeService(
         );
     }
 
-    private static string GetCurrentTier(IEnumerable<UserBadgeDto> badges)
+    public string GetCurrentTier(IEnumerable<UserBadge> badges)
     {
         var tierBadge = badges.FirstOrDefault(b =>
             b.BadgeType == BadgeTypes.Pro ||
@@ -279,7 +280,7 @@ public class BadgeService(
             or BadgeTypes.Newbie or BadgeTypes.Expert or BadgeTypes.Pro;
     }
 
-    private static bool IsTierBadge(string badgeType)
+    public bool IsTierBadge(string badgeType)
     {
         return badgeType is BadgeTypes.Newbie or BadgeTypes.Expert or BadgeTypes.Pro;
     }
