@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using UserService.Application.DTOs;
 using UserService.Application.DTOs.Auth;
+using UserService.Application.DTOs.Points;
 using UserService.Application.Interfaces;
 using UserService.Application.Services.Auth0;
 using UserService.Domain.Exceptions;
@@ -20,6 +21,7 @@ public class AuthController : ControllerBase
     private readonly IUserRepository _userRepository;
     private readonly IPointsService _pointsService;
     private readonly ILogger<AuthController> _logger;
+    private readonly IEmailUpdateRequestRepository _mockEmailUpdateRequestRepository;
 
     public AuthController(
         IAuth0UserLoginService auth0Login,
@@ -27,7 +29,8 @@ public class AuthController : ControllerBase
         IRefreshTokenCookieService refreshCookie,
         IUserRepository userRepository,
         IPointsService pointsService,
-        ILogger<AuthController> logger)
+        ILogger<AuthController> logger,
+        IEmailUpdateRequestRepository mockEmailUpdateRequestRepository)
     {
         _auth0Login = auth0Login ?? throw new ArgumentNullException(nameof(auth0Login));
         _socialLogin = socialLogin ?? throw new ArgumentNullException(nameof(socialLogin));
@@ -35,6 +38,7 @@ public class AuthController : ControllerBase
         _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         _pointsService = pointsService ?? throw new ArgumentNullException(nameof(pointsService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _mockEmailUpdateRequestRepository = mockEmailUpdateRequestRepository ?? throw new ArgumentNullException(nameof(mockEmailUpdateRequestRepository));
     }
 
     // ========================================================================
@@ -746,5 +750,118 @@ public class AuthController : ControllerBase
 
         var dotIndex = email.LastIndexOf('.');
         return dotIndex > atIndex + 1 && dotIndex < email.Length - 1;
+    }
+
+    // ========================================================================
+    // REQUEST EMAIL UPDATE TESTS
+    // ========================================================================
+
+    [Test]
+    public async Task RequestEmailUpdate_Success_ShouldDeleteExistingAndInsertNew()
+    {
+        // ARRANGE
+        var businessId = Guid.NewGuid();
+        var dto = new RequestEmailUpdateDto
+        {
+            BusinessId = businessId,
+            EmailAddress = "newemail@example.com",
+            Reason = "Changing business email"
+        };
+
+        _mockEmailUpdateRequestRepository
+            .Setup(r => r.DeleteByBusinessIdAsync(businessId))
+            .Returns(Task.CompletedTask);
+        _mockEmailUpdateRequestRepository
+            .Setup(r => r.AddAsync(It.IsAny<EmailUpdateRequest>()))
+            .Returns(Task.CompletedTask);
+
+        // ACT
+        var result = await _controller.RequestEmailUpdate(dto);
+
+        // ASSERT
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _mockEmailUpdateRequestRepository.Verify(r => r.DeleteByBusinessIdAsync(businessId), Times.Once);
+        _mockEmailUpdateRequestRepository.Verify(r => r.AddAsync(It.IsAny<EmailUpdateRequest>()), Times.Once);
+    }
+
+    [Test]
+    public async Task RequestEmailUpdate_Success_ShouldDeleteBeforeInsert()
+    {
+        // ARRANGE
+        var callOrder = new List<string>();
+        var businessId = Guid.NewGuid();
+        var dto = new RequestEmailUpdateDto
+        {
+            BusinessId = businessId,
+            EmailAddress = "newemail@example.com"
+        };
+
+        _mockEmailUpdateRequestRepository
+            .Setup(r => r.DeleteByBusinessIdAsync(businessId))
+            .Callback(() => callOrder.Add("delete"))
+            .Returns(Task.CompletedTask);
+        _mockEmailUpdateRequestRepository
+            .Setup(r => r.AddAsync(It.IsAny<EmailUpdateRequest>()))
+            .Callback(() => callOrder.Add("add"))
+            .Returns(Task.CompletedTask);
+
+        // ACT
+        await _controller.RequestEmailUpdate(dto);
+
+        // ASSERT
+        Assert.That(callOrder, Has.Count.EqualTo(2));
+        Assert.That(callOrder[0], Is.EqualTo("delete"));
+        Assert.That(callOrder[1], Is.EqualTo("add"));
+    }
+
+    [Test]
+    public async Task RequestEmailUpdate_WithoutReason_ShouldSucceed()
+    {
+        // ARRANGE
+        var businessId = Guid.NewGuid();
+        var dto = new RequestEmailUpdateDto
+        {
+            BusinessId = businessId,
+            EmailAddress = "newemail@example.com",
+            Reason = null
+        };
+
+        _mockEmailUpdateRequestRepository
+            .Setup(r => r.DeleteByBusinessIdAsync(businessId))
+            .Returns(Task.CompletedTask);
+        _mockEmailUpdateRequestRepository
+            .Setup(r => r.AddAsync(It.IsAny<EmailUpdateRequest>()))
+            .Returns(Task.CompletedTask);
+
+        // ACT
+        var result = await _controller.RequestEmailUpdate(dto);
+
+        // ASSERT
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _mockEmailUpdateRequestRepository.Verify(r => r.AddAsync(It.IsAny<EmailUpdateRequest>()), Times.Once);
+    }
+
+    [Test]
+    public async Task RequestEmailUpdate_RepositoryThrows_ShouldReturn500()
+    {
+        // ARRANGE
+        var businessId = Guid.NewGuid();
+        var dto = new RequestEmailUpdateDto
+        {
+            BusinessId = businessId,
+            EmailAddress = "newemail@example.com"
+        };
+
+        _mockEmailUpdateRequestRepository
+            .Setup(r => r.DeleteByBusinessIdAsync(businessId))
+            .ThrowsAsync(new Exception("Database error"));
+
+        // ACT
+        var result = await _controller.RequestEmailUpdate(dto);
+
+        // ASSERT
+        var statusResult = result as ObjectResult;
+        Assert.That(statusResult, Is.Not.Null);
+        Assert.That(statusResult!.StatusCode, Is.EqualTo(500));
     }
 }
