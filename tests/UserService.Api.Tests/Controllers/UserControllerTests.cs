@@ -1284,4 +1284,47 @@ public class UserControllerTests
         Assert.That(errorResult, Is.Not.Null);
         Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
     }
+    
+    [Test]
+    public async Task GetEndUserSummary_ReturnsOk_WhenUserExists()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var summaryDto = new EndUserSummaryDto
+        {
+            UserId = userId,
+            Email = "test@example.com",
+            Points = 100,
+            TierBadge = null,
+            AchievementBadges = new List<UserBadge>()
+        };
+
+        _mockUserService.Setup(s => s.GetEndUserSummaryAsync(userId))
+            .ReturnsAsync(summaryDto);
+
+        // Act
+        var result = await _controller.GetEndUserSummary(userId);
+
+        // Assert
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        Assert.That(okResult!.StatusCode, Is.EqualTo(200));
+        Assert.That(okResult.Value, Is.EqualTo(summaryDto));
+    }
+
+    [Test]
+    public async Task GetEndUserSummary_ReturnsNotFound_WhenUserDoesNotExist()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        _mockUserService.Setup(s => s.GetEndUserSummaryAsync(userId))
+            .ReturnsAsync((EndUserSummaryDto?)null);
+
+        // Act
+        var result = await _controller.GetEndUserSummary(userId);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<NotFoundResult>());
+    }
+
 }

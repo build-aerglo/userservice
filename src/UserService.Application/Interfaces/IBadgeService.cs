@@ -1,4 +1,5 @@
 using UserService.Application.DTOs.Badge;
+using UserService.Domain.Entities;
 
 namespace UserService.Application.Interfaces;
 
@@ -58,4 +59,7 @@ public interface IBadgeService
     /// Get badge display information (name, description, icon)
     /// </summary>
     (string DisplayName, string Description, string Icon) GetBadgeInfo(string badgeType, string? location = null, string? category = null);
+
+    string GetCurrentTier(IEnumerable<UserBadge> badges);
+    bool IsTierBadge(string badgeType);
 }

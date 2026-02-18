@@ -1,0 +1,107 @@
+name: Build and Deploy .NET App
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    env:
+      PROJECT_PATH: ./src/UserService.Api/UserService.Api.csproj
+      
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # ---------- SAFETY CHECK 1 ----------
+      - name: Verify project file exists
+        run: |
+          if [ ! -f "$PROJECT_PATH" ]; then
+            echo "Project file not found. Aborting deploy."
+            exit 1
+          fi
+
+      # ---------- Setup .NET ----------
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # ---------- Restore ----------
+      - name: Restore dependencies
+        run: dotnet restore $PROJECT_PATH
+
+      # ---------- Build ----------
+      - name: Build
+        run: dotnet build $PROJECT_PATH --configuration Release --no-restore
+
+      # ---------- Tests ----------
+      - name: Run tests
+        run: dotnet test --no-build --verbosity normal
+
+      # ---------- Publish ----------
+      - name: Publish
+        run: dotnet publish $PROJECT_PATH -c Release -o publish
+
+      # ---------- SAFETY CHECK 2 ----------
+      - name: Validate publish output
+        run: |
+          if [ ! "$(ls -A publish)" ]; then
+            echo "Publish folder is empty. Aborting deploy."
+            exit 1
+          fi
+
+      # =========================================================
+      # PUT SITE IN MAINTENANCE MODE
+      # =========================================================
+      - name: Create app_offline.htm
+        run: echo "Site updating. Please wait..." > app_offline.htm
+
+      - name: Upload app_offline.htm
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.SMARTER_FTP_SERVER }}
+          username: ${{ secrets.SMARTER_FTP_USERNAME }}
+          password: ${{ secrets.SMARTER_FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: ./
+          server-dir: /
+          include: |
+            app_offline.htm
+
+      # =========================================================
+      # DEPLOY APPLICATION FILES
+      # =========================================================
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.SMARTER_FTP_SERVER }}
+          username: ${{ secrets.SMARTER_FTP_USERNAME }}
+          password: ${{ secrets.SMARTER_FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: publish/
+          server-dir: /
+
+      # =========================================================
+      # REMOVE MAINTENANCE MODE
+      # =========================================================
+      - name: Remove app_offline.htm
+        run: rm app_offline.htm
+
+      - name: Delete remote app_offline.htm
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.SMARTER_FTP_SERVER }}
+          username: ${{ secrets.SMARTER_FTP_USERNAME }}
+          password: ${{ secrets.SMARTER_FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: ./
+          server-dir: /
+          exclude: |
+            *
