@@ -12,6 +12,7 @@ using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using UserService.Application.Interfaces;
 
 namespace UserService.Api.Tests.Controllers;
 
@@ -20,6 +21,7 @@ public class UserControllerTests
 {
     private Mock<IUserService> _mockUserService = null!;
     private Mock<IBusinessRepRepository> _mockBusinessRepRepository = null!;
+    private Mock<IBadgeService> _mockBadgeService = null!;
     private Mock<ILogger<UserController>> _mockLogger = null!;
     private UserController _controller = null!;
 
@@ -32,6 +34,7 @@ public class UserControllerTests
         _controller = new UserController(
             _mockUserService.Object,
             _mockBusinessRepRepository.Object,
+            _mockBadgeService.Object,
             _mockLogger.Object
         );
     }

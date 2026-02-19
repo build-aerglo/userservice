@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserService.Application.DTOs;
+using UserService.Application.Interfaces;
 using UserService.Application.Services;
 using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
@@ -10,7 +11,7 @@ namespace UserService.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class UserController(IUserService service, IBusinessRepRepository businessRepRepository, ILogger<UserController> logger) : ControllerBase
+public class UserController(IUserService service, IBusinessRepRepository businessRepRepository, IBadgeService badgeService, ILogger<UserController> logger) : ControllerBase
 {
     // BUSINESS USER creates sub-business users
     [Authorize(Roles = "business_user")]
@@ -326,7 +327,8 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     [AllowAnonymous]
     [HttpGet("user-summary/{id:guid}")]
     public async Task<IActionResult> GetEndUserSummary(Guid id)
-    {
+    {   
+        await badgeService.RecalculateAllBadgesAsync(id);
         var result = await service.GetEndUserSummaryAsync(id);
         return result is not null ? Ok(result) : NotFound();
     }
