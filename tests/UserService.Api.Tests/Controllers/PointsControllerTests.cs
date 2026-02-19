@@ -15,6 +15,7 @@ public class PointsControllerTests
 {
     private Mock<IPointsService> _mockPointsService = null!;
     private Mock<ILogger<PointsController>> _mockLogger = null!;
+    private Mock<IReviewServiceClient> _mockReviewServiceClient = null!;
     private PointsController _controller = null!;
 
     [SetUp]
@@ -22,7 +23,8 @@ public class PointsControllerTests
     {
         _mockPointsService = new Mock<IPointsService>();
         _mockLogger = new Mock<ILogger<PointsController>>();
-        _controller = new PointsController(_mockPointsService.Object, _mockLogger.Object);
+        _mockReviewServiceClient = new Mock<IReviewServiceClient>();
+        _controller = new PointsController(_mockPointsService.Object, _mockLogger.Object, _mockReviewServiceClient.Object);
     }
 
     private void SetupUserClaims(Guid userId)
