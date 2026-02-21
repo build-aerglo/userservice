@@ -326,10 +326,14 @@ public class UserController(IUserService service, IBusinessRepRepository busines
 
     [AllowAnonymous]
     [HttpGet("user-summary/{id:guid}")]
-    public async Task<IActionResult> GetEndUserSummary(Guid id)
-    {   
-        await badgeService.RecalculateAllBadgesAsync(id);
+    public async Task<IActionResult> GetEndUserSummary(
+        Guid id,
+        [FromQuery] bool recalculate = true)
+    {
+        if (recalculate)
+            await badgeService.RecalculateAllBadgesAsync(id);
+        
         var result = await service.GetEndUserSummaryAsync(id);
-        return result is not null ? Ok(result) : NotFound();
+        return Ok(result);
     }
 }
