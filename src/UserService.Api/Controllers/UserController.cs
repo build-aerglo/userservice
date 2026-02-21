@@ -329,9 +329,12 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     public async Task<IActionResult> GetEndUserSummary(
         Guid id,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 5)
+        [FromQuery] int pageSize = 5,
+        [FromQuery] bool recalculate = true)
     {
-        await badgeService.RecalculateAllBadgesAsync(id);
+        if (recalculate)
+            await badgeService.RecalculateAllBadgesAsync(id);
+            
         var result = await service.GetEndUserSummaryAsync(id, page, pageSize);
         return Ok(result);
     }
