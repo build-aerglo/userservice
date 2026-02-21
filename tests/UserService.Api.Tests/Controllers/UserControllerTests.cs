@@ -30,6 +30,7 @@ public class UserControllerTests
     {
         _mockUserService = new Mock<IUserService>();
         _mockBusinessRepRepository = new Mock<IBusinessRepRepository>();
+        _mockBadgeService = new Mock<IBadgeService>();
         _mockLogger = new Mock<ILogger<UserController>>();
         _controller = new UserController(
             _mockUserService.Object,
@@ -1288,40 +1289,53 @@ public class UserControllerTests
         Assert.That(errorResult!.StatusCode, Is.EqualTo(500));
     }
     
-    [Test]
-    public async Task GetEndUserSummary_ReturnsOk_WhenUserExists()
-    {
-        // Arrange
-        var userId = Guid.NewGuid();
-        var summaryDto = new EndUserSummaryDto
-        {
-            UserId = userId,
-            Email = "test@example.com",
-            Points = 100,
-            TierBadge = null,
-            AchievementBadges = new List<UserBadge>()
-        };
-
-        _mockUserService.Setup(s => s.GetEndUserSummaryAsync(userId))
-            .ReturnsAsync(summaryDto);
-
-        // Act
-        var result = await _controller.GetEndUserSummary(userId);
-
-        // Assert
-        var okResult = result as OkObjectResult;
-        Assert.That(okResult, Is.Not.Null);
-        Assert.That(okResult!.StatusCode, Is.EqualTo(200));
-        Assert.That(okResult.Value, Is.EqualTo(summaryDto));
-    }
+   [Test]
+   public async Task GetEndUserSummary_ReturnsOk_WhenUserExists()
+   {
+       // Arrange
+       var userId = Guid.NewGuid();
+       var summaryDto = new EndUserSummaryDto
+       {
+           UserId = userId,
+           Email = "test@example.com",
+           Points = 100,
+           TierBadge = null,
+           AchievementBadges = new List<UserBadge>()
+       };
+   
+       // ✅ Match new signature with It.IsAny<int>() for page and pageSize
+       _mockUserService
+           .Setup(s => s.GetEndUserSummaryAsync(userId, It.IsAny<int>(), It.IsAny<int>()))
+           .ReturnsAsync(summaryDto);
+   
+       _mockBadgeService
+           .Setup(b => b.RecalculateAllBadgesAsync(userId))
+           .Returns(Task.CompletedTask);
+   
+       // Act
+       var result = await _controller.GetEndUserSummary(userId);
+   
+       // Assert
+       var okResult = result as OkObjectResult;
+       Assert.That(okResult, Is.Not.Null);
+       Assert.That(okResult!.StatusCode, Is.EqualTo(200));
+       Assert.That(okResult.Value, Is.EqualTo(summaryDto));
+   }
 
     [Test]
     public async Task GetEndUserSummary_ReturnsNotFound_WhenUserDoesNotExist()
     {
         // Arrange
         var userId = Guid.NewGuid();
-        _mockUserService.Setup(s => s.GetEndUserSummaryAsync(userId))
+
+        // ✅ Match new signature with It.IsAny<int>() for page and pageSize
+        _mockUserService
+            .Setup(s => s.GetEndUserSummaryAsync(userId, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync((EndUserSummaryDto?)null);
+
+        _mockBadgeService
+            .Setup(b => b.RecalculateAllBadgesAsync(userId))
+            .Returns(Task.CompletedTask);
 
         // Act
         var result = await _controller.GetEndUserSummary(userId);

@@ -69,7 +69,7 @@ public class EndUserProfileRepository : IEndUserProfileRepository
     }
     
 
-public async Task<EndUserSummary> GetUserDataAsync(Guid? userId, string? email)
+public async Task<EndUserSummary> GetUserDataAsync(Guid? userId, string? email, int page = 1, int pageSize = 5)
 {
     // Validate: need at least one identifier
     if (!userId.HasValue && string.IsNullOrWhiteSpace(email))
@@ -90,9 +90,17 @@ public async Task<EndUserSummary> GetUserDataAsync(Guid? userId, string? email)
    
 
     // Get user reviews with business and branch information
+    const string countSql = @"
+        SELECT COUNT(*)
+        FROM review r
+        WHERE (r.reviewer_id = @ReviewerId OR r.email = @Email);";
+
+    var totalCount = await connection.ExecuteScalarAsync<int>(countSql, new { ReviewerId = userId, Email = email });
+
+    // Paginated reviews query — add LIMIT + OFFSET
     const string reviewsSql = @"
         SELECT 
-            r.id, r.business_id, r.location_id, r.reviewer_id, r.email, r.star_rating,
+           r.id, r.business_id, r.location_id, r.reviewer_id, r.email, r.star_rating,
             r.review_body, r.photo_urls, r.review_as_anon, r.is_guest_review, r.created_at, r.updated_at,
             r.status, r.ip_address, r.device_id, r.geolocation, r.user_agent,
             r.validation_result, r.validated_at,
@@ -108,14 +116,18 @@ public async Task<EndUserSummary> GetUserDataAsync(Guid? userId, string? email)
         INNER JOIN business b ON r.business_id = b.id
         LEFT JOIN business_branches bb ON r.location_id = bb.id
         WHERE (r.reviewer_id = @ReviewerId OR r.email = @Email)
-        ORDER BY r.created_at DESC;";
+        ORDER BY r.created_at DESC
+        LIMIT @PageSize OFFSET @Offset;";
 
-    var reviewRecords = await connection.QueryAsync<dynamic>(reviewsSql, new 
-    { 
-        ReviewerId = userId, 
-        Email = email 
+    var reviewRecords = await connection.QueryAsync<dynamic>(reviewsSql, new
+    {
+        ReviewerId = userId,
+        Email = email,
+        PageSize = pageSize,
+        Offset = (page - 1) * pageSize
     });
 
+    result.TotalReviewCount = totalCount;
     result.Reviews = reviewRecords.Select(r => 
     {
         // Build business address from available data
@@ -200,7 +212,7 @@ public async Task<EndUserSummary> GetUserDataAsync(Guid? userId, string? email)
     }).ToList();
 
     // Get top cities (if there are reviews)
-    if (result.Reviews.Any())
+    if (totalCount > 0)
     {
         const string topCitiesSql = @"
             WITH user_reviews AS (
