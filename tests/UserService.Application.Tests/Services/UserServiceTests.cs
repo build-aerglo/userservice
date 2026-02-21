@@ -838,6 +838,7 @@ public class UserServiceTests
     }
     
    // ---------------------- END USER BADGES TEST ----------------------
+
 [Test]
 public async Task GetUserBadgesAsync_ShouldReturnBadges_WithBadgeInfo_DTO()
 {
@@ -863,14 +864,17 @@ public async Task GetUserBadgesAsync_ShouldReturnBadges_WithBadgeInfo_DTO()
         }
     };
 
+    // ✅ Use It.IsAny<int>() for page and pageSize instead of undefined variables
     _mockEndUserProfileRepository
-        .Setup(r => r.GetUserDataAsync(userId, null))
+        .Setup(r => r.GetUserDataAsync(userId, null, It.IsAny<int>(), It.IsAny<int>()))
         .ReturnsAsync(new EndUserSummary
         {
             UserId = dto.UserId,
             Email = dto.Email,
             Badges = dto.TierBadge != null 
-                ? new List<UserBadge> { dto.TierBadge }.Concat(dto.AchievementBadges ?? Enumerable.Empty<UserBadge>()).ToList() 
+                ? new List<UserBadge> { dto.TierBadge }
+                    .Concat(dto.AchievementBadges ?? Enumerable.Empty<UserBadge>())
+                    .ToList() 
                 : dto.AchievementBadges
         });
 
@@ -883,8 +887,9 @@ public async Task GetUserBadgesAsync_ShouldReturnBadges_WithBadgeInfo_DTO()
              Description: "desc_" + badgeType,
              Icon: "icon_" + badgeType));
 
-    // Act
-    var userSummary = await _mockEndUserProfileRepository.Object.GetUserDataAsync(userId, null);
+    // Act — ✅ pass page and pageSize explicitly
+    var userSummary = await _mockEndUserProfileRepository.Object
+        .GetUserDataAsync(userId, null, 1, 5);
 
     var allBadges = new List<UserBadge>();
     if (dto.TierBadge != null) allBadges.Add(dto.TierBadge);
@@ -897,15 +902,13 @@ public async Task GetUserBadgesAsync_ShouldReturnBadges_WithBadgeInfo_DTO()
         badgeInfoResults.Add(info);
     }
 
-    // NUnit-style assertions
+    // Assert
     Assert.That(userSummary, Is.Not.Null);
     Assert.That(allBadges.Count, Is.EqualTo(2));
-
     Assert.That(badgeInfoResults, Has.Count.EqualTo(2));
     Assert.That(badgeInfoResults[0].DisplayName, Is.EqualTo("display_pro"));
     Assert.That(badgeInfoResults[0].Description, Is.EqualTo("desc_pro"));
     Assert.That(badgeInfoResults[0].Icon, Is.EqualTo("icon_pro"));
-
     Assert.That(badgeInfoResults[1].DisplayName, Is.EqualTo("display_expert_category"));
     Assert.That(badgeInfoResults[1].Description, Is.EqualTo("desc_expert_category"));
     Assert.That(badgeInfoResults[1].Icon, Is.EqualTo("icon_expert_category"));
@@ -914,14 +917,15 @@ public async Task GetUserBadgesAsync_ShouldReturnBadges_WithBadgeInfo_DTO()
 
 
 
-    [Test]
-    public void GetEndUserSummaryAsync_ShouldThrow_WhenUserNotFound()
-    {
-        // Arrange
-        var userId = Guid.NewGuid();
-        _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync((User?)null);
+[Test]
+public void GetEndUserSummaryAsync_ShouldThrow_WhenUserNotFound()
+{
+    var userId = Guid.NewGuid();
+    _mockUserRepository.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync((User?)null);
 
-        // Act & Assert
-        Assert.ThrowsAsync<EndUserNotFoundException>(async () => await _service.GetEndUserSummaryAsync(userId));
-    }
+    // ✅ Pass page and pageSize to match new signature
+    Assert.ThrowsAsync<EndUserNotFoundException>(
+        async () => await _service.GetEndUserSummaryAsync(userId, 1, 5)
+    );
+}
 }

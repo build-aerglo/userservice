@@ -25,7 +25,7 @@ namespace UserService.Application.Services
 
 	 	Task<User?> GetUserByIdAsync(Guid userId);
 
-	    Task<EndUserSummaryDto> GetEndUserSummaryAsync(Guid userId);
+	    Task<EndUserSummaryDto> GetEndUserSummaryAsync(Guid userId, int page = 1, int pageSize = 5);
 
     }
 }
