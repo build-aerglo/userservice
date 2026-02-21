@@ -9,6 +9,9 @@ namespace UserService.Infrastructure.Tests.Repositories;
 [TestFixture]
 public class UserRepositoryTests
 {
+    // ✅ GLOBAL TEST IDENTIFIER
+    private const string InfrastructureTestPrefix = "__INFRA_TEST__";
+
     private UserRepository _repository = null!;
     private IConfiguration _configuration = null!;
     private string _connectionString = string.Empty;
@@ -43,15 +46,30 @@ public class UserRepositoryTests
     public async Task Setup()
     {
         await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.ExecuteAsync("DELETE FROM users;");
+
+        // ✅ ONLY delete test users
+        await conn.ExecuteAsync(@"
+            DELETE FROM users
+            WHERE username LIKE @prefix
+               OR email LIKE @prefix;
+        ", new { prefix = InfrastructureTestPrefix + "%" });
     }
 
-    // ✅ FIXED: Use email under 20 characters
     [Test]
     public async Task AddAsync_ShouldInsertUser_AndGetById_ShouldReturnUser()
     {
         // Arrange
-        var user = new User("test_user", "test@test.com", "1234567890", "password123", "end_user", "123 Main St", "auth0|test");
+        var unique = Guid.NewGuid().ToString("N")[..6];
+
+        var user = new User(
+            $"{InfrastructureTestPrefix}_user_{unique}",
+            $"{InfrastructureTestPrefix}_{unique}@t.c",
+            "1234567890",
+            "password123",
+            "end_user",
+            "123 Main St",
+            "auth0|test"
+        );
 
         // Act
         await _repository.AddAsync(user);
@@ -59,20 +77,37 @@ public class UserRepositoryTests
 
         // Assert
         Assert.That(fetched, Is.Not.Null);
-        Assert.That(fetched!.Username, Is.EqualTo("test_user"));
-        Assert.That(fetched.Email, Is.EqualTo("test@test.com"));
+        Assert.That(fetched!.Username, Is.EqualTo(user.Username));
+        Assert.That(fetched.Email, Is.EqualTo(user.Email));
         Assert.That(fetched.Phone, Is.EqualTo("1234567890"));
     }
 
-    // ✅ FIXED: Use unique emails for each user
     [Test]
     public async Task GetAllAsync_ShouldReturnUsers_WhenUsersExist()
     {
         // Arrange
-        var timestamp = DateTime.UtcNow.Ticks;
-        var user1 = new User("user1", $"u1{timestamp}@t.c", "1111111111", "password123", "end_user", "Addr1", "auth0|1");
-        var user2 = new User("user2", $"u2{timestamp}@t.c", "2222222222", "password123", "end_user", "Addr2", "auth0|2");
-        
+        var unique = Guid.NewGuid().ToString("N")[..6];
+
+        var user1 = new User(
+            $"{InfrastructureTestPrefix}_user1_{unique}",
+            $"{InfrastructureTestPrefix}_u1_{unique}@t.c",
+            "1111111111",
+            "password123",
+            "end_user",
+            "Addr1",
+            "auth0|1"
+        );
+
+        var user2 = new User(
+            $"{InfrastructureTestPrefix}_user2_{unique}",
+            $"{InfrastructureTestPrefix}_u2_{unique}@t.c",
+            "2222222222",
+            "password123",
+            "end_user",
+            "Addr2",
+            "auth0|2"
+        );
+
         await _repository.AddAsync(user1);
         await _repository.AddAsync(user2);
 
@@ -80,8 +115,7 @@ public class UserRepositoryTests
         var results = (await _repository.GetAllAsync()).ToList();
 
         // Assert
-        Assert.That(results.Count, Is.GreaterThanOrEqualTo(2));
-        Assert.That(results.Any(u => u.Username == "user1"), Is.True);
-        Assert.That(results.Any(u => u.Username == "user2"), Is.True);
+        Assert.That(results.Any(u => u.Username == user1.Username), Is.True);
+        Assert.That(results.Any(u => u.Username == user2.Username), Is.True);
     }
 }
