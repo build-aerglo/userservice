@@ -5,7 +5,7 @@ public record EndUserResponseDto(
     Guid EndUserProfileId,
     string Username,
     string Email,
-    string Phone,
+    string? Phone,
     string? Address,
     string? SocialMedia,
     DateTime CreatedAt,
