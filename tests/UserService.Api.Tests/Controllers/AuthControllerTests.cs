@@ -2,11 +2,13 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Moq;
 using UserService.Application.DTOs;
 using UserService.Application.DTOs.Auth;
 using UserService.Application.DTOs.Points;
 using UserService.Application.Interfaces;
 using UserService.Application.Services.Auth0;
+using UserService.Domain.Entities;
 using UserService.Domain.Exceptions;
 using UserService.Domain.Repositories;
 

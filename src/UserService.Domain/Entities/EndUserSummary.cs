@@ -7,6 +7,8 @@ namespace UserService.Domain.Entities
         public string? Email { get; set; }
         public EndUserProfileDetailDto? Profile { get; set; }
         public IEnumerable<ReviewResponseDto> Reviews { get; set; } = new List<ReviewResponseDto>();
+        
+        public int TotalReviewCount { get; set; }
         public IEnumerable<TopCityStat> TopCities { get; set; } = new List<TopCityStat>();
         public IEnumerable<TopCategoryStat> TopCategories { get; set; } = new List<TopCategoryStat>();
         

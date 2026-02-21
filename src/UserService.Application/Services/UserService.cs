@@ -451,7 +451,7 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         return await GetEndUserProfileDetailAsync(userId);
     }
 
-    public async Task<EndUserSummaryDto> GetEndUserSummaryAsync(Guid userId)
+    public async Task<EndUserSummaryDto> GetEndUserSummaryAsync(Guid userId, int page = 1, int pageSize = 5)
 {
     var user = await userRepository.GetByIdAsync(userId);
     if (user is null)
@@ -463,7 +463,7 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
     // Console.WriteLine($"profile details: {profileDetail}", profileDetail);
     
     // Get the entity from repository
-    var entity = await endUserProfileRepository.GetUserDataAsync(userId, user.Email);
+    var entity = await endUserProfileRepository.GetUserDataAsync(userId, user.Email, page, pageSize);
     
     // attach badge icons
     var tierBadge = entity.Badges
@@ -497,7 +497,13 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         
         // Use data from profileDetail
         Profile = profileDetail,
-        Reviews = entity.Reviews,
+        Reviews = new PaginatedReviews
+        {
+            Items = entity.Reviews,
+            TotalCount = entity.TotalReviewCount,
+            Page = page,
+            PageSize = pageSize
+        },
         TopCities = entity.TopCities,
         TopCategories = entity.TopCategories,
         TierBadge = tierBadge,
