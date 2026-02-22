@@ -539,6 +539,10 @@ public class UserServiceTests
             .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
             .ReturnsAsync(businessRep);
 
+        _mockBusinessServiceClient
+            .Setup(c => c.UpdateBusinessUserIdAsync(businessId, user.Id))
+            .Returns(Task.CompletedTask);
+
         // ACT
         var result = await _service.RegisterBusinessAccountAsync(dto);
 
@@ -553,8 +557,85 @@ public class UserServiceTests
         });
 
         _mockBusinessServiceClient.Verify(c => c.CreateBusinessAsync(dto), Times.Once);
+        _mockBusinessServiceClient.Verify(c => c.UpdateBusinessUserIdAsync(businessId, user.Id), Times.Once);
         _mockUserRepository.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Once);
         _mockBusinessRepRepository.Verify(r => r.AddAsync(It.IsAny<BusinessRep>()), Times.Once);
+    }
+
+    [Test]
+    public async Task RegisterBusinessAccountAsync_ShouldCallUpdateBusinessUserId_WithSavedUserIdAndBusinessId()
+    {
+        // ARRANGE
+        var dto = new BusinessUserDto(
+            Name: "Acme Corp",
+            Email: "acme@corp.com",
+            Password: "Pass1234",
+            Phone: "5559876543",
+            UserType: "business_user",
+            Address: "99 Acme Road",
+            BranchName: "Main",
+            BranchAddress: "99 Acme Road",
+            Website: null,
+            CategoryIds: new List<string>()
+        );
+
+        var businessId = Guid.NewGuid();
+        var savedUser = new User(dto.Name, dto.Email, dto.Phone, "password", dto.UserType, dto.Address, "auth0|acme");
+        var businessRep = new BusinessRep(businessId, savedUser.Id, dto.BranchName, dto.BranchAddress);
+
+        Guid capturedUserId = Guid.Empty;
+        Guid capturedBusinessId = Guid.Empty;
+
+        _mockBusinessServiceClient.Setup(c => c.CreateBusinessAsync(dto)).ReturnsAsync(businessId);
+        _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(savedUser);
+        _mockBusinessServiceClient
+            .Setup(c => c.UpdateBusinessUserIdAsync(It.IsAny<Guid>(), It.IsAny<Guid>()))
+            .Callback<Guid, Guid>((bId, uId) => { capturedBusinessId = bId; capturedUserId = uId; })
+            .Returns(Task.CompletedTask);
+        _mockBusinessRepRepository.Setup(r => r.AddAsync(It.IsAny<BusinessRep>())).Returns(Task.CompletedTask);
+        _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(businessRep);
+
+        // ACT
+        await _service.RegisterBusinessAccountAsync(dto);
+
+        // ASSERT
+        Assert.That(capturedBusinessId, Is.EqualTo(businessId));
+        Assert.That(capturedUserId, Is.EqualTo(savedUser.Id));
+    }
+
+    [Test]
+    public void RegisterBusinessAccountAsync_ShouldThrow_WhenUpdateBusinessUserIdFails()
+    {
+        // ARRANGE
+        var dto = new BusinessUserDto(
+            Name: "Fail Corp",
+            Email: "fail@corp.com",
+            Password: "Pass1234",
+            Phone: "5550001111",
+            UserType: "business_user",
+            Address: "1 Fail Street",
+            BranchName: null,
+            BranchAddress: null,
+            Website: null,
+            CategoryIds: new List<string>()
+        );
+
+        var businessId = Guid.NewGuid();
+        var savedUser = new User(dto.Name, dto.Email, dto.Phone, "password", dto.UserType, dto.Address, "auth0|fail");
+
+        _mockBusinessServiceClient.Setup(c => c.CreateBusinessAsync(dto)).ReturnsAsync(businessId);
+        _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
+        _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(savedUser);
+        _mockBusinessServiceClient
+            .Setup(c => c.UpdateBusinessUserIdAsync(It.IsAny<Guid>(), It.IsAny<Guid>()))
+            .ThrowsAsync(new BusinessUserCreationFailedException("Failed to link user to business."));
+
+        // ACT & ASSERT
+        Assert.ThrowsAsync<BusinessUserCreationFailedException>(
+            () => _service.RegisterBusinessAccountAsync(dto));
+
+        _mockBusinessRepRepository.Verify(r => r.AddAsync(It.IsAny<BusinessRep>()), Times.Never);
     }
 
     [Test]

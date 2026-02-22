@@ -27,4 +27,11 @@ public interface IBusinessServiceClient
     /// <param name="newEmail">The new business email</param>
     /// <returns>True if update was successful, otherwise false</returns>
     Task<bool> UpdateBusinessEmailAsync(string oldEmail, string newEmail);
+
+    /// <summary>
+    /// Sets the user_id field on the business record, linking the owning user account.
+    /// </summary>
+    /// <param name="businessId">The business to update</param>
+    /// <param name="userId">The user ID to assign</param>
+    Task UpdateBusinessUserIdAsync(Guid businessId, Guid userId);
 }
