@@ -9,6 +9,9 @@ namespace UserService.Infrastructure.Tests.Repositories;
 [TestFixture]
 public class SupportUserProfileRepositoryTests
 {
+    // ✅ GLOBAL TEST IDENTIFIER
+    private const string InfrastructureTestPrefix = "__INFRA_TEST__";
+
     private SupportUserProfileRepository _repository = null!;
     private UserRepository _userRepository = null!;
     private IConfiguration _configuration = null!;
@@ -49,27 +52,49 @@ public class SupportUserProfileRepositoryTests
     public async Task Setup()
     {
         await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.ExecuteAsync("DELETE FROM support_user;");
-        await conn.ExecuteAsync("DELETE FROM users WHERE user_type = 'support_user';");
+
+        // ✅ Delete only support profiles tied to test users
+        await conn.ExecuteAsync(@"
+            DELETE FROM support_user
+            WHERE user_id IN (
+                SELECT id FROM users
+                WHERE username LIKE @prefix
+                   OR email LIKE @prefix
+            );
+        ", new { prefix = InfrastructureTestPrefix + "%" });
+
+        // ✅ Delete only test users
+        await conn.ExecuteAsync(@"
+            DELETE FROM users
+            WHERE username LIKE @prefix
+               OR email LIKE @prefix;
+        ", new { prefix = InfrastructureTestPrefix + "%" });
     }
 
-    // ✅ FIXED: Use email under 20 characters for varchar(20) constraint
+    private static string Unique() => Guid.NewGuid().ToString("N")[..6];
+
     [Test]
     public async Task AddAsync_ShouldInsertAndRetrieveSupportUserProfile()
     {
-        // Arrange
-        var timestamp = DateTime.UtcNow.Ticks;
-        var user = new User("support_user", $"sup{timestamp % 1000000}@t.c", "3333333333", "password123", "support_user", "User St", "test");
+        var unique = Unique();
+
+        var user = new User(
+            $"{InfrastructureTestPrefix}_support_{unique}",
+            $"{InfrastructureTestPrefix}_{unique}@t.c",
+            "3333333333",
+            "password123",
+            "support_user",
+            "User St",
+            "test"
+        );
 
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
 
-        // Act
         await _repository.AddAsync(supportProfile);
         var fetched = await _repository.GetByIdAsync(supportProfile.Id);
 
-        // Assert
         Assert.That(fetched, Is.Not.Null);
         Assert.That(fetched!.UserId, Is.EqualTo(user.Id));
         Assert.That(fetched.Id, Is.EqualTo(supportProfile.Id));
@@ -78,8 +103,18 @@ public class SupportUserProfileRepositoryTests
     [Test]
     public async Task GetByUserIdAsync_ShouldReturnSupportProfile_WhenExists()
     {
-        var timestamp = DateTime.UtcNow.Ticks;
-        var user = new User("support_user", $"s{timestamp % 10000}@t.c", "3333333333", "password123", "support_user", "User St", "test");
+        var unique = Unique();
+
+        var user = new User(
+            $"{InfrastructureTestPrefix}_support_{unique}",
+            $"{InfrastructureTestPrefix}_{unique}@t.c",
+            "3333333333",
+            "password123",
+            "support_user",
+            "User St",
+            "test"
+        );
+
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
@@ -94,17 +129,27 @@ public class SupportUserProfileRepositoryTests
     [Test]
     public async Task UpdateAsync_ShouldModifyTimestamp()
     {
-        var timestamp = DateTime.UtcNow.Ticks;
-        var user = new User("support_update", $"up{timestamp % 10000}@t.c", "4444444444", "password123", "support_user", "Addr", "test");
+        var unique = Unique();
+
+        var user = new User(
+            $"{InfrastructureTestPrefix}_update_{unique}",
+            $"{InfrastructureTestPrefix}_{unique}@t.c",
+            "4444444444",
+            "password123",
+            "support_user",
+            "Addr",
+            "test"
+        );
+
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
         await _repository.AddAsync(supportProfile);
 
         var originalUpdatedAt = supportProfile.UpdatedAt;
-        
+
         await Task.Delay(100);
-        
+
         supportProfile.UpdateTimestamp();
         await _repository.UpdateAsync(supportProfile);
 
@@ -115,8 +160,18 @@ public class SupportUserProfileRepositoryTests
     [Test]
     public async Task DeleteAsync_ShouldRemoveSupportProfile()
     {
-        var timestamp = DateTime.UtcNow.Ticks;
-        var user = new User("support_delete", $"del{timestamp % 10000}@t.c", "5555555555", "password123", "support_user", "Addr D", "test");
+        var unique = Unique();
+
+        var user = new User(
+            $"{InfrastructureTestPrefix}_delete_{unique}",
+            $"{InfrastructureTestPrefix}_{unique}@t.c",
+            "5555555555",
+            "password123",
+            "support_user",
+            "Addr D",
+            "test"
+        );
+
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
@@ -128,13 +183,32 @@ public class SupportUserProfileRepositoryTests
         Assert.That(result, Is.Null);
     }
 
-    // ✅ FIXED: Use unique emails for each user
     [Test]
     public async Task GetAllAsync_ShouldReturnAllSupportProfiles()
     {
-        var timestamp = DateTime.UtcNow.Ticks;
-        var user1 = new User("support1", $"s1{timestamp}@t.c", "1111111111", "password123", "support_user", "Addr1", "test");
-        var user2 = new User("support2", $"s2{timestamp}@t.c", "2222222222", "password123", "support_user", "Addr2", "test");
+        var unique1 = Unique();
+        var unique2 = Unique();
+
+        var user1 = new User(
+            $"{InfrastructureTestPrefix}_support1_{unique1}",
+            $"{InfrastructureTestPrefix}_{unique1}@t.c",
+            "1111111111",
+            "password123",
+            "support_user",
+            "Addr1",
+            "test"
+        );
+
+        var user2 = new User(
+            $"{InfrastructureTestPrefix}_support2_{unique2}",
+            $"{InfrastructureTestPrefix}_{unique2}@t.c",
+            "2222222222",
+            "password123",
+            "support_user",
+            "Addr2",
+            "test"
+        );
+
         await _userRepository.AddAsync(user1);
         await _userRepository.AddAsync(user2);
 
@@ -149,24 +223,20 @@ public class SupportUserProfileRepositoryTests
     }
 
     [Test]
-    public async Task GetByIdAsync_ShouldReturnNull_WhenProfileDoesNotExist()
-    {
-        var result = await _repository.GetByIdAsync(Guid.NewGuid());
-        Assert.That(result, Is.Null);
-    }
-
-    [Test]
-    public async Task GetByUserIdAsync_ShouldReturnNull_WhenProfileDoesNotExist()
-    {
-        var result = await _repository.GetByUserIdAsync(Guid.NewGuid());
-        Assert.That(result, Is.Null);
-    }
-
-    [Test]
     public async Task DeleteUser_ShouldCascadeDeleteSupportProfile()
     {
-        var timestamp = DateTime.UtcNow.Ticks;
-        var user = new User("cascade_test", $"cas{timestamp}@t.c", "6666666666", "password123", "support_user", "Cascade St", "test");
+        var unique = Unique();
+
+        var user = new User(
+            $"{InfrastructureTestPrefix}_cascade_{unique}",
+            $"{InfrastructureTestPrefix}_{unique}@t.c",
+            "6666666666",
+            "password123",
+            "support_user",
+            "Cascade St",
+            "test"
+        );
+
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
@@ -175,15 +245,24 @@ public class SupportUserProfileRepositoryTests
         await _userRepository.DeleteAsync(user.Id);
 
         var result = await _repository.GetByIdAsync(supportProfile.Id);
-        Assert.That(result, Is.Null, "Support profile should be cascade deleted when user is deleted");
+        Assert.That(result, Is.Null);
     }
 
     [Test]
     public async Task UpdateAsync_ShouldPersistMultipleTimestampUpdates()
     {
-        // Arrange
-        var timestamp = DateTime.UtcNow.Ticks;
-        var user = new User("multi_update", $"mu{timestamp}@t.c", "1111111111", "password123", "support_user", "Multi St", "auth0|test");
+        var unique = Unique();
+
+        var user = new User(
+            $"{InfrastructureTestPrefix}_multi_{unique}",
+            $"{InfrastructureTestPrefix}_{unique}@t.c",
+            "1111111111",
+            "password123",
+            "support_user",
+            "Multi St",
+            "auth0|test"
+        );
+
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
@@ -191,82 +270,108 @@ public class SupportUserProfileRepositoryTests
 
         var originalUpdatedAt = supportProfile.UpdatedAt;
 
-        // Act - First update
         await Task.Delay(100);
         supportProfile.UpdateTimestamp();
         await _repository.UpdateAsync(supportProfile);
         var firstUpdate = await _repository.GetByIdAsync(supportProfile.Id);
 
-        // Act - Second update
         await Task.Delay(100);
         supportProfile.UpdateTimestamp();
         await _repository.UpdateAsync(supportProfile);
         var secondUpdate = await _repository.GetByIdAsync(supportProfile.Id);
 
-        // Assert
         Assert.That(firstUpdate!.UpdatedAt, Is.GreaterThan(originalUpdatedAt));
         Assert.That(secondUpdate!.UpdatedAt, Is.GreaterThan(firstUpdate.UpdatedAt));
     }
-
- 
+    
+    [Test]
+    public async Task GetByIdAsync_ShouldReturnNull_WhenProfileDoesNotExist()
+    {
+        var result = await _repository.GetByIdAsync(Guid.NewGuid());
+        Assert.That(result, Is.Null);
+    }
+    
+    [Test]
+    public async Task GetByUserIdAsync_ShouldReturnNull_WhenProfileDoesNotExist()
+    {
+        var result = await _repository.GetByUserIdAsync(Guid.NewGuid());
+        Assert.That(result, Is.Null);
+    }
+    
     [Test]
     public async Task UpdateAsync_ShouldNotModifyCreatedAt()
     {
-        // Arrange
-        var timestamp = DateTime.UtcNow.Ticks;
-        var user = new User("created_check", $"cc{timestamp}@t.c", "2222222222", "password123", "support_user", "Created St", "auth0|test");
+        var unique = Unique();
+
+        var user = new User(
+            $"{InfrastructureTestPrefix}_created_{unique}",
+            $"{InfrastructureTestPrefix}_{unique}@t.c",
+            "2222222222",
+            "password123",
+            "support_user",
+            "Created St",
+            "auth0|test"
+        );
+
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
         await _repository.AddAsync(supportProfile);
 
-        // ✅ FIXED: Get the CreatedAt value from the database after insert
         var fetchedAfterInsert = await _repository.GetByIdAsync(supportProfile.Id);
         var originalCreatedAt = fetchedAfterInsert!.CreatedAt;
 
-        // Act
         await Task.Delay(100);
         supportProfile.UpdateTimestamp();
         await _repository.UpdateAsync(supportProfile);
 
-        // Assert
         var updated = await _repository.GetByIdAsync(supportProfile.Id);
 
-        // ✅ FIXED: Convert both to UTC before comparing
         DateTime ToUtc(DateTime dt) => DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-        DateTime RoundMs(DateTime dt) => new DateTime(dt.Ticks - (dt.Ticks % TimeSpan.TicksPerMillisecond), DateTimeKind.Utc);
+        DateTime RoundMs(DateTime dt) =>
+            new DateTime(dt.Ticks - (dt.Ticks % TimeSpan.TicksPerMillisecond), DateTimeKind.Utc);
 
         Assert.Multiple(() =>
         {
-            Assert.That(RoundMs(ToUtc(updated!.CreatedAt)), Is.EqualTo(RoundMs(ToUtc(originalCreatedAt))));
-            Assert.That(RoundMs(ToUtc(updated.UpdatedAt)), Is.GreaterThan(RoundMs(ToUtc(originalCreatedAt))));
+            Assert.That(RoundMs(ToUtc(updated!.CreatedAt)),
+                Is.EqualTo(RoundMs(ToUtc(originalCreatedAt))));
+
+            Assert.That(RoundMs(ToUtc(updated.UpdatedAt)),
+                Is.GreaterThan(RoundMs(ToUtc(originalCreatedAt))));
         });
     }
-    
 
     [Test]
     public async Task UpdateAsync_WithNonExistentId_ShouldNotThrowException()
     {
-        // Arrange
         var nonExistentProfile = new SupportUserProfile(Guid.NewGuid());
 
-        // Act & Assert
-        Assert.DoesNotThrowAsync(async () => await _repository.UpdateAsync(nonExistentProfile));
+        Assert.DoesNotThrowAsync(async () =>
+            await _repository.UpdateAsync(nonExistentProfile));
     }
 
     [Test]
     public async Task UpdateAsync_ConcurrentUpdates_ShouldMaintainDataIntegrity()
     {
-        // Arrange
-        var timestamp = DateTime.UtcNow.Ticks;
-        var user = new User("concurrent_test", $"con{timestamp}@t.c", "3333333333", "password123", "support_user", "Concurrent St", "auth0|test");
+        var unique = Unique();
+
+        var user = new User(
+            $"{InfrastructureTestPrefix}_concurrent_{unique}",
+            $"{InfrastructureTestPrefix}_{unique}@t.c",
+            "3333333333",
+            "password123",
+            "support_user",
+            "Concurrent St",
+            "auth0|test"
+        );
+
         await _userRepository.AddAsync(user);
 
         var supportProfile = new SupportUserProfile(user.Id);
         await _repository.AddAsync(supportProfile);
 
-        // Act - Simulate concurrent updates
         var tasks = new List<Task>();
+
         for (int i = 0; i < 5; i++)
         {
             tasks.Add(Task.Run(async () =>
@@ -279,9 +384,10 @@ public class SupportUserProfileRepositoryTests
 
         await Task.WhenAll(tasks);
 
-        // Assert
         var result = await _repository.GetByIdAsync(supportProfile.Id);
+
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.UserId, Is.EqualTo(user.Id));
     }
+
 }
