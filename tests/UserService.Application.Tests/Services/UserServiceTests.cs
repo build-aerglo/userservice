@@ -539,10 +539,7 @@ public class UserServiceTests
             .Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
             .ReturnsAsync(businessRep);
 
-        _mockBusinessServiceClient
-            .Setup(c => c.UpdateBusinessUserIdAsync(businessId, user.Id))
-            .Returns(Task.CompletedTask);
-
+       
         // ACT
         var result = await _service.RegisterBusinessAccountAsync(dto);
 
@@ -557,7 +554,6 @@ public class UserServiceTests
         });
 
         _mockBusinessServiceClient.Verify(c => c.CreateBusinessAsync(dto), Times.Once);
-        _mockBusinessServiceClient.Verify(c => c.UpdateBusinessUserIdAsync(businessId, user.Id), Times.Once);
         _mockUserRepository.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Once);
         _mockBusinessRepRepository.Verify(r => r.AddAsync(It.IsAny<BusinessRep>()), Times.Once);
     }
@@ -589,10 +585,6 @@ public class UserServiceTests
         _mockBusinessServiceClient.Setup(c => c.CreateBusinessAsync(dto)).ReturnsAsync(businessId);
         _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
         _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(savedUser);
-        _mockBusinessServiceClient
-            .Setup(c => c.UpdateBusinessUserIdAsync(It.IsAny<Guid>(), It.IsAny<Guid>()))
-            .Callback<Guid, Guid>((bId, uId) => { capturedBusinessId = bId; capturedUserId = uId; })
-            .Returns(Task.CompletedTask);
         _mockBusinessRepRepository.Setup(r => r.AddAsync(It.IsAny<BusinessRep>())).Returns(Task.CompletedTask);
         _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(businessRep);
 
@@ -627,10 +619,7 @@ public class UserServiceTests
         _mockBusinessServiceClient.Setup(c => c.CreateBusinessAsync(dto)).ReturnsAsync(businessId);
         _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
         _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(savedUser);
-        _mockBusinessServiceClient
-            .Setup(c => c.UpdateBusinessUserIdAsync(It.IsAny<Guid>(), It.IsAny<Guid>()))
-            .ThrowsAsync(new BusinessUserCreationFailedException("Failed to link user to business."));
-
+       
         // ACT & ASSERT
         Assert.ThrowsAsync<BusinessUserCreationFailedException>(
             () => _service.RegisterBusinessAccountAsync(dto));

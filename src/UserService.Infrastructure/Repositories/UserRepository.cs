@@ -171,4 +171,15 @@ public class UserRepository : IUserRepository
         using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, new { UserId = userId, NewEmail = newEmail, UpdatedAt = DateTime.UtcNow });
     }
+    
+    public async Task SetUserIdAsync(Guid userId, Guid businessId)
+    {
+        const string sql = @"
+            UPDATE business
+            SET user_id = @UserId
+            WHERE id = @BusinessId;";
+
+        using var conn = CreateConnection();
+        await conn.ExecuteAsync(sql, new { UserId = userId, BusinessId = businessId });
+    }
 }
