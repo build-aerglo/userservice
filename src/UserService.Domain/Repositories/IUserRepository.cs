@@ -16,4 +16,5 @@ public interface IUserRepository
     Task<User?> GetByPhoneAsync(string phone);
     Task<User?> GetByEmailOrPhoneAsync(string identifier);
     Task UpdateEmailAsync(Guid userId, string newEmail);
+    Task SetUserIdAsync(Guid userId, Guid businessId);
 }

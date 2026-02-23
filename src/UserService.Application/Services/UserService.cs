@@ -251,7 +251,7 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
             throw new UserCreationFailedException("Failed to create user record.");
 
         // link user to business record
-        await businessServiceClient.UpdateBusinessUserIdAsync(businessId.Value, savedUser.Id);
+        await userRepository.SetUserIdAsync(savedUser.Id, businessId.Value);
 
         // save business
         var businessRep = new BusinessRep(businessId.Value, savedUser.Id, userPayload.BranchName, userPayload.BranchAddress);
