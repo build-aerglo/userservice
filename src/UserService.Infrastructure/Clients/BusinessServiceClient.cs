@@ -120,6 +120,47 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
         }
     }
 
+    /// <summary>
+    /// Sets the user_id field on the business record in the Business Service.
+    /// </summary>
+    public async Task UpdateBusinessUserIdAsync(Guid businessId, Guid userId)
+    {
+        try
+        {
+            var payload = new { userId };
+            var response = await httpClient.PatchAsJsonAsync($"/api/business/{businessId}/user-id", payload);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                logger.LogError(
+                    "Failed to set user_id on business {BusinessId}: {StatusCode} | {Error}",
+                    businessId, response.StatusCode, error);
+                throw new BusinessUserCreationFailedException(
+                    $"Failed to link user to business {businessId}.");
+            }
+
+            logger.LogInformation(
+                "Successfully set user_id {UserId} on business {BusinessId}", userId, businessId);
+        }
+        catch (BusinessUserCreationFailedException)
+        {
+            throw;
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Network error setting user_id on business {BusinessId}", businessId);
+            throw new BusinessUserCreationFailedException(
+                $"Network error linking user to business {businessId}.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error setting user_id on business {BusinessId}", businessId);
+            throw new BusinessUserCreationFailedException(
+                $"Unexpected error linking user to business {businessId}.");
+        }
+    }
+
     private sealed class BusinessFetchResponse
     {
         public Guid Id { get; set; }

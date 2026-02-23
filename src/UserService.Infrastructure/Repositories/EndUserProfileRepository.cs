@@ -198,7 +198,12 @@ public async Task<EndUserSummary> GetUserDataAsync(Guid? userId, string? email, 
             Email: r.email,
             StarRating: r.star_rating,
             ReviewBody: r.review_body,
-            PhotoUrls: r.photo_urls != null ? ((string)r.photo_urls).Split(',', StringSplitOptions.RemoveEmptyEntries) : Array.Empty<string>(),
+            PhotoUrls: r.photo_urls switch
+            {
+                string s => s.Split(',', StringSplitOptions.RemoveEmptyEntries),
+                string[] arr => arr,
+                _ => Array.Empty<string>()
+            },
             ReviewAsAnon: r.review_as_anon,
             IsGuestReview: r.is_guest_review,
             CreatedAt: r.created_at,

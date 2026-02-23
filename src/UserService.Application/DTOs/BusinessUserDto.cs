@@ -6,7 +6,7 @@ public record BusinessUserDto(
     string Name,
     string Email,
     string Password,
-    string Phone,
+    string? Phone,
     string UserType,
     string? Address,
     string? BranchName,
@@ -15,7 +15,7 @@ public record BusinessUserDto(
     List<string> CategoryIds
 )
 {
-    public BusinessUserDto() : this("", "", "", "", "",  null, null, null, null, new List<string>()) { }
+    public BusinessUserDto() : this("", "", "", null, "",  null, null, null, null, new List<string>()) { }
 };
 
 public record BusinessFetchResponseDto

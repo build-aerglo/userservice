@@ -3,7 +3,7 @@ namespace UserService.Application.DTOs;
 public record UserDto(
     string Username,
     string Email,
-    string Phone,
+    string? Phone,
     string UserType,
     string? Address
 );
@@ -21,7 +21,7 @@ public record CreateSubBusinessUserDto(
     Guid BusinessId,           
     string Username,          
     string Email,              
-    string Phone,             
+    string? Phone,             
     string? Address,         
     string? BranchName,
     string? Password,
@@ -44,7 +44,7 @@ public record SubBusinessUserResponseDto(
     Guid BusinessId,           
     string Username,
     string Email,
-    string Phone,
+    string? Phone,
     string? Address,
     string? BranchName,
     string? BranchAddress,
