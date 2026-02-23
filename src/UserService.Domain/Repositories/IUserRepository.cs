@@ -3,7 +3,7 @@ using UserService.Domain.Entities;
 namespace UserService.Domain.Repositories;
 
 public interface IUserRepository
-{
+{ 
     Task<bool> EmailExistsAsync(string email);
     Task<bool> PhoneExistsAsync(string phone);
     Task<IEnumerable<User>> GetAllAsync();
