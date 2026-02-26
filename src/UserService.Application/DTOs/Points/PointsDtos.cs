@@ -194,3 +194,12 @@ public record PointTransactionsByDateRangeDto(
     decimal TotalPointsDeducted,
     int Count
 );
+
+// In UserService.Application.DTOs.Points
+public record UserPointsBreakdownDto(
+    decimal ReviewPoints,
+    decimal ReferralPoints,
+    decimal StreakPoints,
+    decimal BonusPoints,
+    decimal OtherPoints
+);

@@ -817,7 +817,7 @@ public class PointsServiceTests
         // ARRANGE
         var userId = Guid.NewGuid();
         var userPoints = new UserPoints(userId);
-        userPoints.AddPoints(100m);
+        userPoints.AddPoints(1000m); // ← CHANGE: 100 → 1000 (must be >= 500 minimum)
 
         _mockPointsRepository.Setup(r => r.GetByUserIdAsync(userId))
             .ReturnsAsync(userPoints);
@@ -878,10 +878,10 @@ public class PointsServiceTests
     [Test]
     public async Task RedeemPoints_AirtimeFails_ShouldMarkAsFailed()
     {
-        // ARRANGE
+        //ARRANGE
         var userId = Guid.NewGuid();
         var userPoints = new UserPoints(userId);
-        userPoints.AddPoints(100m);
+        userPoints.AddPoints(1000m); // ← CHANGE: 100 → 1000 (must be >= 500 minimum)
 
         _mockPointsRepository.Setup(r => r.GetByUserIdAsync(userId))
             .ReturnsAsync(userPoints);
@@ -922,7 +922,7 @@ public class PointsServiceTests
         // ARRANGE
         var userId = Guid.NewGuid();
         var userPoints = new UserPoints(userId);
-        userPoints.AddPoints(100m);
+        userPoints.AddPoints(1000m); // ← CHANGE: 100 → 1000
 
         _mockPointsRepository.Setup(r => r.GetByUserIdAsync(userId))
             .ReturnsAsync(userPoints);
@@ -1039,4 +1039,264 @@ public class PointsServiceTests
             async () => await _service.GetPointRuleByActionTypeAsync("INVALID")
         );
     }
+    
+    // ========================================================================
+// POINTS BREAKDOWN TESTS
+// ========================================================================
+
+[Test]
+public async Task GetPointsBreakdownAsync_WithReviewTransactions_ShouldSumReviewPoints()
+{
+    // ARRANGE
+    var userId = Guid.NewGuid();
+    var transactions = new List<PointTransaction>
+    {
+        new(userId, 5.5m, "EARN", "Review points", Guid.NewGuid(), "Review"),
+        new(userId, 3.0m, "EARN", "Review with images", Guid.NewGuid(), "Review"),
+        new(userId, 10m, "EARN", "Referral bonus", Guid.NewGuid(), "Referral"), // Should NOT count as review
+    };
+
+    _mockTransactionRepository.Setup(r => r.GetByUserIdAsync(userId, 1000, 0))
+        .ReturnsAsync(transactions);
+
+    // ACT
+    var result = await _service.GetPointsBreakdownAsync(userId);
+
+    // ASSERT
+    Assert.That(result.ReviewPoints, Is.EqualTo(8.5m)); // 5.5 + 3.0
+    Assert.That(result.ReferralPoints, Is.EqualTo(10m));
+}
+
+[Test]
+public async Task GetPointsBreakdownAsync_WithReferralTransactions_ShouldSumReferralPoints()
+{
+    // ARRANGE
+    var userId = Guid.NewGuid();
+    var transactions = new List<PointTransaction>
+    {
+        new(userId, 50m, "BONUS", "Referral bonus", Guid.NewGuid(), "Referral"),
+        new(userId, 75m, "BONUS", "Another referral", Guid.NewGuid(), "Referral"),
+    };
+
+    _mockTransactionRepository.Setup(r => r.GetByUserIdAsync(userId, 1000, 0))
+        .ReturnsAsync(transactions);
+
+    // ACT
+    var result = await _service.GetPointsBreakdownAsync(userId);
+
+    // ASSERT
+    Assert.That(result.ReferralPoints, Is.EqualTo(125m));
+}
+
+[Test]
+public async Task GetPointsBreakdownAsync_WithStreakTransactions_ShouldSumStreakPoints()
+{
+    // ARRANGE
+    var userId = Guid.NewGuid();
+    var transactions = new List<PointTransaction>
+    {
+        new(userId, 100m, "MILESTONE", "100-day login streak milestone bonus"),
+        new(userId, 150m, "MILESTONE", "100-day login streak milestone bonus"), // Verified user
+    };
+
+    _mockTransactionRepository.Setup(r => r.GetByUserIdAsync(userId, 1000, 0))
+        .ReturnsAsync(transactions);
+
+    // ACT
+    var result = await _service.GetPointsBreakdownAsync(userId);
+
+    // ASSERT
+    Assert.That(result.StreakPoints, Is.EqualTo(250m));
+}
+
+[Test]
+public async Task GetPointsBreakdownAsync_WithBonusTransactions_ShouldSumBonusPoints_ExcludingReferrals()
+{
+    // ARRANGE
+    var userId = Guid.NewGuid();
+    var transactions = new List<PointTransaction>
+    {
+        new(userId, 20m, "BONUS", "25 reviews milestone"), // Should count as bonus
+        new(userId, 50m, "BONUS", "Referral bonus", Guid.NewGuid(), "Referral"), // Should NOT count (is referral)
+        new(userId, 30m, "BONUS", "Loyalty bonus"), // Should count as bonus
+    };
+
+    _mockTransactionRepository.Setup(r => r.GetByUserIdAsync(userId, 1000, 0))
+        .ReturnsAsync(transactions);
+
+    // ACT
+    var result = await _service.GetPointsBreakdownAsync(userId);
+
+    // ASSERT
+    Assert.That(result.BonusPoints, Is.EqualTo(50m)); // 20 + 30, excluding the 50 referral
+}
+
+[Test]
+public async Task GetPointsBreakdownAsync_WithMixedTransactions_ShouldCategorizeCorrectly()
+{
+    // ARRANGE
+    var userId = Guid.NewGuid();
+    var transactions = new List<PointTransaction>
+    {
+        // Review points
+        new(userId, 4.5m, "EARN", "Review", Guid.NewGuid(), "Review"),
+        // Referral points
+        new(userId, 75m, "BONUS", "Referral", Guid.NewGuid(), "Referral"),
+        // Streak points
+        new(userId, 150m, "MILESTONE", "100-day login streak milestone bonus"),
+        // Other bonus
+        new(userId, 500m, "BONUS", "Loyalty anniversary"),
+        // Deduction (should not add to any category total, but exists in history)
+        new(userId, -50m, "REDEEM", "Redeemed for airtime"),
+    };
+
+    _mockTransactionRepository.Setup(r => r.GetByUserIdAsync(userId, 1000, 0))
+        .ReturnsAsync(transactions);
+
+    // ACT
+    var result = await _service.GetPointsBreakdownAsync(userId);
+
+    // ASSERT
+    Assert.That(result.ReviewPoints, Is.EqualTo(4.5m));
+    Assert.That(result.ReferralPoints, Is.EqualTo(75m));
+    Assert.That(result.StreakPoints, Is.EqualTo(150m));
+    Assert.That(result.BonusPoints, Is.EqualTo(500m));
+    // Note: Deductions are negative points; your logic may need to handle absolute values
+    // depending on whether you want "points earned" vs "net points" per category
+}
+
+[Test]
+public async Task GetPointsBreakdownAsync_WithNoTransactions_ShouldReturnZeros()
+{
+    // ARRANGE
+    var userId = Guid.NewGuid();
+
+    _mockTransactionRepository.Setup(r => r.GetByUserIdAsync(userId, 1000, 0))
+        .ReturnsAsync(new List<PointTransaction>());
+
+    // ACT
+    var result = await _service.GetPointsBreakdownAsync(userId);
+
+    // ASSERT
+    Assert.That(result.ReviewPoints, Is.EqualTo(0m));
+    Assert.That(result.ReferralPoints, Is.EqualTo(0m));
+    Assert.That(result.StreakPoints, Is.EqualTo(0m));
+    Assert.That(result.BonusPoints, Is.EqualTo(0m));
+    Assert.That(result.OtherPoints, Is.EqualTo(0m));
+}
+
+[Test]
+public async Task GetPointsBreakdownAsync_CaseInsensitiveReferenceType_ShouldMatch()
+{
+    // ARRANGE
+    var userId = Guid.NewGuid();
+    var transactions = new List<PointTransaction>
+    {
+        new(userId, 10m, "EARN", "Review", Guid.NewGuid(), "review"), // lowercase
+        new(userId, 20m, "EARN", "Referral", Guid.NewGuid(), "REFERRAL"), // uppercase
+    };
+
+    _mockTransactionRepository.Setup(r => r.GetByUserIdAsync(userId, 1000, 0))
+        .ReturnsAsync(transactions);
+
+    // ACT
+    var result = await _service.GetPointsBreakdownAsync(userId);
+
+    // ASSERT
+    Assert.That(result.ReviewPoints, Is.EqualTo(10m));
+    Assert.That(result.ReferralPoints, Is.EqualTo(20m));
+}
+
+[Test]
+public async Task GetPointsBreakdownAsync_StreakDescriptionCaseInsensitive_ShouldMatch()
+{
+    // ARRANGE
+    var userId = Guid.NewGuid();
+    var transactions = new List<PointTransaction>
+    {
+        new(userId, 100m, "MILESTONE", "100-DAY LOGIN STREAK MILESTONE BONUS"), // Uppercase
+        new(userId, 150m, "MILESTONE", "100-day login streak milestone bonus"), // Mixed case
+    };
+
+    _mockTransactionRepository.Setup(r => r.GetByUserIdAsync(userId, 1000, 0))
+        .ReturnsAsync(transactions);
+
+    // ACT
+    var result = await _service.GetPointsBreakdownAsync(userId);
+
+    // ASSERT
+    Assert.That(result.StreakPoints, Is.EqualTo(250m));
+}
+
+[Test]
+public async Task GetPointsBreakdownAsync_ReviewPoints_ShouldNotAppearInOtherPoints()
+{
+    // ARRANGE
+    var userId = Guid.NewGuid();
+    var transactions = new List<PointTransaction>
+    {
+        new(userId, 13m, "EARN", "Review points", Guid.NewGuid(), "Review"),
+        new(userId, 50m, "EARN", "Referral", Guid.NewGuid(), "Referral"),
+        new(userId, 25m, "EARN", "Welcome bonus", null, null), // Should be OtherPoints
+    };
+
+    _mockTransactionRepository.Setup(r => r.GetByUserIdAsync(userId, 1000, 0))
+        .ReturnsAsync(transactions);
+
+    // ACT
+    var result = await _service.GetPointsBreakdownAsync(userId);
+
+    // ASSERT
+    Assert.That(result.ReviewPoints, Is.EqualTo(13m));
+    Assert.That(result.OtherPoints, Is.EqualTo(25m)); // Should NOT include the 13 review points
+    Assert.That(result.ReviewPoints + result.OtherPoints, Is.EqualTo(38m)); // No double-counting
+}
+
+[Test]
+public async Task GetPointsBreakdownAsync_WithNullReferenceType_ShouldNotDoubleCount()
+{
+    // ARRANGE
+    var userId = Guid.NewGuid();
+    var transactions = new List<PointTransaction>
+    {
+        // Review with null ReferenceType BUT "review" in description
+        new PointTransaction(
+            userId: userId,
+            points: 13m,
+            transactionType: "EARN",
+            description: "Review points",  // ← Contains "review"
+            referenceId: Guid.NewGuid(),
+            referenceType: null  // ← Null, but description saves it
+        ),
+        // Review with lowercase reference type
+        new PointTransaction(
+            userId: userId,
+            points: 10m,
+            transactionType: "EARN",
+            description: "Review with images",
+            referenceId: Guid.NewGuid(),
+            referenceType: "review"  // ← lowercase
+        ),
+        // Actual other points (no "review" in description)
+        new PointTransaction(
+            userId: userId,
+            points: 25m,
+            transactionType: "EARN",
+            description: "Welcome bonus",  // ← No "review" here
+            referenceId: null,
+            referenceType: null
+        ),
+    };
+
+    _mockTransactionRepository.Setup(r => r.GetByUserIdAsync(userId, 1000, 0))
+        .ReturnsAsync(transactions);
+
+    // ACT
+    var result = await _service.GetPointsBreakdownAsync(userId);
+
+    // ASSERT
+    Assert.That(result.ReviewPoints, Is.EqualTo(23m), "Review points should include null and lowercase");
+    Assert.That(result.OtherPoints, Is.EqualTo(25m), "Other points should NOT include review points");
+    Assert.That(result.ReviewPoints + result.OtherPoints, Is.EqualTo(48m), "No double-counting");
+}
 }

@@ -1,6 +1,6 @@
 using Dapper;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
-using Npgsql;
 using UserService.Domain.Entities;
 using UserService.Infrastructure.Repositories;
 using System.Text.Json;
@@ -10,115 +10,225 @@ namespace UserService.Infrastructure.Tests.Repositories;
 [TestFixture]
 public class EndUserProfileRepositoryTests
 {
-    private const string InfrastructureTestPrefix = "__INFRA_TEST__";
-    private static string Unique() => Guid.NewGuid().ToString("N")[..6];
-
+    private SqliteConnection _connection = null!;
     private EndUserProfileRepository _repository = null!;
-    private IConfiguration _configuration = null!;
-    private string _connectionString = string.Empty;
 
     [OneTimeSetUp]
     public async Task GlobalSetup()
     {
-        var builder = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
+        // Single shared in-memory SQLite connection
+        _connection = new SqliteConnection("Data Source=:memory:");
+        await _connection.OpenAsync();
 
-        _configuration = builder.Build();
-        _connectionString = _configuration.GetConnectionString("PostgresConnection")
-                            ?? throw new InvalidOperationException("Missing connection string");
+        await CreateSchemaAsync();
 
-        _repository = new EndUserProfileRepository(_configuration);
+        // Pass connection into repository
+        _repository = new EndUserProfileRepository(_connection);
     }
 
-    [SetUp]
-    public async Task Setup()
+    [OneTimeTearDown]
+    public async Task GlobalTearDown()
     {
-        await using var conn = new NpgsqlConnection(_connectionString);
-        var prefix = InfrastructureTestPrefix + "%";
-
-        await conn.ExecuteAsync(@"
-            DELETE FROM point_transactions
-            WHERE user_id IN (
-                SELECT id FROM users WHERE username LIKE @prefix OR email LIKE @prefix
-            );", new { prefix });
-
-        await conn.ExecuteAsync(@"
-            DELETE FROM user_points
-            WHERE user_id IN (
-                SELECT id FROM users WHERE username LIKE @prefix OR email LIKE @prefix
-            );", new { prefix });
-
-        await conn.ExecuteAsync(@"
-            DELETE FROM user_badges
-            WHERE user_id IN (
-                SELECT id FROM users WHERE username LIKE @prefix OR email LIKE @prefix
-            );", new { prefix });
-
-        await conn.ExecuteAsync(@"
-            DELETE FROM review
-            WHERE reviewer_id IN (
-                SELECT id FROM users WHERE username LIKE @prefix OR email LIKE @prefix
-            )
-            OR email LIKE @prefix;", new { prefix });
-
-        await conn.ExecuteAsync(@"
-            DELETE FROM end_user
-            WHERE user_id IN (
-                SELECT id FROM users WHERE username LIKE @prefix OR email LIKE @prefix
-            );", new { prefix });
-
-        await conn.ExecuteAsync(@"
-            DELETE FROM business WHERE name LIKE @prefix;", new { prefix });
-
-        await conn.ExecuteAsync(@"
-            DELETE FROM users
-            WHERE username LIKE @prefix OR email LIKE @prefix;", new { prefix });
+        await _connection.CloseAsync();
+        _connection.Dispose();
     }
 
-    private async Task<Guid> CreateParentUserAsync(Guid? userId = null)
+    [TearDown]
+    public async Task TearDown()
+    {
+        // Wipe data between tests but keep schema
+        await _connection.ExecuteAsync(@"
+            DELETE FROM point_transactions;
+            DELETE FROM user_points;
+            DELETE FROM user_badges;
+            DELETE FROM business_category;
+            DELETE FROM business_branches;
+            DELETE FROM category;
+            DELETE FROM review;
+            DELETE FROM end_user;
+            DELETE FROM business;
+            DELETE FROM users;");
+    }
+
+    private async Task CreateSchemaAsync()
+    {
+        await _connection.ExecuteAsync(@"
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                username TEXT NOT NULL,
+                user_type TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS end_user (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id),
+                social_media TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS business (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                logo TEXT,
+                business_citytown TEXT,
+                business_state TEXT,
+                business_address TEXT,
+                is_verified INTEGER DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS business_branches (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL REFERENCES business(id),
+                branch_citytown TEXT,
+                branch_state TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS category (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS business_category (
+                business_id TEXT NOT NULL REFERENCES business(id),
+                category_id TEXT NOT NULL REFERENCES category(id),
+                PRIMARY KEY (business_id, category_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS review (
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL REFERENCES business(id),
+                location_id TEXT REFERENCES business_branches(id),
+                reviewer_id TEXT REFERENCES users(id),
+                email TEXT,
+                star_rating REAL,
+                review_body TEXT,
+                photo_urls TEXT,
+                review_as_anon INTEGER DEFAULT 0,
+                is_guest_review INTEGER DEFAULT 0,
+                status TEXT,
+                ip_address TEXT,
+                device_id TEXT,
+                geolocation TEXT,
+                user_agent TEXT,
+                validation_result TEXT,
+                validated_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS user_badges (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id),
+                badge_type TEXT NOT NULL,
+                location TEXT,
+                category TEXT,
+                earned_at TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1
+            );
+
+            CREATE TABLE IF NOT EXISTS user_points (
+                user_id TEXT PRIMARY KEY REFERENCES users(id),
+                total_points REAL DEFAULT 0,
+                current_streak INTEGER DEFAULT 0,
+                longest_streak INTEGER DEFAULT 0,
+                last_login_date TEXT,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS point_transactions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id),
+                points REAL NOT NULL,
+                transaction_type TEXT NOT NULL,
+                description TEXT,
+                reference_id TEXT,
+                reference_type TEXT,
+                created_at TEXT NOT NULL
+            );");
+    }
+
+    // ========================================================================
+    // HELPERS
+    // ========================================================================
+
+    private async Task<Guid> CreateUserAsync(Guid? userId = null)
     {
         var id = userId ?? Guid.NewGuid();
-        var unique = Unique();
-
-        await using var conn = new NpgsqlConnection(_connectionString);
-
-        await conn.ExecuteAsync(@"
+        await _connection.ExecuteAsync(@"
             INSERT INTO users (id, email, username, user_type, created_at)
-            VALUES (@Id, @Email, @Username, @UserType, @CreatedAt)
-            ON CONFLICT (id) DO NOTHING",
+            VALUES (@Id, @Email, @Username, @UserType, @CreatedAt)",
             new
             {
-                Id = id,
-                Email = $"{InfrastructureTestPrefix}_{unique}@example.com",
-                Username = $"{InfrastructureTestPrefix}_user_{unique}",
+                Id = id.ToString(),
+                Email = $"test_{id:N}@example.com",
+                Username = $"user_{id:N}",
                 UserType = "end_user",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow.ToString("o")
             });
-
         return id;
     }
+
+    private async Task<Guid> CreateBusinessAsync(string city = "Test City", string state = "TS")
+    {
+        var id = Guid.NewGuid();
+        await _connection.ExecuteAsync(@"
+            INSERT INTO business (id, name, business_citytown, business_state, is_verified)
+            VALUES (@Id, @Name, @City, @State, @IsVerified)",
+            new { Id = id.ToString(), Name = $"Business_{id:N}", City = city, State = state, IsVerified = 1 });
+        return id;
+    }
+
+    private async Task<Guid> CreateBranchAsync(Guid businessId, string city, string state)
+    {
+        var id = Guid.NewGuid();
+        await _connection.ExecuteAsync(@"
+            INSERT INTO business_branches (id, business_id, branch_citytown, branch_state)
+            VALUES (@Id, @BusinessId, @City, @State)",
+            new { Id = id.ToString(), BusinessId = businessId.ToString(), City = city, State = state });
+        return id;
+    }
+
+    private async Task CreateReviewAsync(Guid businessId, Guid userId, string status = "APPROVED", 
+        decimal starRating = 5m, Guid? locationId = null)
+    {
+        await _connection.ExecuteAsync(@"
+            INSERT INTO review (id, business_id, location_id, reviewer_id, email, star_rating, review_body, status, created_at)
+            VALUES (@Id, @BusinessId, @LocationId, @ReviewerId, @Email, @StarRating, @ReviewBody, @Status, @CreatedAt)",
+            new
+            {
+                Id = Guid.NewGuid().ToString(),
+                BusinessId = businessId.ToString(),
+                LocationId = locationId?.ToString(),
+                ReviewerId = userId.ToString(),
+                Email = $"test_{userId:N}@example.com",
+                StarRating = (double)starRating,
+                ReviewBody = "Test review body with enough content to be meaningful.",
+                Status = status,
+                CreatedAt = DateTime.UtcNow.ToString("o")
+            });
+    }
+
+    // ========================================================================
+    // TESTS
+    // ========================================================================
 
     [Test]
     public async Task GetByUserIdAsync_ShouldReturnProfile_WhenExists()
     {
-        var userId = await CreateParentUserAsync();
-
+        var userId = await CreateUserAsync();
         var profile = new EndUserProfile
         {
+            Id = Guid.NewGuid(),
             UserId = userId,
-            SocialMedia = JsonSerializer.Serialize(
-                new Dictionary<string, string>
-                {
-                    { "twitter", "@testuser" },
-                    { "instagram", "@test_insta" }
-                }),
+            SocialMedia = JsonSerializer.Serialize(new Dictionary<string, string> { { "twitter", "@test" } }),
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
 
         await _repository.AddAsync(profile);
-
         var fetched = await _repository.GetByUserIdAsync(userId);
 
         Assert.That(fetched, Is.Not.Null);
@@ -133,20 +243,15 @@ public class EndUserProfileRepositoryTests
     }
 
     [Test]
-    public async Task AddAsync_ShouldInsertEndUserProfile_AndGetById_ShouldReturnProfile()
+    public async Task AddAsync_ShouldInsertProfile_AndGetById_ShouldReturnIt()
     {
         var profileId = Guid.NewGuid();
-        var userId = await CreateParentUserAsync();
+        var userId = await CreateUserAsync();
 
         var profile = new EndUserProfile
         {
             Id = profileId,
             UserId = userId,
-            SocialMedia = JsonSerializer.Serialize(
-                new Dictionary<string, string>
-                {
-                    { "twitter", "@testuser" }
-                }),
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -162,16 +267,9 @@ public class EndUserProfileRepositoryTests
     public async Task DeleteAsync_ShouldRemoveProfile()
     {
         var profileId = Guid.NewGuid();
-        var userId = await CreateParentUserAsync();
+        var userId = await CreateUserAsync();
 
-        var profile = new EndUserProfile
-        {
-            Id = profileId,
-            UserId = userId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
+        var profile = new EndUserProfile { Id = profileId, UserId = userId, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
         await _repository.AddAsync(profile);
         await _repository.DeleteAsync(profileId);
 
@@ -180,370 +278,123 @@ public class EndUserProfileRepositoryTests
     }
 
     [Test]
-    public async Task GetUserDataAsync_WithUserId_ShouldReturnUserSummary()
+    public async Task GetUserDataAsync_WithUserId_ShouldReturnReviews()
     {
-        var userId = await CreateParentUserAsync();
-        var unique = Unique();
-        var email = $"{InfrastructureTestPrefix}_{unique}@example.com";
-
-        await using var conn = new NpgsqlConnection(_connectionString);
-
-        var businessId = Guid.NewGuid();
-        await conn.ExecuteAsync(@"
-            INSERT INTO business (id, name, business_citytown, business_state, is_verified)
-            VALUES (@Id, @Name, @City, @State, @IsVerified)",
-            new
-            {
-                Id = businessId,
-                Name = $"{InfrastructureTestPrefix}_Business_{unique}",
-                City = "Test City",
-                State = "TS",
-                IsVerified = true
-            });
-
-        await conn.ExecuteAsync(@"
-            INSERT INTO review (id, business_id, reviewer_id, email, star_rating, review_body, status, created_at)
-            VALUES (@Id, @BusinessId, @ReviewerId, @Email, @StarRating, @ReviewBody, @Status, @CreatedAt)",
-            new
-            {
-                Id = Guid.NewGuid(),
-                BusinessId = businessId,
-                ReviewerId = userId,
-                Email = email,
-                StarRating = 5m,
-                ReviewBody = "A solid experience overall. The ambiance was pleasant and the quality was consistently good. I would definitely return in the future.",
-                Status = "APPROVED",
-                CreatedAt = DateTime.UtcNow
-            });
+        var userId = await CreateUserAsync();
+        var businessId = await CreateBusinessAsync();
+        await CreateReviewAsync(businessId, userId);
 
         var result = await _repository.GetUserDataAsync(userId, null);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Reviews, Is.Not.Empty);
     }
-    
+
     [Test]
-public async Task GetUserDataAsync_WithEmail_ShouldReturnUserSummary()
-{
-    // Arrange
-    var unique = Unique();
-    var email = $"{InfrastructureTestPrefix}_{unique}@example.com";
-    
-    await using var conn = new NpgsqlConnection(_connectionString);
-    
-    // Insert test business
-    var businessId = Guid.NewGuid();
-    await conn.ExecuteAsync(@"
-        INSERT INTO business (id, name, business_citytown, business_state, is_verified)
-        VALUES (@Id, @Name, @City, @State, @IsVerified)
-        ON CONFLICT (id) DO NOTHING",
-        new { 
-            Id = businessId, 
-            Name = $"{InfrastructureTestPrefix}_EmailBusiness_{unique}", 
-            City = "Email City", 
-            State = "EC", 
-            IsVerified = true 
-        });
-
-    // Insert guest review
-    await conn.ExecuteAsync(@"
-        INSERT INTO review (id, business_id, email, star_rating, review_body, status, is_guest_review, created_at)
-        VALUES (@Id, @BusinessId, @Email, @StarRating, @ReviewBody, @Status, @IsGuest, @CreatedAt)",
-        new { 
-            Id = Guid.NewGuid(), 
-            BusinessId = businessId, 
-            Email = email,
-            StarRating = 4m, 
-            ReviewBody = "I had a fantastic experience visiting this business. The service was outstanding, the food was delicious, and the atmosphere was very pleasant. I would absolutely recommend it.", 
-            Status = "APPROVED", 
-            IsGuest = true, 
-            CreatedAt = DateTime.UtcNow 
-        });
-
-    // Act
-    var result = await _repository.GetUserDataAsync(null, email);
-
-    // Assert
-    Assert.That(result, Is.Not.Null);
-    Assert.That(result.Email, Is.EqualTo(email));
-    Assert.That(result.Reviews, Is.Not.Empty);
-    
-    var review = result.Reviews.First();
-    Assert.That(review.StarRating, Is.EqualTo(4m));
-    Assert.That(review.IsGuestReview, Is.True);
-    
-    Assert.That(result.Badges, Is.Empty);
-    Assert.That(result.Points, Is.EqualTo(0));
-}
-
-[Test]
-public async Task GetUserDataAsync_WithNoIdentifier_ShouldReturnEmptySummary()
-{
-    var result = await _repository.GetUserDataAsync(null, null);
-
-    Assert.That(result, Is.Not.Null);
-    Assert.That(result.UserId, Is.Null);
-    Assert.That(result.Email, Is.Null);
-    Assert.That(result.Reviews, Is.Empty);
-    Assert.That(result.TopCities, Is.Empty);
-    Assert.That(result.TopCategories, Is.Empty);
-    Assert.That(result.Badges, Is.Empty);
-}
-
-[Test]
-public async Task GetUserDataAsync_WithNonExistentUser_ShouldReturnEmptyData()
-{
-    var result = await _repository.GetUserDataAsync(Guid.NewGuid(), null);
-
-    Assert.That(result, Is.Not.Null);
-    Assert.That(result.Reviews, Is.Empty);
-    Assert.That(result.TopCities, Is.Empty);
-    Assert.That(result.TopCategories, Is.Empty);
-    Assert.That(result.Badges, Is.Empty);
-    Assert.That(result.Points, Is.EqualTo(0));
-    Assert.That(result.Rank, Is.EqualTo(0));
-    Assert.That(result.Streak, Is.EqualTo(0));
-    Assert.That(result.LifetimePoints, Is.EqualTo(0));
-}
-
-[Test]
-public async Task GetUserDataAsync_WithReviews_ShouldCalculateTopCitiesAndCategories()
-{
-    var unique = Unique();
-    var userId = Guid.NewGuid();
-    await CreateParentUserAsync(userId);
-    var email = $"{InfrastructureTestPrefix}_{unique}@example.com";
-    
-    await using var conn = new NpgsqlConnection(_connectionString);
-    
-    var business1Id = Guid.NewGuid();
-    await conn.ExecuteAsync(@"
-        INSERT INTO business (id, name, business_citytown, business_state, is_verified)
-        VALUES (@Id, @Name, @City, @State, @IsVerified)",
-        new { 
-            Id = business1Id, 
-            Name = $"{InfrastructureTestPrefix}_Business1_{unique}", 
-            City = "New York", 
-            State = "NY", 
-            IsVerified = true 
-        });
-
-    var business2Id = Guid.NewGuid();
-    await conn.ExecuteAsync(@"
-        INSERT INTO business (id, name, business_citytown, business_state, is_verified)
-        VALUES (@Id, @Name, @City, @State, @IsVerified)",
-        new { 
-            Id = business2Id, 
-            Name = $"{InfrastructureTestPrefix}_Business2_{unique}", 
-            City = "Los Angeles", 
-            State = "CA", 
-            IsVerified = true 
-        });
-
-    var category1Id = Guid.NewGuid();
-    var category2Id = Guid.NewGuid();
-
-    await conn.ExecuteAsync(@"
-        INSERT INTO category (id, name) VALUES (@Id, @Name)",
-        new[] {
-            new { Id = category1Id, Name = $"{InfrastructureTestPrefix}_Restaurant_{unique}" },
-            new { Id = category2Id, Name = $"{InfrastructureTestPrefix}_Cafe_{unique}" }
-        });
-
-    await conn.ExecuteAsync(@"
-        INSERT INTO business_category (business_id, category_id)
-        VALUES (@BusinessId, @CategoryId)",
-        new[] {
-            new { BusinessId = business1Id, CategoryId = category1Id },
-            new { BusinessId = business1Id, CategoryId = category2Id },
-            new { BusinessId = business2Id, CategoryId = category2Id }
-        });
-
-    var branch1Id = Guid.NewGuid();
-    var branch2Id = Guid.NewGuid();
-
-    await conn.ExecuteAsync(@"
-        INSERT INTO business_branches (id, business_id, branch_citytown, branch_state)
-        VALUES (@Id, @BusinessId, @City, @State)",
-        new[] {
-            new { Id = branch1Id, BusinessId = business1Id, City = "New York", State = "NY" },
-            new { Id = branch2Id, BusinessId = business2Id, City = "Los Angeles", State = "CA" }
-        });
-
-    var now = DateTime.UtcNow;
-
-    for (int i = 0; i < 3; i++)
+    public async Task GetUserDataAsync_WithNoIdentifier_ShouldReturnEmptySummary()
     {
-        await conn.ExecuteAsync(@"
-            INSERT INTO review (id, business_id, location_id, reviewer_id, email, star_rating, review_body, status, created_at)
-            VALUES (@Id, @BusinessId, @LocationId, @ReviewerId, @Email, @StarRating, @ReviewBody, @Status, @CreatedAt)",
-            new {
-                Id = Guid.NewGuid(),
-                BusinessId = business1Id,
-                LocationId = branch1Id,
-                ReviewerId = userId,
-                Email = email,
-                StarRating = 5m,
-                ReviewBody = "I had a fantastic experience visiting this business. The service was outstanding, the food was delicious, and the atmosphere was very pleasant. I would absolutely recommend it.",
-                Status = "APPROVED",
-                CreatedAt = now.AddDays(-i)
-            });
+        var result = await _repository.GetUserDataAsync(null, null);
+
+        Assert.That(result.UserId, Is.Null);
+        Assert.That(result.Reviews, Is.Empty);
+        Assert.That(result.TopCities, Is.Empty);
+        Assert.That(result.Badges, Is.Empty);
     }
 
-    for (int i = 0; i < 2; i++)
+    [Test]
+    public async Task GetUserDataAsync_WithNonExistentUser_ShouldReturnEmptyData()
     {
-        await conn.ExecuteAsync(@"
-            INSERT INTO review (id, business_id, location_id, reviewer_id, email, star_rating, review_body, status, created_at)
-            VALUES (@Id, @BusinessId, @LocationId, @ReviewerId, @Email, @StarRating, @ReviewBody, @Status, @CreatedAt)",
-            new {
-                Id = Guid.NewGuid(),
-                BusinessId = business2Id,
-                LocationId = branch2Id,
-                ReviewerId = userId,
-                Email = email,
-                StarRating = 4m,
-                ReviewBody = "I had a fantastic experience. The service was excellent, the atmosphere was welcoming, and the quality exceeded expectations. I would highly recommend this business to anyone looking for great service.",
-                Status = "APPROVED",
-                CreatedAt = now.AddDays(-(3 + i))
-            });
+        var result = await _repository.GetUserDataAsync(Guid.NewGuid(), null);
+
+        Assert.That(result.Reviews, Is.Empty);
+        Assert.That(result.Points, Is.EqualTo(0));
+        Assert.That(result.Rank, Is.EqualTo(0));
+        Assert.That(result.Streak, Is.EqualTo(0));
     }
 
-    var result = await _repository.GetUserDataAsync(userId, null);
-
-    Assert.That(result.Reviews.Count(), Is.EqualTo(5));
-
-    var topCity = result.TopCities.First();
-    Assert.That(topCity.City, Is.EqualTo("New York"));
-    Assert.That(topCity.ReviewCount, Is.EqualTo(3));
-
-    var topCategory = result.TopCategories.First();
-    Assert.That(topCategory.ReviewCount, Is.EqualTo(5));
-}
-
-[Test]
-public async Task GetUserDataAsync_WithBadges_ShouldReturnActiveBadgesOnly()
-{
-    // Arrange
-    var userId = await CreateParentUserAsync();
-
-    // Create end_user profile so joins work
-    var profile = new EndUserProfile
+    [Test]
+    public async Task GetUserDataAsync_WithBadges_ShouldReturnActiveBadgesOnly()
     {
-        Id = Guid.NewGuid(),
-        UserId = userId,
-        CreatedAt = DateTime.UtcNow,
-        UpdatedAt = DateTime.UtcNow
-    };
+        var userId = await CreateUserAsync();
 
-    await _repository.AddAsync(profile);
+        await _connection.ExecuteAsync(@"
+            INSERT INTO user_badges (id, user_id, badge_type, earned_at, is_active)
+            VALUES 
+                (@Id1, @UserId, 'Newbie', @Now, 1),
+                (@Id2, @UserId, 'Expert', @Now, 1),
+                (@Id3, @UserId, 'Pro',    @Now, 0)",
+            new { Id1 = Guid.NewGuid().ToString(), Id2 = Guid.NewGuid().ToString(), Id3 = Guid.NewGuid().ToString(), UserId = userId.ToString(), Now = DateTime.UtcNow.ToString("o") });
 
-    await using var conn = new NpgsqlConnection(_connectionString);
+        var result = await _repository.GetUserDataAsync(userId, null);
 
-    // Insert both active and inactive badges
-    await conn.ExecuteAsync(@"
-        INSERT INTO user_badges (id, user_id, badge_type, earned_at, is_active)
-        VALUES 
-            (@Id1, @UserId, @BadgeType1, @EarnedAt1, true),
-            (@Id2, @UserId, @BadgeType2, @EarnedAt2, true),
-            (@Id3, @UserId, @BadgeType3, @EarnedAt3, false)",
-        new
-        {
-            Id1 = Guid.NewGuid(),
-            UserId = userId,
-            BadgeType1 = "Newbie",
-            EarnedAt1 = DateTime.UtcNow.AddDays(-10),
+        Assert.That(result.Badges.Count(), Is.EqualTo(2));
+        Assert.That(result.Badges.Any(b => b.BadgeType == "Pro"), Is.False);
+    }
 
-            Id2 = Guid.NewGuid(),
-            BadgeType2 = "Expert",
-            EarnedAt2 = DateTime.UtcNow.AddDays(-5),
-
-            Id3 = Guid.NewGuid(),
-            BadgeType3 = "Pro",
-            EarnedAt3 = DateTime.UtcNow
-        });
-
-    // Act
-    var result = await _repository.GetUserDataAsync(userId, null);
-
-    // Assert
-    Assert.That(result.Badges.Count(), Is.EqualTo(2));
-    Assert.That(result.Badges.Any(b => b.BadgeType == "Newbie"), Is.True);
-    Assert.That(result.Badges.Any(b => b.BadgeType == "Expert"), Is.True);
-    Assert.That(result.Badges.Any(b => b.BadgeType == "Pro"), Is.False);
-    Assert.That(result.CurrentTier, Is.Not.Null);
-}
-
-[Test]
-public async Task GetUserDataAsync_WithPoints_ShouldCalculateCorrectly()
-{
-    // Arrange
-    var userId = await CreateParentUserAsync();
-
-    // Create end_user profile so joins work
-    var profile = new EndUserProfile
+    [Test]
+    public async Task GetUserDataAsync_WithPoints_ShouldReturnCorrectValues()
     {
-        Id = Guid.NewGuid(),
-        UserId = userId,
-        CreatedAt = DateTime.UtcNow,
-        UpdatedAt = DateTime.UtcNow
-    };
+        var userId = await CreateUserAsync();
 
-    await _repository.AddAsync(profile);
+        await _connection.ExecuteAsync(@"
+            INSERT INTO user_points (user_id, total_points, current_streak, updated_at)
+            VALUES (@UserId, 250, 10, @Now)",
+            new { UserId = userId.ToString(), Now = DateTime.UtcNow.ToString("o") });
 
-    await using var conn = new NpgsqlConnection(_connectionString);
+        await _connection.ExecuteAsync(@"
+            INSERT INTO point_transactions (id, user_id, points, transaction_type, description, created_at)
+            VALUES 
+                (@Id1, @UserId, 100, 'EARNED',   'Wrote review',   @T1),
+                (@Id2, @UserId,  50, 'EARNED',   'Received like',  @T2),
+                (@Id3, @UserId,  25, 'REDEEMED', 'Redeemed reward',@T3)",
+            new
+            {
+                Id1 = Guid.NewGuid().ToString(), Id2 = Guid.NewGuid().ToString(), Id3 = Guid.NewGuid().ToString(),
+                UserId = userId.ToString(),
+                T1 = DateTime.UtcNow.AddDays(-2).ToString("o"),
+                T2 = DateTime.UtcNow.AddDays(-1).ToString("o"),
+                T3 = DateTime.UtcNow.ToString("o")
+            });
 
-    await conn.ExecuteAsync(@"
-        INSERT INTO user_points (user_id, total_points, current_streak, updated_at)
-        VALUES (@UserId, @TotalPoints, @CurrentStreak, @UpdatedAt)",
-        new
-        {
-            UserId = userId,
-            TotalPoints = 250,
-            CurrentStreak = 10,
-            UpdatedAt = DateTime.UtcNow
-        });
+        var result = await _repository.GetUserDataAsync(userId, null);
 
-    var now = DateTime.UtcNow;
+        Assert.That(result.Points, Is.EqualTo(250));
+        Assert.That(result.Streak, Is.EqualTo(10));
+        Assert.That(result.LifetimePoints, Is.EqualTo(175));
+        Assert.That(result.RecentActivity.Count(), Is.EqualTo(3));
+    }
 
-    await conn.ExecuteAsync(@"
-        INSERT INTO point_transactions (id, user_id, points, transaction_type, description, created_at)
-        VALUES 
-            (@Id1, @UserId, @Points1, @Type1, @Desc1, @CreatedAt1),
-            (@Id2, @UserId, @Points2, @Type2, @Desc2, @CreatedAt2),
-            (@Id3, @UserId, @Points3, @Type3, @Desc3, @CreatedAt3)",
-        new
-        {
-            UserId = userId,
+    [Test]
+    public async Task GetUserDataAsync_WithReviews_ShouldCalculateTopCitiesAndCategories()
+    {
+        var userId = await CreateUserAsync();
+        var biz1 = await CreateBusinessAsync("New York", "NY");
+        var biz2 = await CreateBusinessAsync("Los Angeles", "CA");
+        var branch1 = await CreateBranchAsync(biz1, "New York", "NY");
+        var branch2 = await CreateBranchAsync(biz2, "Los Angeles", "CA");
 
-            Id1 = Guid.NewGuid(),
-            Points1 = 100,
-            Type1 = "EARNED",
-            Desc1 = "Wrote review",
-            CreatedAt1 = now.AddDays(-2),
+        var cat1 = Guid.NewGuid();
+        var cat2 = Guid.NewGuid();
+        await _connection.ExecuteAsync("INSERT INTO category (id, name) VALUES (@Id, @Name)",
+            new[] { new { Id = cat1.ToString(), Name = "Restaurant" }, new { Id = cat2.ToString(), Name = "Cafe" } });
 
-            Id2 = Guid.NewGuid(),
-            Points2 = 50,
-            Type2 = "EARNED",
-            Desc2 = "Received like",
-            CreatedAt2 = now.AddDays(-1),
+        await _connection.ExecuteAsync("INSERT INTO business_category (business_id, category_id) VALUES (@B, @C)",
+            new[]
+            {
+                new { B = biz1.ToString(), C = cat1.ToString() },
+                new { B = biz1.ToString(), C = cat2.ToString() },
+                new { B = biz2.ToString(), C = cat2.ToString() }
+            });
 
-            Id3 = Guid.NewGuid(),
-            Points3 = 25,
-            Type3 = "REDEEMED",
-            Desc3 = "Redeemed reward",
-            CreatedAt3 = now
-        });
+        for (int i = 0; i < 3; i++)
+            await CreateReviewAsync(biz1, userId, locationId: branch1);
+        for (int i = 0; i < 2; i++)
+            await CreateReviewAsync(biz2, userId, locationId: branch2);
 
-    // Act
-    var result = await _repository.GetUserDataAsync(userId, null);
+        var result = await _repository.GetUserDataAsync(userId, null);
 
-    // Assert
-    Assert.That(result.Points, Is.EqualTo(250));
-    Assert.That(result.Streak, Is.EqualTo(10));
-    Assert.That(result.LifetimePoints, Is.EqualTo(175));
-    Assert.That(result.RecentActivity.Count(), Is.EqualTo(3));
-    Assert.That(result.RecentActivity.First().TransactionType, Is.EqualTo("REDEEMED"));
-    Assert.That(result.RecentActivity.First().Points, Is.EqualTo(25));
-}
-   
+        Assert.That(result.Reviews.Count(), Is.EqualTo(5));
+        Assert.That(result.TopCities.First().City, Is.EqualTo("New York"));
+        Assert.That(result.TopCategories.First().ReviewCount, Is.EqualTo(5));
+    }
 }

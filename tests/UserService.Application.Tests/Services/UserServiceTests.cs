@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using Moq;
 using UserService.Application.DTOs;
 using UserService.Application.Interfaces;
@@ -21,7 +22,10 @@ public class UserServiceTests
     private Mock<IUserSettingsRepository> _mockUserSettingsRepository = null!;
     private Mock<IAuth0ManagementService> _mockAuth0 = null!;
     private Mock<IBadgeService> _mockBadgeService = null!;
+    private Mock<IPointsService> _mockPointsService = null!;
+    private Mock<IReferralService> _mockReferralService = null!;
     private Mock<IConfiguration> _mockConfig = null!;
+    private Mock<IMemoryCache> _mockCache = null!;
     private Application.Services.UserService _service = null!;
 
     [SetUp]
@@ -34,7 +38,10 @@ public class UserServiceTests
         _mockEndUserProfileRepository = new Mock<IEndUserProfileRepository>();
         _mockUserSettingsRepository = new Mock<IUserSettingsRepository>();
         _mockBadgeService = new Mock<IBadgeService>();
+        _mockPointsService = new Mock<IPointsService>();
+        _mockReferralService = new Mock<IReferralService>();
         _mockAuth0 = new Mock<IAuth0ManagementService>();
+        _mockCache = new Mock<IMemoryCache>();
         _mockConfig = new Mock<IConfiguration>();
 
         // Auth0 role mappings
@@ -56,6 +63,12 @@ public class UserServiceTests
         _mockBadgeService.Setup(b => 
             b.CheckAndAssignPioneerBadgeAsync(It.IsAny<Guid>(), It.IsAny<DateTime>()))
             .ReturnsAsync(true);
+        
+        object? cacheValue = null;
+        _mockCache.Setup(c => c.TryGetValue(It.IsAny<object>(), out cacheValue))
+            .Returns((object key, out object value) => { value = null; return false; });
+        _mockCache.Setup(c => c.CreateEntry(It.IsAny<object>()))
+            .Returns(Mock.Of<ICacheEntry>());
 
         _service = new Application.Services.UserService(
             _mockUserRepository.Object,
@@ -65,8 +78,11 @@ public class UserServiceTests
             _mockEndUserProfileRepository.Object,
             _mockUserSettingsRepository.Object,
             _mockBadgeService.Object,
+            _mockPointsService.Object,
+            _mockReferralService.Object,
             _mockAuth0.Object,
-            _mockConfig.Object
+            _mockConfig.Object,
+            _mockCache.Object 
         );
     }
 
@@ -559,7 +575,7 @@ public class UserServiceTests
     }
 
     [Test]
-    public async Task RegisterBusinessAccountAsync_ShouldCallUpdateBusinessUserId_WithSavedUserIdAndBusinessId()
+    public async Task RegisterBusinessAccountAsync_ShouldCallAddAsync_WithCorrectIds()
     {
         // ARRANGE
         var dto = new BusinessUserDto(
@@ -577,7 +593,6 @@ public class UserServiceTests
 
         var businessId = Guid.NewGuid();
         var savedUser = new User(dto.Name, dto.Email, dto.Phone, "password", dto.UserType, dto.Address, "auth0|acme");
-        var businessRep = new BusinessRep(businessId, savedUser.Id, dto.BranchName, dto.BranchAddress);
 
         Guid capturedUserId = Guid.Empty;
         Guid capturedBusinessId = Guid.Empty;
@@ -585,8 +600,19 @@ public class UserServiceTests
         _mockBusinessServiceClient.Setup(c => c.CreateBusinessAsync(dto)).ReturnsAsync(businessId);
         _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
         _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(savedUser);
-        _mockBusinessRepRepository.Setup(r => r.AddAsync(It.IsAny<BusinessRep>())).Returns(Task.CompletedTask);
-        _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(businessRep);
+    
+        // ✅ CAPTURE the parameters passed to AddAsync
+        _mockBusinessRepRepository
+            .Setup(r => r.AddAsync(It.IsAny<BusinessRep>()))
+            .Callback<BusinessRep>(br =>
+            {
+                capturedBusinessId = br.BusinessId;
+                capturedUserId = br.UserId;
+            })
+            .Returns(Task.CompletedTask);
+        
+        _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync(new BusinessRep(businessId, savedUser.Id, dto.BranchName, dto.BranchAddress));
 
         // ACT
         await _service.RegisterBusinessAccountAsync(dto);
@@ -597,7 +623,7 @@ public class UserServiceTests
     }
 
     [Test]
-    public void RegisterBusinessAccountAsync_ShouldThrow_WhenUpdateBusinessUserIdFails()
+    public void RegisterBusinessAccountAsync_ShouldThrow_WhenGetBusinessRepFails()
     {
         // ARRANGE
         var dto = new BusinessUserDto(
@@ -619,12 +645,24 @@ public class UserServiceTests
         _mockBusinessServiceClient.Setup(c => c.CreateBusinessAsync(dto)).ReturnsAsync(businessId);
         _mockUserRepository.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
         _mockUserRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(savedUser);
-       
+    
+        // ✅ AddAsync succeeds
+        _mockBusinessRepRepository.Setup(r => r.AddAsync(It.IsAny<BusinessRep>()))
+            .Returns(Task.CompletedTask);
+    
+        // ❌ But GetByIdAsync returns null → triggers exception
+        _mockBusinessRepRepository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
+            .ReturnsAsync((BusinessRep?)null);
+
         // ACT & ASSERT
         Assert.ThrowsAsync<BusinessUserCreationFailedException>(
-            () => _service.RegisterBusinessAccountAsync(dto));
+            async () => await _service.RegisterBusinessAccountAsync(dto)
+        );
 
-        _mockBusinessRepRepository.Verify(r => r.AddAsync(It.IsAny<BusinessRep>()), Times.Never);
+        // ✅ Verify AddAsync WAS called (it happens before the failure)
+        _mockBusinessRepRepository.Verify(r => r.AddAsync(It.IsAny<BusinessRep>()), Times.Once);
+        // ✅ Verify GetByIdAsync was called and returned null
+        _mockBusinessRepRepository.Verify(r => r.GetByIdAsync(It.IsAny<Guid>()), Times.Once);
     }
 
     [Test]
@@ -998,4 +1036,6 @@ public void GetEndUserSummaryAsync_ShouldThrow_WhenUserNotFound()
         async () => await _service.GetEndUserSummaryAsync(userId, 1, 5)
     );
 }
+
+
 }

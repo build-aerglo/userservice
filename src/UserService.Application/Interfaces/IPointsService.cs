@@ -183,4 +183,6 @@ public interface IPointsService
         Guid userId, 
         DateTime startDate, 
         DateTime endDate);
+
+    Task<UserPointsBreakdownDto> GetPointsBreakdownAsync(Guid userId);
 }
