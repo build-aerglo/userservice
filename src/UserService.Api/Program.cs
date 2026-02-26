@@ -10,10 +10,12 @@ using UserService.Application.Services;
 using UserService.Application.Services.Auth0;
 using UserService.Domain.Repositories;
 using UserService.Infrastructure.Clients;
+using UserService.Infrastructure.Database;
 using UserService.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
 // Enable Dapper snake_case to PascalCase mapping (e.g., auth0_user_id → Auth0UserId)
 DefaultTypeMap.MatchNamesWithUnderscores = true;
 
@@ -172,6 +174,8 @@ builder.Services.Configure<CookiePolicyOptions>(options =>
     options.MinimumSameSitePolicy = SameSiteMode.None;
     options.Secure = CookieSecurePolicy.Always;
 });
+
+builder.Services.AddMemoryCache();
 
 // ---------- CORS ----------
 builder.Services.AddCors(options =>

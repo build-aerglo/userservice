@@ -404,6 +404,8 @@ public class PointsService : IPointsService
     // POINT REDEMPTION
     // ========================================================================
 
+    private const decimal MinimumRedeemablePoints = 500m;
+
     public async Task<RedemptionResponseDto> RedeemPointsAsync(RedeemPointsDto dto)
     {
         if (!IsValidNigerianPhoneNumber(dto.PhoneNumber))
@@ -412,6 +414,9 @@ public class PointsService : IPointsService
         var userPoints = await _pointsRepository.GetByUserIdAsync(dto.UserId);
         if (userPoints is null)
             throw new UserPointsNotFoundException(dto.UserId);
+
+        if (userPoints.TotalPoints < MinimumRedeemablePoints)          // ADD THIS
+            throw new InsufficientPointsException(dto.UserId, dto.Points, userPoints.TotalPoints);
 
         if (userPoints.TotalPoints < dto.Points)
             throw new InsufficientPointsException(dto.UserId, dto.Points, userPoints.TotalPoints);
@@ -655,7 +660,69 @@ public class PointsService : IPointsService
             Count: transactionDtos.Count
         );
     }
+    
+    public async Task<UserPointsBreakdownDto> GetPointsBreakdownAsync(Guid userId)
+{
+    var transactions = await _transactionRepository.GetByUserIdAsync(userId, 1000, 0);
 
+    // Helper for case-insensitive null-safe comparison
+    static bool IsMatch(string? value, string target) =>
+        value?.Equals(target, StringComparison.OrdinalIgnoreCase) == true;
+
+    static bool ContainsIgnoreCase(string? value, string substring) =>
+        value?.Contains(substring, StringComparison.OrdinalIgnoreCase) == true;
+
+    // REVIEW: ReferenceType = "Review" OR Description contains "review" (for legacy data)
+    var reviewPoints = transactions
+        .Where(t => IsMatch(t.ReferenceType, "Review") || ContainsIgnoreCase(t.Description, "review"))
+        .Where(t => t.Points > 0)
+        .Sum(t => t.Points);
+
+    // REFERRAL: ReferenceType = "Referral" OR Description contains "referral"
+    var referralPoints = transactions
+        .Where(t => IsMatch(t.ReferenceType, "Referral") || ContainsIgnoreCase(t.Description, "referral"))
+        .Where(t => t.Points > 0)
+        .Sum(t => t.Points);
+
+    // STREAK: Description contains "streak"
+    var streakPoints = transactions
+        .Where(t => ContainsIgnoreCase(t.Description, "streak"))
+        .Where(t => t.Points > 0)
+        .Sum(t => t.Points);
+
+    // BONUS: TransactionType = "Bonus" BUT NOT Referral or Streak
+    var bonusPoints = transactions
+        .Where(t => IsMatch(t.TransactionType, "Bonus"))
+        .Where(t => !IsMatch(t.ReferenceType, "Referral") && !ContainsIgnoreCase(t.Description, "referral"))
+        .Where(t => !ContainsIgnoreCase(t.Description, "streak"))
+        .Where(t => t.Points > 0)
+        .Sum(t => t.Points);
+
+    // MILESTONE: TransactionType = "Milestone" BUT NOT Streak
+    var milestonePoints = transactions
+        .Where(t => IsMatch(t.TransactionType, "Milestone"))
+        .Where(t => !ContainsIgnoreCase(t.Description, "streak"))
+        .Where(t => t.Points > 0)
+        .Sum(t => t.Points);
+
+    // OTHER: Everything NOT captured above (earnings only)
+    var otherPoints = transactions
+        .Where(t => t.Points > 0)
+        .Where(t => !IsMatch(t.ReferenceType, "Review") && !ContainsIgnoreCase(t.Description, "review"))
+        .Where(t => !IsMatch(t.ReferenceType, "Referral") && !ContainsIgnoreCase(t.Description, "referral"))
+        .Where(t => !ContainsIgnoreCase(t.Description, "streak"))
+        .Where(t => !IsMatch(t.TransactionType, "Bonus"))
+        .Where(t => !IsMatch(t.TransactionType, "Milestone"))
+        .Sum(t => t.Points);
+
+    return new UserPointsBreakdownDto(
+        ReviewPoints: reviewPoints,
+        ReferralPoints: referralPoints,
+        StreakPoints: streakPoints,
+        BonusPoints: bonusPoints + milestonePoints,
+        OtherPoints: otherPoints
+    );
+}
     // ========================================================================
     // PRIVATE HELPER METHODS
     // ========================================================================

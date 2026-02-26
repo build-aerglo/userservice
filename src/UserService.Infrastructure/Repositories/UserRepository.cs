@@ -1,88 +1,92 @@
 using Dapper;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
+using System.Data;
 using UserService.Domain.Entities;
 using UserService.Domain.Repositories;
+using UserService.Infrastructure.Database;
 
 namespace UserService.Infrastructure.Repositories;
 
 public class UserRepository : IUserRepository
 {
-    private readonly string _connectionString;
+    private readonly IDbConnectionFactory _connectionFactory;
+    private readonly IDbConnection? _testConnection;
 
-    public UserRepository(IConfiguration config)
+    public UserRepository(IDbConnectionFactory connectionFactory)
     {
-        _connectionString = config.GetConnectionString("PostgresConnection")!;
+        _connectionFactory = connectionFactory;
     }
 
-    private NpgsqlConnection CreateConnection() => new(_connectionString);
-    
+    public UserRepository(IDbConnection testConnection)
+    {
+        _testConnection = testConnection;
+    }
+
+    private bool IsTestMode => _testConnection != null;
+
+    private async Task<T> QueryAsync<T>(Func<IDbConnection, Task<T>> query)
+    {
+        if (IsTestMode)
+        {
+            if (_testConnection!.State != ConnectionState.Open)
+                await ((System.Data.Common.DbConnection)_testConnection).OpenAsync();
+            return await query(_testConnection);
+        }
+
+        using var conn = await _connectionFactory.CreateConnectionAsync();
+        return await query(conn);
+    }
+
+    private async Task ExecuteAsync(Func<IDbConnection, Task> command)
+    {
+        if (IsTestMode)
+        {
+            if (_testConnection!.State != ConnectionState.Open)
+                await ((System.Data.Common.DbConnection)_testConnection).OpenAsync();
+            await command(_testConnection);
+            return;
+        }
+
+        using var conn = await _connectionFactory.CreateConnectionAsync();
+        await command(conn);
+    }
+
     public async Task<Guid?> GetUserOrBusinessIdByEmailAsync(string email)
     {
-        const string userSql = @"
-            SELECT id, user_type
-            FROM users
-            WHERE LOWER(email) = LOWER(@Email);
-        ";
-
-        using var conn = CreateConnection();
-
-        // Get user record
-        var user = await conn.QueryFirstOrDefaultAsync<(Guid Id, string UserType)>(
-            userSql,
-            new { Email = email }
-        );
-
-        if (user.Id == Guid.Empty)
+        return await QueryAsync(async conn =>
         {
-            Console.WriteLine($"[GetUserOrBusinessIdByEmailAsync] No user found for email: {email}");
-            return null; // user not found
-        }
+            const string userSql = "SELECT id, user_type FROM users WHERE LOWER(email) = LOWER(@Email);";
+            var user = await conn.QueryFirstOrDefaultAsync<(Guid Id, string UserType)>(
+                userSql, new { Email = email });
 
-        // If NOT a business user → return user id
-        if (!string.Equals(user.UserType, "business_user", StringComparison.OrdinalIgnoreCase))
-        {
-            Console.WriteLine($"[GetUserOrBusinessIdByEmailAsync] Found end_user with ID: {user.Id}");
-            return user.Id;
-        }
+            if (user.Id == Guid.Empty) return (Guid?)null;
 
-        // If business user → get business_id from business_reps
-        const string repSql = @"
-            SELECT business_id
-            FROM business_reps
-            WHERE user_id = @UserId;
-        ";
+            if (!string.Equals(user.UserType, "business_user", StringComparison.OrdinalIgnoreCase))
+                return user.Id;
 
-        var businessId = await conn.ExecuteScalarAsync<Guid?>(
-            repSql,
-            new { UserId = user.Id }
-        );
-
-        Console.WriteLine($"[GetUserOrBusinessIdByEmailAsync] Found business_user with business_id: {businessId}");
-        return businessId; // may return null if rep not found
+            const string repSql = "SELECT business_id FROM business_reps WHERE user_id = @UserId;";
+            return await conn.ExecuteScalarAsync<Guid?>(repSql, new { UserId = user.Id });
+        });
     }
 
-    
     public async Task<bool> EmailExistsAsync(string email)
     {
         const string sql = "SELECT COUNT(1) FROM users WHERE email = @Email;";
-        using var conn = CreateConnection();
-        var count = await conn.ExecuteScalarAsync<int>(sql, new { Email = email });
-        return count > 0;
+        return await QueryAsync(async conn =>
+            await conn.ExecuteScalarAsync<int>(sql, new { Email = email }) > 0);
     }
-    
+
     public async Task<IEnumerable<User>> GetAllAsync()
     {
         const string sql = "SELECT * FROM users ORDER BY created_at DESC;";
-        using var conn = CreateConnection();
-        return await conn.QueryAsync<User>(sql);
+        return await QueryAsync(conn => conn.QueryAsync<User>(sql));
     }
 
     public async Task<User?> GetByIdAsync(Guid id)
     {
         const string sql = "SELECT * FROM users WHERE id = @Id;";
-        using var conn = CreateConnection();
-        return await conn.QueryFirstOrDefaultAsync<User>(sql, new { Id = id });
+        return await QueryAsync(conn =>
+            conn.QueryFirstOrDefaultAsync<User>(sql, new { Id = id }));
     }
 
     public async Task AddAsync(User user)
@@ -91,95 +95,79 @@ public class UserRepository : IUserRepository
             INSERT INTO users (id, username, email, phone, user_type, address, join_date, created_at, updated_at, login_type, auth0_user_id)
             VALUES (@Id, @Username, @Email, @Phone, @UserType, @Address, @JoinDate, @CreatedAt, @UpdatedAt, @LoginType, @Auth0UserId);";
 
-        using var conn = CreateConnection();
-        await conn.ExecuteAsync(sql, user);
+        await ExecuteAsync(conn => conn.ExecuteAsync(sql, user));
     }
 
     public async Task UpdateAsync(User user)
     {
         const string sql = @"
             UPDATE users
-            SET email = @Email,
-                phone = @Phone,
-                address = @Address,
+            SET email      = @Email,
+                phone      = @Phone,
+                address    = @Address,
                 updated_at = @UpdatedAt
             WHERE id = @Id;";
 
-        using var conn = CreateConnection();
-        await conn.ExecuteAsync(sql, user);
+        await ExecuteAsync(conn => conn.ExecuteAsync(sql, user));
     }
 
     public async Task DeleteAsync(Guid id)
     {
         const string sql = "DELETE FROM users WHERE id = @Id;";
-        using var conn = CreateConnection();
-        await conn.ExecuteAsync(sql, new { Id = id });
+        await ExecuteAsync(conn => conn.ExecuteAsync(sql, new { Id = id }));
     }
-    
+
     public async Task UpdateLastLoginAsync(Guid userId, DateTime loginTime)
     {
-        const string sql = @"
-        UPDATE users 
-        SET last_login = @LoginTime 
-        WHERE id = @UserId;";
-    
-        using var conn = CreateConnection();
-        await conn.ExecuteAsync(sql, new { UserId = userId, LoginTime = loginTime });
+        const string sql = "UPDATE users SET last_login = @LoginTime WHERE id = @UserId;";
+        await ExecuteAsync(conn =>
+            conn.ExecuteAsync(sql, new { UserId = userId, LoginTime = loginTime }));
     }
 
     public async Task<User?> GetByEmailAsync(string email)
     {
         const string sql = "SELECT * FROM users WHERE LOWER(email) = LOWER(@Email);";
-        using var conn = CreateConnection();
-        var user = await conn.QueryFirstOrDefaultAsync<User>(sql, new { Email = email });
-        Console.WriteLine($"[GetByEmailAsync] Searched for email '{email}', found: {user != null}");
-        return user;
+        return await QueryAsync(conn =>
+            conn.QueryFirstOrDefaultAsync<User>(sql, new { Email = email }));
     }
 
     public async Task<User?> GetByPhoneAsync(string phone)
     {
         const string sql = "SELECT * FROM users WHERE phone = @Phone;";
-        using var conn = CreateConnection();
-        var user = await conn.QueryFirstOrDefaultAsync<User>(sql, new { Phone = phone });
-        Console.WriteLine($"[GetByPhoneAsync] Searched for phone '{phone}', found: {user != null}");
-        return user;
+        return await QueryAsync(conn =>
+            conn.QueryFirstOrDefaultAsync<User>(sql, new { Phone = phone }));
     }
 
     public async Task<bool> PhoneExistsAsync(string phone)
     {
         const string sql = "SELECT COUNT(1) FROM users WHERE phone = @Phone;";
-        using var conn = CreateConnection();
-        var count = await conn.ExecuteScalarAsync<int>(sql, new { Phone = phone });
-        return count > 0;
+        return await QueryAsync(async conn =>
+            await conn.ExecuteScalarAsync<int>(sql, new { Phone = phone }) > 0);
     }
 
     public async Task<User?> GetByEmailOrPhoneAsync(string identifier)
     {
         const string sql = "SELECT * FROM users WHERE LOWER(email) = LOWER(@Identifier) OR phone = @Identifier;";
-        using var conn = CreateConnection();
-        return await conn.QueryFirstOrDefaultAsync<User>(sql, new { Identifier = identifier });
+        return await QueryAsync(conn =>
+            conn.QueryFirstOrDefaultAsync<User>(sql, new { Identifier = identifier }));
     }
 
     public async Task UpdateEmailAsync(Guid userId, string newEmail)
     {
         const string sql = @"
             UPDATE users
-            SET email = @NewEmail,
+            SET email      = @NewEmail,
                 updated_at = @UpdatedAt
             WHERE id = @UserId;";
 
-        using var conn = CreateConnection();
-        await conn.ExecuteAsync(sql, new { UserId = userId, NewEmail = newEmail, UpdatedAt = DateTime.UtcNow });
+        await ExecuteAsync(conn =>
+            conn.ExecuteAsync(sql, new { UserId = userId, NewEmail = newEmail, UpdatedAt = DateTime.UtcNow }));
     }
-    
+
     public async Task SetUserIdAsync(Guid userId, Guid businessId)
     {
-        const string sql = @"
-            UPDATE business
-            SET user_id = @UserId
-            WHERE id = @BusinessId;";
-
-        using var conn = CreateConnection();
-        await conn.ExecuteAsync(sql, new { UserId = userId, BusinessId = businessId });
+        const string sql = "UPDATE business SET user_id = @UserId WHERE id = @BusinessId;";
+        await ExecuteAsync(conn =>
+            conn.ExecuteAsync(sql, new { UserId = userId, BusinessId = businessId }));
     }
 }

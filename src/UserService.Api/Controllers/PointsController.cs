@@ -299,7 +299,8 @@ public class PointsController(
     
     
     // Redemption Endpoints
-[Authorize(Roles = "end_user")]
+// [Authorize(Roles = "end_user")]
+[AllowAnonymous]
 [HttpPost("redeem")]
 public async Task<IActionResult> RedeemPoints([FromBody] RedeemPointsDto dto)
 {
@@ -322,7 +323,8 @@ public async Task<IActionResult> RedeemPoints([FromBody] RedeemPointsDto dto)
     }
 }
 
-[Authorize(Roles = "end_user")]
+// [Authorize(Roles = "end_user")]
+    [AllowAnonymous]
 [HttpGet("user/{userId:guid}/redemptions")]
 public async Task<IActionResult> GetRedemptionHistory(Guid userId, [FromQuery] int limit = 50, [FromQuery] int offset = 0)
 {

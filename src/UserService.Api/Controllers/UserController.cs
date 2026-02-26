@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserService.Application.DTOs;
+using UserService.Application.DTOs.Referral;
 using UserService.Application.Interfaces;
 using UserService.Application.Services;
 using UserService.Domain.Exceptions;
@@ -11,7 +12,7 @@ namespace UserService.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class UserController(IUserService service, IBusinessRepRepository businessRepRepository, IBadgeService badgeService, ILogger<UserController> logger) : ControllerBase
+public class UserController(IUserService service, IBusinessRepRepository businessRepRepository, IBadgeService badgeService, IReferralService referralService, ILogger<UserController> logger) : ControllerBase
 {
     // BUSINESS USER creates sub-business users
     [Authorize(Roles = "business_user")]
@@ -332,10 +333,16 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         [FromQuery] int pageSize = 5,
         [FromQuery] bool recalculate = true)
     {
-        if (recalculate)
-            await badgeService.RecalculateAllBadgesAsync(id);
-            
         var result = await service.GetEndUserSummaryAsync(id, page, pageSize);
+
+        if (result == null)
+            return NotFound();
+        
+        if (recalculate)
+        {
+            await badgeService.RecalculateAllBadgesAsync(id);
+        }
+
         return Ok(result);
     }
 }

@@ -22,6 +22,7 @@ public class UserControllerTests
     private Mock<IUserService> _mockUserService = null!;
     private Mock<IBusinessRepRepository> _mockBusinessRepRepository = null!;
     private Mock<IBadgeService> _mockBadgeService = null!;
+    private Mock<IReferralService> _mockReferralService = null!;
     private Mock<ILogger<UserController>> _mockLogger = null!;
     private UserController _controller = null!;
 
@@ -31,11 +32,13 @@ public class UserControllerTests
         _mockUserService = new Mock<IUserService>();
         _mockBusinessRepRepository = new Mock<IBusinessRepRepository>();
         _mockBadgeService = new Mock<IBadgeService>();
+        _mockReferralService = new Mock<IReferralService>();
         _mockLogger = new Mock<ILogger<UserController>>();
         _controller = new UserController(
             _mockUserService.Object,
             _mockBusinessRepRepository.Object,
             _mockBadgeService.Object,
+            _mockReferralService.Object,
             _mockLogger.Object
         );
     }
@@ -1322,26 +1325,43 @@ public class UserControllerTests
        Assert.That(okResult.Value, Is.EqualTo(summaryDto));
    }
 
-    [Test]
-    public async Task GetEndUserSummary_ReturnsNotFound_WhenUserDoesNotExist()
-    {
-        // Arrange
-        var userId = Guid.NewGuid();
+   [Test]
+   public async Task GetEndUserSummary_ReturnsNotFound_WhenUserDoesNotExist()
+   {
+       // Arrange
+       var userId = Guid.NewGuid();
 
-        // ✅ Match new signature with It.IsAny<int>() for page and pageSize
-        _mockUserService
-            .Setup(s => s.GetEndUserSummaryAsync(userId, It.IsAny<int>(), It.IsAny<int>()))
-            .ReturnsAsync((EndUserSummaryDto?)null);
+       _mockUserService
+           .Setup(s => s.GetEndUserSummaryAsync(userId, It.IsAny<int>(), It.IsAny<int>()))
+           .ReturnsAsync((EndUserSummaryDto?)null);
 
-        _mockBadgeService
-            .Setup(b => b.RecalculateAllBadgesAsync(userId))
-            .Returns(Task.CompletedTask);
+       // Act
+       var result = await _controller.GetEndUserSummary(userId);
 
-        // Act
-        var result = await _controller.GetEndUserSummary(userId);
+       // Assert
+       Assert.That(result, Is.TypeOf<NotFoundResult>());
 
-        // Assert
-        Assert.That(result, Is.TypeOf<NotFoundResult>());
-    }
+       // Badge recalc should NEVER run for non-existent users
+       _mockBadgeService.Verify(b => b.RecalculateAllBadgesAsync(userId), Times.Never);
+   }
+   
+   [Test]
+   public async Task GetEndUserSummary_DoesNotRecalculate_WhenRecalculateIsFalse()
+   {
+       // Arrange
+       var userId = Guid.NewGuid();
+       var mockSummary = new EndUserSummaryDto { /* ... */ };
+    
+       _mockUserService
+           .Setup(s => s.GetEndUserSummaryAsync(userId, It.IsAny<int>(), It.IsAny<int>()))
+           .ReturnsAsync(mockSummary);
+
+       // Act - pass recalculate: false
+       var result = await _controller.GetEndUserSummary(userId, recalculate: false);
+
+       // Assert
+       Assert.That(result, Is.TypeOf<OkObjectResult>());
+       _mockBadgeService.Verify(b => b.RecalculateAllBadgesAsync(userId), Times.Never);
+   }
 
 }
