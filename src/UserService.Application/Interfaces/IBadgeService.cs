@@ -53,7 +53,7 @@ public interface IBadgeService
     /// <summary>
     /// Recalculate all badges for a user (used by background job)
     /// </summary>
-    Task RecalculateAllBadgesAsync(Guid userId);
+    Task RecalculateAllBadgesAsync(Guid userId, int reviewCount = 0);
 
     /// <summary>
     /// Get badge display information (name, description, icon)

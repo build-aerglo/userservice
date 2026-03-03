@@ -458,151 +458,155 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         return await GetEndUserProfileDetailAsync(userId);
     }
     
-    public async Task<EndUserSummaryDto> GetEndUserSummaryAsync(Guid userId, int page = 1, int pageSize = 5)
+    public async Task<EndUserSummaryDto> GetEndUserSummaryAsync(Guid userId, int page = 1, int pageSize = 5, bool recalculate = true)
     {
         var cacheKey = $"EndUserSummary:{userId}:{page}:{pageSize}";
-    
+
         if (cache.TryGetValue(cacheKey, out EndUserSummaryDto cachedResult))
             return cachedResult;
 
-        // Your existing logic (extracted to a private method for clarity)
-        var result = await BuildEndUserSummaryInternalAsync(userId, page, pageSize);
-    
-        // Cache for 2-5 minutes (user data doesn't change second-to-second)
+        var result = await BuildEndUserSummaryInternalAsync(userId, page, pageSize, recalculate);
+
         cache.Set(cacheKey, result, TimeSpan.FromMinutes(2));
-    
+
         return result;
     }
 
-   public async Task<EndUserSummaryDto> BuildEndUserSummaryInternalAsync(Guid userId, int page, int pageSize)
-{
-    var user = await userRepository.GetByIdAsync(userId);
-    if (user is null)
-        throw new EndUserNotFoundException(userId);
-
-    // ---- PHASE 1 (2 parallel calls max) ----
-    var profileDetailTask = GetEndUserProfileDetailAsync(userId);
-    var entityTask = endUserProfileRepository.GetUserDataAsync(userId, user.Email, page, pageSize);
-
-    await Task.WhenAll(profileDetailTask, entityTask);
-
-    var profileDetail = await profileDetailTask;
-    var entity = await entityTask;
-
-    // ---- PHASE 2 (2 parallel calls max) ----
-    var pointsTask = pointsService.GetUserPointsAsync(userId);
-    var redemptionHistoryTask = pointsService.GetRedemptionHistoryAsync(userId, limit: 3, offset: 0);
-    var pointsBreakdownTask = pointsService.GetPointsBreakdownAsync(userId); // 🆕
-
-    await Task.WhenAll(pointsTask, redemptionHistoryTask, pointsBreakdownTask); // 🆕
-
-    var pointsData = await pointsTask;
-    var redemptionHistory = await redemptionHistoryTask;
-    var pointsBreakdown = await pointsBreakdownTask;
-    
-    // ---- PHASE 3 (3 parallel calls max) ----
-    var referralStatsTask = referralService.GetReferralStatsAsync(userId);
-    var referralCodeTask = referralService.GetUserReferralCodeAsync(userId);
-    var referredByTask = referralService.GetReferredByAsync(userId);
-
-    await Task.WhenAll(referralStatsTask, referralCodeTask, referredByTask);
-
-    var referralStats = await referralStatsTask;
-    var referralCode = await referralCodeTask;
-    var referredBy = await referredByTask;
-    
-    // Generate referral code once if user doesn't have one
-    if (referralCode is null)
+    public async Task<EndUserSummaryDto> BuildEndUserSummaryInternalAsync(Guid userId, int page, int pageSize, bool recalculate = true)
     {
-        referralCode = await referralService.GenerateReferralCodeAsync(new GenerateReferralCodeDto(userId));
-    }
+        var user = await userRepository.GetByIdAsync(userId);
+        if (user is null)
+            throw new EndUserNotFoundException(userId);
 
-    // ---- Badge enrichment ----
-    var tierBadge = entity.Badges.FirstOrDefault(b => badgeService.IsTierBadge(b.BadgeType));
-    var achievementBadges = entity.Badges
-        .Where(b => !badgeService.IsTierBadge(b.BadgeType))
-        .ToList();
+        // ---- PHASE 1 (2 parallel calls max) ----
+        var profileDetailTask = GetEndUserProfileDetailAsync(userId);
+        var entityTask = endUserProfileRepository.GetUserDataAsync(userId, user.Email, page, pageSize);
 
-    foreach (var badge in achievementBadges)
-    {
-        var info = badgeService.GetBadgeInfo(badge.BadgeType, badge.Location, badge.Category);
-        badge.Icon = info.Icon;
-        badge.Description = info.Description;
-    }
+        await Task.WhenAll(profileDetailTask, entityTask);
 
-    if (tierBadge != null)
-    {
-        var info = badgeService.GetBadgeInfo(tierBadge.BadgeType);
-        tierBadge.Icon = info.Icon;
-        tierBadge.Description = info.Description;
-    }
+        var profileDetail = await profileDetailTask;
+        var entity = await entityTask;
 
-    // ---- Redemption summary ----
-    var recentRedemptions = redemptionHistory.Redemptions
-        .Select(r => new RedemptionSummaryDto
+        // ✅ Only recalculate badges when flag is true (e.g. profile load, not pagination)
+        if (recalculate)
         {
-            PointsRedeemed = (int)r.PointsRedeemed,
-            AmountInNaira = r.AmountInNaira,
-            PhoneNumber = r.PhoneNumber,
-            Status = r.Status,
-            CreatedAt = r.CreatedAt
-        })
-        .ToList();
-
-    var totalPointsRedeemed = redemptionHistory.Redemptions
-        .Where(r => r.Status == "Completed")
-        .Sum(r => (int)r.PointsRedeemed);
-
-    return new EndUserSummaryDto
-    {
-        UserId = entity.UserId,
-        Email = entity.Email,
-        Profile = profileDetail,
-        Reviews = new PaginatedReviews
-        {
-            Items = entity.Reviews,
-            TotalCount = entity.TotalReviewCount,
-            Page = page,
-            PageSize = pageSize
-        },
-        TopCities = entity.TopCities,
-        TopCategories = entity.TopCategories,
-        TierBadge = tierBadge,
-        AchievementBadges = achievementBadges,
-
-        // Points
-        Points = entity.Points,
-        Rank = entity.Rank,
-        Streak = entity.Streak,
-        LifetimePoints = entity.LifetimePoints,
-        PointTier = pointsData.Tier,
-        LongestStreak = pointsData.LongestStreak,
-        
-        // 🆕 POINT BREAKDOWN
-        ReviewPoints = pointsBreakdown.ReviewPoints,
-        ReferralPoints = pointsBreakdown.ReferralPoints,
-        StreakPoints = pointsBreakdown.StreakPoints,
-        BonusPoints = pointsBreakdown.BonusPoints,
-        OtherPoints = pointsBreakdown.OtherPoints,
-        
-        RecentActivity = entity.RecentActivity,
-
-        // Redemptions
-        TotalPointsRedeemed = totalPointsRedeemed,
-        RemainingRedeemablePoints = entity.Points,
-        RecentRedemptions = recentRedemptions,
-
-        // Referral
-        Referral = new UserReferralSummaryDto
-        {
-            Code = referralCode?.Code,
-            TotalReferrals = referralStats.TotalReferrals,
-            SuccessfulReferrals = referralStats.SuccessfulReferrals,
-            PendingReferrals = referralStats.PendingReferrals,
-            TotalPointsEarned = referralStats.TotalPointsEarned,
-            WasReferred = referredBy is not null,
-            ReferredByUsername = referredBy?.ReferrerUsername
+            await badgeService.RecalculateAllBadgesAsync(userId, entity.TotalReviewCount);
         }
-    };
-}
+
+        // ---- PHASE 2 (3 parallel calls max) ----
+        var pointsTask = pointsService.GetUserPointsAsync(userId);
+        var redemptionHistoryTask = pointsService.GetRedemptionHistoryAsync(userId, limit: 3, offset: 0);
+        var pointsBreakdownTask = pointsService.GetPointsBreakdownAsync(userId);
+
+        await Task.WhenAll(pointsTask, redemptionHistoryTask, pointsBreakdownTask);
+
+        var pointsData = await pointsTask;
+        var redemptionHistory = await redemptionHistoryTask;
+        var pointsBreakdown = await pointsBreakdownTask;
+
+        // ---- PHASE 3 (3 parallel calls max) ----
+        var referralStatsTask = referralService.GetReferralStatsAsync(userId);
+        var referralCodeTask = referralService.GetUserReferralCodeAsync(userId);
+        var referredByTask = referralService.GetReferredByAsync(userId);
+
+        await Task.WhenAll(referralStatsTask, referralCodeTask, referredByTask);
+
+        var referralStats = await referralStatsTask;
+        var referralCode = await referralCodeTask;
+        var referredBy = await referredByTask;
+
+        // Generate referral code once if user doesn't have one
+        if (referralCode is null)
+        {
+            referralCode = await referralService.GenerateReferralCodeAsync(new GenerateReferralCodeDto(userId));
+        }
+
+        // ---- Badge enrichment ----
+        var tierBadge = entity.Badges.FirstOrDefault(b => badgeService.IsTierBadge(b.BadgeType));
+        var achievementBadges = entity.Badges
+            .Where(b => !badgeService.IsTierBadge(b.BadgeType))
+            .ToList();
+
+        foreach (var badge in achievementBadges)
+        {
+            var info = badgeService.GetBadgeInfo(badge.BadgeType, badge.Location, badge.Category);
+            badge.Icon = info.Icon;
+            badge.Description = info.Description;
+        }
+
+        if (tierBadge != null)
+        {
+            var info = badgeService.GetBadgeInfo(tierBadge.BadgeType);
+            tierBadge.Icon = info.Icon;
+            tierBadge.Description = info.Description;
+        }
+
+        // ---- Redemption summary ----
+        var recentRedemptions = redemptionHistory.Redemptions
+            .Select(r => new RedemptionSummaryDto
+            {
+                PointsRedeemed = (int)r.PointsRedeemed,
+                AmountInNaira = r.AmountInNaira,
+                PhoneNumber = r.PhoneNumber,
+                Status = r.Status,
+                CreatedAt = r.CreatedAt
+            })
+            .ToList();
+
+        var totalPointsRedeemed = redemptionHistory.Redemptions
+            .Where(r => r.Status == "Completed")
+            .Sum(r => (int)r.PointsRedeemed);
+
+        return new EndUserSummaryDto
+        {
+            UserId = entity.UserId,
+            Email = entity.Email,
+            Profile = profileDetail,
+            Reviews = new PaginatedReviews
+            {
+                Items = entity.Reviews,
+                TotalCount = entity.TotalReviewCount,
+                Page = page,
+                PageSize = pageSize
+            },
+            TopCities = entity.TopCities,
+            TopCategories = entity.TopCategories,
+            TierBadge = tierBadge,
+            AchievementBadges = achievementBadges,
+
+            // Points
+            Points = entity.Points,
+            Rank = entity.Rank,
+            Streak = entity.Streak,
+            LifetimePoints = entity.LifetimePoints,
+            PointTier = pointsData.Tier,
+            LongestStreak = pointsData.LongestStreak,
+
+            // Point breakdown
+            ReviewPoints = pointsBreakdown.ReviewPoints,
+            ReferralPoints = pointsBreakdown.ReferralPoints,
+            StreakPoints = pointsBreakdown.StreakPoints,
+            BonusPoints = pointsBreakdown.BonusPoints,
+            OtherPoints = pointsBreakdown.OtherPoints,
+
+            RecentActivity = entity.RecentActivity,
+
+            // Redemptions
+            TotalPointsRedeemed = totalPointsRedeemed,
+            RemainingRedeemablePoints = entity.Points,
+            RecentRedemptions = recentRedemptions,
+
+            // Referral
+            Referral = new UserReferralSummaryDto
+            {
+                Code = referralCode?.Code,
+                TotalReferrals = referralStats.TotalReferrals,
+                SuccessfulReferrals = referralStats.SuccessfulReferrals,
+                PendingReferrals = referralStats.PendingReferrals,
+                TotalPointsEarned = referralStats.TotalPointsEarned,
+                WasReferred = referredBy is not null,
+                ReferredByUsername = referredBy?.ReferrerUsername
+            }
+        };
+    }
 }

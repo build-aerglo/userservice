@@ -333,15 +333,10 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         [FromQuery] int pageSize = 5,
         [FromQuery] bool recalculate = true)
     {
-        var result = await service.GetEndUserSummaryAsync(id, page, pageSize);
+        var result = await service.GetEndUserSummaryAsync(id, page, pageSize, recalculate);
 
         if (result == null)
             return NotFound();
-        
-        if (recalculate)
-        {
-            await badgeService.RecalculateAllBadgesAsync(id);
-        }
 
         return Ok(result);
     }
