@@ -177,19 +177,18 @@ public class ReferralService(
         if (referral.PointsAwarded)
             throw new ReferralAlreadyCompletedException(referralId);
 
-        // Check if referral is qualified
         if (referral.ApprovedReviewCount < RequiredApprovedReviews)
             return;
 
-        // Award points to referrer
-        var isReferrerVerified = await verificationService.IsUserVerifiedAsync(referral.ReferrerId);
-        await pointsService.AwardReferralBonusAsync(referral.ReferrerId, referralId, isReferrerVerified);
+        // Award referrer (50pts)
+        await pointsService.AwardReferralBonusAsync(referral.ReferrerId, referralId, false);
 
-        // Mark referral as completed
+        // Award referred user (25pts)
+        await pointsService.AwardReferredUserBonusAsync(referral.ReferredUserId, referralId);
+
         referral.MarkAsCompleted();
         await referralRepository.UpdateAsync(referral);
 
-        // Update referral code stats
         var referralCode = await referralCodeRepository.GetByCodeAsync(referral.ReferralCode);
         if (referralCode is not null)
         {

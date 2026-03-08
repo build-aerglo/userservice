@@ -320,15 +320,29 @@ public class PointsService : IPointsService
         ));
     }
 
+    // Change the constant — verified branch no longer used for now but keep for future
+    private const decimal ReferralPointsReferred = 25m;
+
     public async Task<PointTransactionDto> AwardReferralBonusAsync(Guid userId, Guid referralId, bool isVerifiedUser)
     {
-        var points = isVerifiedUser ? ReferralPointsVerified : ReferralPointsNonVerified;
-
+        // isVerifiedUser ignored for now — all users are unverified
         return await AwardPointsAsync(new AwardPointsDto(
             UserId: userId,
-            Points: points,
+            Points: ReferralPointsNonVerified, // always 50
             TransactionType: TransactionTypes.Bonus,
             Description: "Referral bonus - referred user qualified",
+            ReferenceId: referralId,
+            ReferenceType: ReferenceTypes.Referral
+        ));
+    }
+
+    public async Task<PointTransactionDto> AwardReferredUserBonusAsync(Guid referredUserId, Guid referralId)
+    {
+        return await AwardPointsAsync(new AwardPointsDto(
+            UserId: referredUserId,
+            Points: ReferralPointsReferred, // 25
+            TransactionType: TransactionTypes.Bonus,
+            Description: "Referral reward - joined via referral code",
             ReferenceId: referralId,
             ReferenceType: ReferenceTypes.Referral
         ));

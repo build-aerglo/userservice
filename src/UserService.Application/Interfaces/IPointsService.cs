@@ -80,6 +80,8 @@ public interface IPointsService
     /// Award referral bonus points
     /// </summary>
     Task<PointTransactionDto> AwardReferralBonusAsync(Guid userId, Guid referralId, bool isVerifiedUser);
+    
+    Task<PointTransactionDto> AwardReferredUserBonusAsync(Guid referredUserId, Guid referralId);
 
     // ========================================================================
     // LEADERBOARDS & TIERS
