@@ -27,4 +27,19 @@ public interface IBusinessServiceClient
     /// <param name="newEmail">The new business email</param>
     /// <returns>True if update was successful, otherwise false</returns>
     Task<bool> UpdateBusinessEmailAsync(string oldEmail, string newEmail);
+
+    /// <summary>
+    /// Retrieves the business ID associated with an email address.
+    /// </summary>
+    /// <param name="email">Business owner email</param>
+    /// <returns>The business ID, or null if not found</returns>
+    Task<Guid?> GetBusinessIdByEmailAsync(string email);
+
+    /// <summary>
+    /// Marks a business's email as verified in the business_verification table.
+    /// </summary>
+    /// <param name="businessId">The business ID</param>
+    /// <param name="email">The verified email address</param>
+    /// <returns>True if update was successful, otherwise false</returns>
+    Task<bool> MarkBusinessEmailVerifiedAsync(Guid businessId, string email);
 }

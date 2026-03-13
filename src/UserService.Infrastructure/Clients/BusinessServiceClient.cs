@@ -120,6 +120,72 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
         }
     }
     
+    /// <summary>
+    /// Retrieves the business ID by email address.
+    /// </summary>
+    public async Task<Guid?> GetBusinessIdByEmailAsync(string email)
+    {
+        try
+        {
+            var response = await httpClient.GetAsync($"/api/business/by-email?email={Uri.EscapeDataString(email)}");
+
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                var result = await response.Content.ReadFromJsonAsync<BusinessFetchResponse>();
+                if (result != null && result.Id != Guid.Empty)
+                {
+                    logger.LogInformation("Found business ID {BusinessId} for email {Email}", result.Id, email);
+                    return result.Id;
+                }
+            }
+
+            logger.LogWarning("Business not found for email {Email}: {StatusCode}", email, response.StatusCode);
+            return null;
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Network error fetching business by email {Email}", email);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error fetching business by email {Email}", email);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Marks a business's email as verified in the Business Service.
+    /// </summary>
+    public async Task<bool> MarkBusinessEmailVerifiedAsync(Guid businessId, string email)
+    {
+        try
+        {
+            var payload = new { email };
+            var response = await httpClient.PatchAsJsonAsync($"/api/business/{businessId}/verify-email", payload);
+
+            if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.NoContent)
+            {
+                logger.LogInformation("Business email verified for business {BusinessId}", businessId);
+                return true;
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            logger.LogWarning("Failed to mark business email verified: {StatusCode} | {Error}", response.StatusCode, error);
+            return false;
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Network error marking business email verified for {BusinessId}", businessId);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error marking business email verified for {BusinessId}", businessId);
+            return false;
+        }
+    }
+
     private sealed class BusinessFetchResponse
     {
         public Guid Id { get; set; }

@@ -19,11 +19,12 @@ public class UserService(
     IEndUserProfileRepository endUserProfileRepository,
     IUserSettingsRepository userSettingsRepository,
     IBadgeService badgeService,
-    IPointsService pointsService, 
+    IPointsService pointsService,
     IReferralService referralService,
     IAuth0ManagementService _auth0,
     IConfiguration _config,
-    IMemoryCache cache  
+    IMemoryCache cache,
+    IRegistrationVerificationService registrationVerificationService
 ) : IUserService
 {
 
@@ -267,6 +268,9 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         if (savedBusiness == null)
             throw new BusinessUserCreationFailedException("Failed to create business record.");
 
+        // Send registration verification email (non-blocking)
+        await registrationVerificationService.SendVerificationEmailAsync(user.Email, user.Username, "business_user");
+
         return (user, businessId.Value, businessRep);
     }
     
@@ -316,6 +320,9 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         var savedProfile = await endUserProfileRepository.GetByIdAsync(endUserProfile.Id);
         if (savedProfile is null)
             throw new UserCreationFailedException("Failed to create end user profile.");
+
+        // ✅ 8. Send registration verification email (non-blocking)
+        await registrationVerificationService.SendVerificationEmailAsync(user.Email, user.Username, "end_user");
 
         // ✅ 7. Map to response DTO
         return new EndUserResponseDto(

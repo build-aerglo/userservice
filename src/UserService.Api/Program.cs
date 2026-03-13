@@ -51,6 +51,7 @@ builder.Services.AddScoped<IPointMultiplierRepository, PointMultiplierRepository
 builder.Services.AddScoped<IPointRedemptionRepository, PointRedemptionRepository>();
 builder.Services.AddScoped<IPasswordResetRequestRepository, PasswordResetRequestRepository>();
 builder.Services.AddScoped<IEmailUpdateRequestRepository, EmailUpdateRequestRepository>();
+builder.Services.AddScoped<IRegistrationVerificationRepository, RegistrationVerificationRepository>();
 
 // ---------- Auth0 Login HTTP Client (TLS forced) ----------
 builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(client =>
@@ -84,6 +85,9 @@ builder.Services.AddScoped<IGeolocationService, GeolocationService>();
 // ---------- Password Reset & Encryption Services ----------
 builder.Services.AddScoped<IEncryptionService, EncryptionService>();
 builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
+
+// ---------- Registration Email Verification Service ----------
+builder.Services.AddScoped<IRegistrationVerificationService, RegistrationVerificationService>();
 
 // ==================================================================
 //  BUSINESS SERVICE CLIENT — ALLOW HTTP (FIX FOR SSL MISMATCH ERROR)

@@ -15,6 +15,7 @@ public class User
 
     public string Auth0UserId { get; private set; }
     public string LoginType { get; private set; } = "email-password";
+    public bool IsEmailVerified { get; private set; }
 
     // Dapper needs a parameterless constructor
     protected User() { }
@@ -34,6 +35,13 @@ public class User
         UpdatedAt = DateTime.UtcNow;
         Auth0UserId = auth0UserId;
         LoginType = loginType;
+        IsEmailVerified = false;
+    }
+
+    public void MarkEmailVerified()
+    {
+        IsEmailVerified = true;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void Update(string? email, string? phone, string? address)
