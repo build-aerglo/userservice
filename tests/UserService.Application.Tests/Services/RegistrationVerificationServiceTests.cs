@@ -274,6 +274,28 @@ public class RegistrationVerificationServiceTests
         Assert.ThrowsAsync<VerificationTokenExpiredException>(() => _service.VerifyEmailAsync(email, token));
     }
 
+    [Test]
+    public async Task VerifyEmailAsync_ShouldReturnAlreadyVerified_WhenEmailAlreadyVerified()
+    {
+        // Arrange
+        const string email = "user@example.com";
+        const string token = "token";
+        var user = new User("alice", email, "08012345678", "pw", "end_user", null, "auth0|1");
+        user.MarkEmailVerified();
+
+        _mockEncryption.Setup(e => e.Decrypt(token)).Returns(email);
+        _mockUserRepo.Setup(r => r.GetByEmailAsync(email)).ReturnsAsync(user);
+
+        // Act
+        var result = await _service.VerifyEmailAsync(email, token);
+
+        // Assert
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Does.Contain("already verified"));
+        _mockUserRepo.Verify(r => r.UpdateEmailVerifiedAsync(It.IsAny<Guid>()), Times.Never);
+        _mockRegVerificationRepo.Verify(r => r.DeleteByEmailAsync(It.IsAny<string>()), Times.Never);
+    }
+
     // =========================================================================
     // ReverifyEmailAsync
     // =========================================================================
@@ -313,6 +335,26 @@ public class RegistrationVerificationServiceTests
 
         // Act & Assert
         Assert.ThrowsAsync<EndUserNotFoundException>(() => _service.ReverifyEmailAsync(email));
+    }
+
+    [Test]
+    public async Task ReverifyEmailAsync_ShouldReturnAlreadyVerified_WhenEmailAlreadyVerified()
+    {
+        // Arrange
+        const string email = "user@example.com";
+        var user = new User("alice", email, "08012345678", "pw", "end_user", null, "auth0|1");
+        user.MarkEmailVerified();
+
+        _mockUserRepo.Setup(r => r.GetByEmailAsync(email)).ReturnsAsync(user);
+
+        // Act
+        var result = await _service.ReverifyEmailAsync(email);
+
+        // Assert
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Message, Does.Contain("already verified"));
+        _mockNotificationClient.Verify(n => n.SendNotificationAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object>()), Times.Never);
     }
 
 }

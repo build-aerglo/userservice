@@ -80,6 +80,9 @@ public class RegistrationVerificationService(
         if (user is null)
             throw new EndUserNotFoundException(Guid.Empty);
 
+        if (user.IsEmailVerified)
+            return new VerifyRegistrationEmailResultDto(true, "Email is already verified.");
+
         // Confirm a pending registration_verification entry exists
         var verification = await registrationVerificationRepository.GetByEmailAsync(email);
         if (verification is null)
@@ -129,6 +132,9 @@ public class RegistrationVerificationService(
         var user = await userRepository.GetByEmailAsync(email);
         if (user is null)
             throw new EndUserNotFoundException(Guid.Empty);
+
+        if (user.IsEmailVerified)
+            return new ReverifyEmailResultDto(false, "Email is already verified.", DateTime.UtcNow);
 
         await SendVerificationEmailAsync(email, user.Username, user.UserType);
 
