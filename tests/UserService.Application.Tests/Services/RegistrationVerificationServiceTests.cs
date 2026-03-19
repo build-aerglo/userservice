@@ -74,6 +74,56 @@ public class RegistrationVerificationServiceTests
     }
 
     [Test]
+    public async Task SendVerificationEmailAsync_ShouldIncludeTypeUser_InUrlForEndUser()
+    {
+        // Arrange
+        const string email = "user@example.com";
+        const string encryptedToken = "tok";
+        object? capturedPayload = null;
+
+        _mockEncryption.Setup(e => e.Encrypt(email)).Returns(encryptedToken);
+        _mockRegVerificationRepo.Setup(r => r.DeleteByEmailAsync(email)).Returns(Task.CompletedTask);
+        _mockRegVerificationRepo.Setup(r => r.AddAsync(It.IsAny<RegistrationVerification>())).Returns(Task.CompletedTask);
+        _mockNotificationClient
+            .Setup(n => n.SendNotificationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object>()))
+            .Callback<string, string, string, object>((_, _, _, payload) => capturedPayload = payload)
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.SendVerificationEmailAsync(email, "alice", "end_user");
+
+        // Assert
+        Assert.That(capturedPayload, Is.Not.Null);
+        var url = capturedPayload!.GetType().GetProperty("url")!.GetValue(capturedPayload)!.ToString();
+        Assert.That(url, Does.Contain("&type=user"));
+    }
+
+    [Test]
+    public async Task SendVerificationEmailAsync_ShouldIncludeTypeBusiness_InUrlForBusinessUser()
+    {
+        // Arrange
+        const string email = "biz@example.com";
+        const string encryptedToken = "tok";
+        object? capturedPayload = null;
+
+        _mockEncryption.Setup(e => e.Encrypt(email)).Returns(encryptedToken);
+        _mockRegVerificationRepo.Setup(r => r.DeleteByEmailAsync(email)).Returns(Task.CompletedTask);
+        _mockRegVerificationRepo.Setup(r => r.AddAsync(It.IsAny<RegistrationVerification>())).Returns(Task.CompletedTask);
+        _mockNotificationClient
+            .Setup(n => n.SendNotificationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object>()))
+            .Callback<string, string, string, object>((_, _, _, payload) => capturedPayload = payload)
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.SendVerificationEmailAsync(email, "bizcorp", "business_user");
+
+        // Assert
+        Assert.That(capturedPayload, Is.Not.Null);
+        var url = capturedPayload!.GetType().GetProperty("url")!.GetValue(capturedPayload)!.ToString();
+        Assert.That(url, Does.Contain("&type=business"));
+    }
+
+    [Test]
     public async Task SendVerificationEmailAsync_ShouldNotThrow_WhenNotificationFails()
     {
         // Arrange

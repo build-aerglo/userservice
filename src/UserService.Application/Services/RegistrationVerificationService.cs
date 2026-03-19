@@ -37,7 +37,8 @@ public class RegistrationVerificationService(
         // Build the verification URL
         var encodedToken = Uri.EscapeDataString(token);
         var encodedEmail = Uri.EscapeDataString(email);
-        var url = $"{VerificationBaseUrl}?token={encodedToken}&e={encodedEmail}";
+        var accountType = userType.Equals("business_user", StringComparison.OrdinalIgnoreCase) ? "business" : "user";
+        var url = $"{VerificationBaseUrl}?token={encodedToken}&e={encodedEmail}&type={accountType}";
 
         // Send the notification — failure is logged but does not throw so that
         // the registration itself is not rolled back.
