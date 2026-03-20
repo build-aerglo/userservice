@@ -11,8 +11,9 @@ using UserService.Domain.Repositories;
 
 namespace UserService.Api.Controllers;
 
+[ApiController]
 [Route("api/auth")]
-public class AuthController : BaseApiController
+public class AuthController : ControllerBase
 {
     private readonly IAuth0UserLoginService _auth0Login;
     private readonly IAuth0SocialLoginService _socialLogin;

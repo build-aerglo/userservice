@@ -7,11 +7,12 @@ using UserService.Domain.Exceptions;
 
 namespace UserService.Api.Controllers;
 
+[ApiController]
 [Route("api/[controller]")]
 public class PointsController(
     IPointsService pointsService, 
     ILogger<PointsController> logger,
-    IReviewServiceClient reviewServiceClient) : BaseApiController 
+    IReviewServiceClient reviewServiceClient) : ControllerBase 
 {
     private readonly IReviewServiceClient _reviewServiceClient;
     
@@ -65,7 +66,7 @@ public class PointsController(
     public async Task<IActionResult> AwardPoints([FromBody] AwardPointsDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ValidationError());
+            return BadRequest(ModelState);
 
         try
         {
@@ -91,7 +92,7 @@ public class PointsController(
     public async Task<IActionResult> CalculateReviewPoints([FromBody] CalculateReviewPointsDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ValidationError());
+            return BadRequest(ModelState);
 
         try
         {
@@ -113,7 +114,7 @@ public class PointsController(
     public async Task<IActionResult> AwardReviewPoints([FromBody] CalculateReviewPointsDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ValidationError());
+            return BadRequest(ModelState);
 
         try
         {

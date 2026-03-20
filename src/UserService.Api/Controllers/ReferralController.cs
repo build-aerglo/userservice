@@ -6,8 +6,9 @@ using UserService.Domain.Exceptions;
 
 namespace UserService.Api.Controllers;
 
+[ApiController]
 [Route("api/referral")]
-public class ReferralController(IReferralService referralService, ILogger<ReferralController> logger) : BaseApiController
+public class ReferralController(IReferralService referralService, ILogger<ReferralController> logger) : ControllerBase
 {
     // ========================================================================
     // REFERRAL CODE MANAGEMENT
@@ -88,7 +89,7 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
     public async Task<IActionResult> SetCustomReferralCode(Guid userId, [FromBody] SetCustomReferralCodeDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ValidationError());
+            return BadRequest(ModelState);
 
         if (userId != dto.UserId)
             return BadRequest(new { error = "UserId in URL must match UserId in body" });
@@ -125,7 +126,7 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
     public async Task<IActionResult> UseReferralCode([FromBody] ApplyReferralCodeDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ValidationError());
+            return BadRequest(ModelState);
 
         try
         {
@@ -258,7 +259,7 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
     public async Task<IActionResult> ProcessReferralReview([FromBody] ProcessReferralReviewDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ValidationError());
+            return BadRequest(ModelState);
 
         try
         {
@@ -385,7 +386,7 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
     public async Task<IActionResult> CreateCampaign([FromBody] CreateCampaignDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ValidationError());
+            return BadRequest(ModelState);
 
         try
         {
@@ -407,7 +408,7 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
     public async Task<IActionResult> SendReferralInvite([FromBody] SendReferralInviteDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ValidationError());
+            return BadRequest(ModelState);
 
         try
         {
