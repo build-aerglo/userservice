@@ -6,9 +6,8 @@ using UserService.Domain.Exceptions;
 
 namespace UserService.Api.Controllers;
 
-[ApiController]
 [Route("api/[controller]")]
-public class GeolocationController(IGeolocationService geolocationService, ILogger<GeolocationController> logger) : ControllerBase
+public class GeolocationController(IGeolocationService geolocationService, ILogger<GeolocationController> logger) : BaseApiController
 {
     /// <summary>
     /// Get user's current geolocation
@@ -39,7 +38,7 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     public async Task<IActionResult> UpdateGeolocation([FromBody] UpdateGeolocationDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
@@ -73,7 +72,7 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     public async Task<IActionResult> RecordGeolocationHistory([FromBody] RecordGeolocationHistoryDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
@@ -118,7 +117,7 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     public async Task<IActionResult> ToggleGeolocation([FromBody] ToggleGeolocationDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
@@ -140,7 +139,7 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     public async Task<IActionResult> ValidateLocationForReview([FromBody] ValidateLocationForReviewDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {

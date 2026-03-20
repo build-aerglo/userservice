@@ -6,12 +6,11 @@ using UserService.Domain.Exceptions;
 
 namespace UserService.Api.Controllers;
 
-[ApiController]
 [Route("api/[controller]")]
 public class VerificationController(
     IVerificationService verificationService,
     IRegistrationVerificationService registrationVerificationService,
-    ILogger<VerificationController> logger) : ControllerBase
+    ILogger<VerificationController> logger) : BaseApiController
 {
     /// <summary>
     /// Get user's verification status
@@ -40,7 +39,7 @@ public class VerificationController(
     public async Task<IActionResult> SendPhoneOtp([FromBody] SendPhoneOtpDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
@@ -78,7 +77,7 @@ public class VerificationController(
     public async Task<IActionResult> VerifyPhoneOtp([FromBody] VerifyPhoneOtpDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
@@ -112,7 +111,7 @@ public class VerificationController(
     public async Task<IActionResult> SendEmailVerification([FromBody] SendEmailVerificationDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
@@ -146,7 +145,7 @@ public class VerificationController(
     public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {

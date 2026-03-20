@@ -11,9 +11,8 @@ using UserService.Domain.Repositories;
 
 namespace UserService.Api.Controllers;
 
-[ApiController]
 [Route("api/auth")]
-public class AuthController : ControllerBase
+public class AuthController : BaseApiController
 {
     private readonly IAuth0UserLoginService _auth0Login;
     private readonly IAuth0SocialLoginService _socialLogin;
@@ -742,7 +741,7 @@ public class AuthController : ControllerBase
     /// <summary>
     /// Creates a consistent error response for the frontend.
     /// </summary>
-    private static object ErrorResponse(string error, string message) => new { error, message };
+    private static object ErrorResponse(string error, string message) => new { error = message };
 
     /// <summary>
     /// Masks email for safe logging (e.g., "t***@example.com").

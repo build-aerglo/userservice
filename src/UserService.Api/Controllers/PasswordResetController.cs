@@ -5,9 +5,8 @@ using UserService.Application.Interfaces;
 
 namespace UserService.Api.Controllers;
 
-[ApiController]
 [Route("api/password")]
-public class PasswordResetController : ControllerBase
+public class PasswordResetController : BaseApiController
 {
     private readonly IPasswordResetService _passwordResetService;
     private readonly ILogger<PasswordResetController> _logger;

@@ -10,9 +10,8 @@ using UserService.Domain.Repositories;
 
 namespace UserService.Api.Controllers;
 
-[ApiController]
 [Route("api/[controller]")]
-public class UserController(IUserService service, IBusinessRepRepository businessRepRepository, IBadgeService badgeService, IReferralService referralService, ILogger<UserController> logger) : ControllerBase
+public class UserController(IUserService service, IBusinessRepRepository businessRepRepository, IBadgeService badgeService, IReferralService referralService, ILogger<UserController> logger) : BaseApiController
 {
     // BUSINESS USER creates sub-business users
     [Authorize(Roles = "business_user")]
@@ -20,7 +19,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     public async Task<IActionResult> CreateSubBusinessUser([FromBody] CreateSubBusinessUserDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
@@ -50,7 +49,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     public async Task<IActionResult> UpdateSubBusinessUser(Guid userId, [FromBody] UpdateSubBusinessUserDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
@@ -67,7 +66,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     public async Task<IActionResult> CreateSupportUser([FromBody] CreateSupportUserDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
@@ -95,7 +94,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     public async Task<IActionResult> UpdateSupportUser(Guid userId, [FromBody] UpdateSupportUserDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
@@ -152,7 +151,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     public async Task<IActionResult> CreateEndUser([FromBody] CreateEndUserDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
@@ -296,7 +295,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         [FromBody] UpdateEndUserProfileDto dto)
     {
         if (!ModelState.IsValid)  
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
         
         
         try

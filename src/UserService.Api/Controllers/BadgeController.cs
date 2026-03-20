@@ -6,9 +6,8 @@ using UserService.Domain.Exceptions;
 
 namespace UserService.Api.Controllers;
 
-[ApiController]
 [Route("api/[controller]")]
-public class BadgeController(IBadgeService badgeService, ILogger<BadgeController> logger) : ControllerBase
+public class BadgeController(IBadgeService badgeService, ILogger<BadgeController> logger) : BaseApiController
 {
     /// <summary>
     /// Get all badges for a user
@@ -63,7 +62,7 @@ public class BadgeController(IBadgeService badgeService, ILogger<BadgeController
     public async Task<IActionResult> AssignBadge([FromBody] AssignBadgeDto dto)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+            return BadRequest(ValidationError());
 
         try
         {
