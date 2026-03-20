@@ -741,7 +741,7 @@ public class AuthController : BaseApiController
     /// <summary>
     /// Creates a consistent error response for the frontend.
     /// </summary>
-    private static object ErrorResponse(string error, string message) => new { error = message };
+    private static object ErrorResponse(string error, string message) => new { error, message };
 
     /// <summary>
     /// Masks email for safe logging (e.g., "t***@example.com").
