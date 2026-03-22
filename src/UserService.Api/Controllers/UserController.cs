@@ -331,7 +331,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         Guid id,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 5,
-        [FromQuery] bool recalculate = true)
+        [FromQuery] bool recalculate = false)
     {
         var result = await service.GetEndUserSummaryAsync(id, page, pageSize, recalculate);
 

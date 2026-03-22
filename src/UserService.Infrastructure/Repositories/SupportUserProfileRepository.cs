@@ -26,6 +26,9 @@ public class SupportUserProfileRepository : ISupportUserProfileRepository
 
     private bool IsTestMode => _testConnection != null;
 
+    // SQLite needs string params for TEXT uuid columns; Postgres needs Guid for uuid columns.
+    private object GuidParam(Guid id) => IsTestMode ? (object)id.ToString() : id;
+
     private IDbConnection GetConnection() =>
         _testConnection ?? new NpgsqlConnection(_connectionString);
 
@@ -60,7 +63,7 @@ public class SupportUserProfileRepository : ISupportUserProfileRepository
         try
         {
             await EnsureOpenAsync(conn);
-            return await conn.QueryFirstOrDefaultAsync<SupportUserProfile>(sql, new { Id = id });
+            return await conn.QueryFirstOrDefaultAsync<SupportUserProfile>(sql, new { Id = GuidParam(id) });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
@@ -72,7 +75,7 @@ public class SupportUserProfileRepository : ISupportUserProfileRepository
         try
         {
             await EnsureOpenAsync(conn);
-            return await conn.QueryFirstOrDefaultAsync<SupportUserProfile>(sql, new { UserId = userId });
+            return await conn.QueryFirstOrDefaultAsync<SupportUserProfile>(sql, new { UserId = GuidParam(userId) });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
@@ -87,7 +90,13 @@ public class SupportUserProfileRepository : ISupportUserProfileRepository
         try
         {
             await EnsureOpenAsync(conn);
-            await conn.ExecuteAsync(sql, profile);
+            await conn.ExecuteAsync(sql, new
+            {
+                Id     = GuidParam(profile.Id),
+                UserId = GuidParam(profile.UserId),
+                profile.CreatedAt,
+                profile.UpdatedAt
+            });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
@@ -99,7 +108,11 @@ public class SupportUserProfileRepository : ISupportUserProfileRepository
         try
         {
             await EnsureOpenAsync(conn);
-            await conn.ExecuteAsync(sql, profile);
+            await conn.ExecuteAsync(sql, new
+            {
+                Id = GuidParam(profile.Id),
+                profile.UpdatedAt
+            });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
@@ -111,7 +124,7 @@ public class SupportUserProfileRepository : ISupportUserProfileRepository
         try
         {
             await EnsureOpenAsync(conn);
-            await conn.ExecuteAsync(sql, new { Id = id });
+            await conn.ExecuteAsync(sql, new { Id = GuidParam(id) });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }

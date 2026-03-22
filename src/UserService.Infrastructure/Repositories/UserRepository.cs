@@ -24,6 +24,12 @@ public class UserRepository : IUserRepository
 
     private bool IsTestMode => _testConnection != null;
 
+    // SQLite stores UUIDs as TEXT and requires string params for equality checks.
+    // PostgreSQL stores UUIDs as the uuid type and requires Guid params — passing
+    // a string causes: "operator does not exist: uuid = text".
+    // This helper returns the correct representation for whichever DB is active.
+    private object GuidParam(Guid id) => IsTestMode ? (object)id.ToString() : id;
+
     private async Task<T> QueryAsync<T>(Func<IDbConnection, Task<T>> query)
     {
         if (IsTestMode)
@@ -65,7 +71,7 @@ public class UserRepository : IUserRepository
                 return user.Id;
 
             const string repSql = "SELECT business_id FROM business_reps WHERE user_id = @UserId;";
-            return await conn.ExecuteScalarAsync<Guid?>(repSql, new { UserId = user.Id });
+            return await conn.ExecuteScalarAsync<Guid?>(repSql, new { UserId = GuidParam(user.Id) });
         });
     }
 
@@ -86,7 +92,7 @@ public class UserRepository : IUserRepository
     {
         const string sql = "SELECT * FROM users WHERE id = @Id;";
         return await QueryAsync(conn =>
-            conn.QueryFirstOrDefaultAsync<User>(sql, new { Id = id }));
+            conn.QueryFirstOrDefaultAsync<User>(sql, new { Id = GuidParam(id) }));
     }
 
     public async Task AddAsync(User user)
@@ -108,20 +114,27 @@ public class UserRepository : IUserRepository
                 updated_at = @UpdatedAt
             WHERE id = @Id;";
 
-        await ExecuteAsync(conn => conn.ExecuteAsync(sql, user));
+        await ExecuteAsync(conn => conn.ExecuteAsync(sql, new
+        {
+            Id         = GuidParam(user.Id),
+            user.Email,
+            user.Phone,
+            user.Address,
+            user.UpdatedAt
+        }));
     }
 
     public async Task DeleteAsync(Guid id)
     {
         const string sql = "DELETE FROM users WHERE id = @Id;";
-        await ExecuteAsync(conn => conn.ExecuteAsync(sql, new { Id = id }));
+        await ExecuteAsync(conn => conn.ExecuteAsync(sql, new { Id = GuidParam(id) }));
     }
 
     public async Task UpdateLastLoginAsync(Guid userId, DateTime loginTime)
     {
         const string sql = "UPDATE users SET last_login = @LoginTime WHERE id = @UserId;";
         await ExecuteAsync(conn =>
-            conn.ExecuteAsync(sql, new { UserId = userId, LoginTime = loginTime }));
+            conn.ExecuteAsync(sql, new { UserId = GuidParam(userId), LoginTime = loginTime }));
     }
 
     public async Task<User?> GetByEmailAsync(string email)
@@ -161,13 +174,22 @@ public class UserRepository : IUserRepository
             WHERE id = @UserId;";
 
         await ExecuteAsync(conn =>
-            conn.ExecuteAsync(sql, new { UserId = userId, NewEmail = newEmail, UpdatedAt = DateTime.UtcNow }));
+            conn.ExecuteAsync(sql, new
+            {
+                UserId    = GuidParam(userId),
+                NewEmail  = newEmail,
+                UpdatedAt = DateTime.UtcNow
+            }));
     }
 
     public async Task SetUserIdAsync(Guid userId, Guid businessId)
     {
         const string sql = "UPDATE business SET user_id = @UserId WHERE id = @BusinessId;";
         await ExecuteAsync(conn =>
-            conn.ExecuteAsync(sql, new { UserId = userId, BusinessId = businessId }));
+            conn.ExecuteAsync(sql, new
+            {
+                UserId     = GuidParam(userId),
+                BusinessId = GuidParam(businessId)
+            }));
     }
 }

@@ -828,6 +828,7 @@ public class UserControllerTests
             UserId: userId,
             Username: "john_doe",
             Email: "john@example.com",
+            IsEmailVerified: true,
             Phone: "1234567890",
             Address: "123 Main St",
             JoinDate: DateTime.UtcNow.AddDays(-30),
@@ -946,6 +947,7 @@ public class UserControllerTests
             UserId: userId,
             Username: "updated_john",
             Email: "john@example.com",
+            IsEmailVerified: true,
             Phone: "9876543210",
             Address: "456 New Street",
             JoinDate: DateTime.UtcNow.AddDays(-30),
@@ -1036,6 +1038,7 @@ public class UserControllerTests
             UserId: userId,
             Username: "john_doe",
             Email: "john@example.com",
+            IsEmailVerified: true,
             Phone: "1234567890",
             Address: "123 Main St",
             JoinDate: DateTime.UtcNow.AddDays(-30),
@@ -1116,6 +1119,7 @@ public class UserControllerTests
             UserId: userId,
             Username: "john_doe",
             Email: "john@example.com",
+            IsEmailVerified: true,
             Phone: "1234567890",
             Address: "123 Main St",
             JoinDate: DateTime.UtcNow.AddDays(-30),
@@ -1367,9 +1371,9 @@ public class UserControllerTests
             Times.Once
         );
     }
-
+    
     [Test]
-    public async Task GetEndUserSummary_PassesRecalculateTrue_ByDefault()
+    public async Task GetEndUserSummary_PassesRecalculateFalse_ByDefault()
     {
         // Arrange
         var userId = Guid.NewGuid();
@@ -1383,18 +1387,18 @@ public class UserControllerTests
         };
 
         _mockUserService
-            .Setup(s => s.GetEndUserSummaryAsync(userId, It.IsAny<int>(), It.IsAny<int>(), true))
+            .Setup(s => s.GetEndUserSummaryAsync(userId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>()))
             .ReturnsAsync(summaryDto);
 
-        // Act — no recalculate param, should default to true
+        // Act — no recalculate param, should default to false
         var result = await _controller.GetEndUserSummary(userId);
 
         // Assert
         Assert.That(result, Is.TypeOf<OkObjectResult>());
 
         _mockUserService.Verify(
-            s => s.GetEndUserSummaryAsync(userId, It.IsAny<int>(), It.IsAny<int>(), true),
+            s => s.GetEndUserSummaryAsync(userId, It.IsAny<int>(), It.IsAny<int>(), false),
             Times.Once
         );
     }
-}
+    }

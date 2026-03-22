@@ -26,6 +26,9 @@ public class BusinessRepRepository : IBusinessRepRepository
 
     private bool IsTestMode => _testConnection != null;
 
+    // SQLite needs string params for TEXT uuid columns; Postgres needs Guid for uuid columns.
+    private object GuidParam(Guid id) => IsTestMode ? (object)id.ToString() : id;
+
     private IDbConnection GetConnection() =>
         _testConnection ?? new NpgsqlConnection(_connectionString);
 
@@ -48,7 +51,7 @@ public class BusinessRepRepository : IBusinessRepRepository
         try
         {
             await EnsureOpenAsync(conn);
-            return await conn.QueryAsync<BusinessRep>(sql, new { BusinessId = businessId });
+            return await conn.QueryAsync<BusinessRep>(sql, new { BusinessId = GuidParam(businessId) });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
@@ -60,7 +63,7 @@ public class BusinessRepRepository : IBusinessRepRepository
         try
         {
             await EnsureOpenAsync(conn);
-            return await conn.QueryFirstOrDefaultAsync<BusinessRep>(sql, new { Id = id });
+            return await conn.QueryFirstOrDefaultAsync<BusinessRep>(sql, new { Id = GuidParam(id) });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
@@ -72,7 +75,7 @@ public class BusinessRepRepository : IBusinessRepRepository
         try
         {
             await EnsureOpenAsync(conn);
-            return await conn.QueryFirstOrDefaultAsync<BusinessRep>(sql, new { UserId = userId });
+            return await conn.QueryFirstOrDefaultAsync<BusinessRep>(sql, new { UserId = GuidParam(userId) });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
@@ -87,7 +90,16 @@ public class BusinessRepRepository : IBusinessRepRepository
         try
         {
             await EnsureOpenAsync(conn);
-            await conn.ExecuteAsync(sql, businessRep);
+            await conn.ExecuteAsync(sql, new
+            {
+                Id            = GuidParam(businessRep.Id),
+                BusinessId    = GuidParam(businessRep.BusinessId),
+                UserId        = GuidParam(businessRep.UserId),
+                businessRep.BranchName,
+                businessRep.BranchAddress,
+                businessRep.CreatedAt,
+                businessRep.UpdatedAt
+            });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
@@ -105,7 +117,13 @@ public class BusinessRepRepository : IBusinessRepRepository
         try
         {
             await EnsureOpenAsync(conn);
-            await conn.ExecuteAsync(sql, businessRep);
+            await conn.ExecuteAsync(sql, new
+            {
+                Id = GuidParam(businessRep.Id),
+                businessRep.BranchName,
+                businessRep.BranchAddress,
+                businessRep.UpdatedAt
+            });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
@@ -117,7 +135,7 @@ public class BusinessRepRepository : IBusinessRepRepository
         try
         {
             await EnsureOpenAsync(conn);
-            await conn.ExecuteAsync(sql, new { Id = id });
+            await conn.ExecuteAsync(sql, new { Id = GuidParam(id) });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
@@ -134,7 +152,7 @@ public class BusinessRepRepository : IBusinessRepRepository
         try
         {
             await EnsureOpenAsync(conn);
-            return await conn.QueryFirstOrDefaultAsync<BusinessRep>(sql, new { BusinessId = businessId });
+            return await conn.QueryFirstOrDefaultAsync<BusinessRep>(sql, new { BusinessId = GuidParam(businessId) });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
