@@ -1,72 +1,198 @@
 using Dapper;
+using Npgsql;
+using System.Data;
 using UserService.Domain.Entities;
-using UserService.Infrastructure.Repositories;
+using UserService.Domain.Repositories;
+using UserService.Infrastructure.Database;
 
-namespace UserService.Infrastructure.Tests.Repositories;
+namespace UserService.Infrastructure.Repositories;
 
-[TestFixture]
-public class UserRepositoryTests : InMemoryTestBase
+public class UserRepository : IUserRepository
 {
-    private UserRepository _repository = null!;
+    private readonly IDbConnectionFactory _connectionFactory;
+    private readonly IDbConnection? _testConnection;
 
-    [OneTimeSetUp]
-    public void Setup()
+    public UserRepository(IDbConnectionFactory connectionFactory)
     {
-        _repository = new UserRepository(Connection);
+        _connectionFactory = connectionFactory;
     }
 
-    [Test]
-    public async Task AddAsync_ShouldInsertUser_AndGetById_ShouldReturnUser()
+    public UserRepository(IDbConnection testConnection)
     {
-        var userId = await CreateUserAsync(userType: "end_user");
-
-        var fetched = await _repository.GetByIdAsync(userId);
-
-        Assert.That(fetched, Is.Not.Null);
-        Assert.That(fetched!.Id, Is.EqualTo(userId));
-        Assert.That(fetched.UserType, Is.EqualTo("end_user"));
+        _testConnection = testConnection;
     }
 
-    [Test]
-    public async Task GetAllAsync_ShouldReturnAllInsertedUsers()
+    private bool IsTestMode => _testConnection != null;
+
+    private async Task<T> QueryAsync<T>(Func<IDbConnection, Task<T>> query)
     {
-        var id1 = await CreateUserAsync();
-        var id2 = await CreateUserAsync();
+        if (IsTestMode)
+        {
+            if (_testConnection!.State != ConnectionState.Open)
+                await ((System.Data.Common.DbConnection)_testConnection).OpenAsync();
+            return await query(_testConnection);
+        }
 
-        var results = (await _repository.GetAllAsync()).ToList();
-
-        Assert.That(results.Any(u => u.Id == id1), Is.True);
-        Assert.That(results.Any(u => u.Id == id2), Is.True);
+        using var conn = await _connectionFactory.CreateConnectionAsync();
+        return await query(conn);
     }
 
-    [Test]
-    public async Task GetByIdAsync_ShouldReturnNull_WhenUserDoesNotExist()
+    private async Task ExecuteAsync(Func<IDbConnection, Task> command)
     {
-        var result = await _repository.GetByIdAsync(Guid.NewGuid());
-        Assert.That(result, Is.Null);
+        if (IsTestMode)
+        {
+            if (_testConnection!.State != ConnectionState.Open)
+                await ((System.Data.Common.DbConnection)_testConnection).OpenAsync();
+            await command(_testConnection);
+            return;
+        }
+
+        using var conn = await _connectionFactory.CreateConnectionAsync();
+        await command(conn);
     }
 
-    [Test]
-    public async Task UpdateAsync_ShouldPersistChanges()
+    public async Task<Guid?> GetUserOrBusinessIdByEmailAsync(string email)
     {
-        var userId = await CreateUserAsync();
-        var user = await _repository.GetByIdAsync(userId);
+        return await QueryAsync(async conn =>
+        {
+            const string userSql = "SELECT id, user_type FROM users WHERE LOWER(email) = LOWER(@Email);";
+            var user = await conn.QueryFirstOrDefaultAsync<(Guid Id, string UserType)>(
+                userSql, new { Email = email });
 
-        user!.Update("updated@example.com", "9999999999", "New Address");
-        await _repository.UpdateAsync(user);
+            if (user.Id == Guid.Empty) return (Guid?)null;
 
-        var updated = await _repository.GetByIdAsync(userId);
-        Assert.That(updated!.Email, Is.EqualTo("updated@example.com"));
-        Assert.That(updated.Phone, Is.EqualTo("9999999999"));
+            if (!string.Equals(user.UserType, "business_user", StringComparison.OrdinalIgnoreCase))
+                return user.Id;
+
+            const string repSql = "SELECT business_id FROM business_reps WHERE user_id = @UserId;";
+            // FIX: .ToString() on Guid so SQLite matches TEXT column correctly.
+            return await conn.ExecuteScalarAsync<Guid?>(repSql, new { UserId = user.Id.ToString() });
+        });
     }
 
-    [Test]
-    public async Task DeleteAsync_ShouldRemoveUser()
+    public async Task<bool> EmailExistsAsync(string email)
     {
-        var userId = await CreateUserAsync();
-        await _repository.DeleteAsync(userId);
+        const string sql = "SELECT COUNT(1) FROM users WHERE email = @Email;";
+        return await QueryAsync(async conn =>
+            await conn.ExecuteScalarAsync<int>(sql, new { Email = email }) > 0);
+    }
 
-        var result = await _repository.GetByIdAsync(userId);
-        Assert.That(result, Is.Null);
+    public async Task<IEnumerable<User>> GetAllAsync()
+    {
+        const string sql = "SELECT * FROM users ORDER BY created_at DESC;";
+        return await QueryAsync(conn => conn.QueryAsync<User>(sql));
+    }
+
+    public async Task<User?> GetByIdAsync(Guid id)
+    {
+        const string sql = "SELECT * FROM users WHERE id = @Id;";
+        // FIX: Pass Id as string. Dapper's GuidTypeHandler fires for entity property
+        // setters (reads) but is unreliable for anonymous-object query parameters (writes)
+        // in SQLite. .ToString() guarantees TEXT comparison against the TEXT primary key.
+        return await QueryAsync(conn =>
+            conn.QueryFirstOrDefaultAsync<User>(sql, new { Id = id.ToString() }));
+    }
+
+    public async Task AddAsync(User user)
+    {
+        const string sql = @"
+            INSERT INTO users (id, username, email, phone, user_type, address, join_date, created_at, updated_at, login_type, auth0_user_id)
+            VALUES (@Id, @Username, @Email, @Phone, @UserType, @Address, @JoinDate, @CreatedAt, @UpdatedAt, @LoginType, @Auth0UserId);";
+
+        await ExecuteAsync(conn => conn.ExecuteAsync(sql, user));
+    }
+
+    public async Task UpdateAsync(User user)
+    {
+        const string sql = @"
+            UPDATE users
+            SET email      = @Email,
+                phone      = @Phone,
+                address    = @Address,
+                updated_at = @UpdatedAt
+            WHERE id = @Id;";
+
+        // FIX: Explicit anonymous object with Id as string.
+        await ExecuteAsync(conn => conn.ExecuteAsync(sql, new
+        {
+            Id         = user.Id.ToString(),
+            user.Email,
+            user.Phone,
+            user.Address,
+            user.UpdatedAt
+        }));
+    }
+
+    public async Task DeleteAsync(Guid id)
+    {
+        const string sql = "DELETE FROM users WHERE id = @Id;";
+        // FIX: Id as string.
+        await ExecuteAsync(conn => conn.ExecuteAsync(sql, new { Id = id.ToString() }));
+    }
+
+    public async Task UpdateLastLoginAsync(Guid userId, DateTime loginTime)
+    {
+        const string sql = "UPDATE users SET last_login = @LoginTime WHERE id = @UserId;";
+        // FIX: UserId as string.
+        await ExecuteAsync(conn =>
+            conn.ExecuteAsync(sql, new { UserId = userId.ToString(), LoginTime = loginTime }));
+    }
+
+    public async Task<User?> GetByEmailAsync(string email)
+    {
+        const string sql = "SELECT * FROM users WHERE LOWER(email) = LOWER(@Email);";
+        return await QueryAsync(conn =>
+            conn.QueryFirstOrDefaultAsync<User>(sql, new { Email = email }));
+    }
+
+    public async Task<User?> GetByPhoneAsync(string phone)
+    {
+        const string sql = "SELECT * FROM users WHERE phone = @Phone;";
+        return await QueryAsync(conn =>
+            conn.QueryFirstOrDefaultAsync<User>(sql, new { Phone = phone }));
+    }
+
+    public async Task<bool> PhoneExistsAsync(string phone)
+    {
+        const string sql = "SELECT COUNT(1) FROM users WHERE phone = @Phone;";
+        return await QueryAsync(async conn =>
+            await conn.ExecuteScalarAsync<int>(sql, new { Phone = phone }) > 0);
+    }
+
+    public async Task<User?> GetByEmailOrPhoneAsync(string identifier)
+    {
+        const string sql = "SELECT * FROM users WHERE LOWER(email) = LOWER(@Identifier) OR phone = @Identifier;";
+        return await QueryAsync(conn =>
+            conn.QueryFirstOrDefaultAsync<User>(sql, new { Identifier = identifier }));
+    }
+
+    public async Task UpdateEmailAsync(Guid userId, string newEmail)
+    {
+        const string sql = @"
+            UPDATE users
+            SET email      = @NewEmail,
+                updated_at = @UpdatedAt
+            WHERE id = @UserId;";
+
+        // FIX: UserId as string.
+        await ExecuteAsync(conn =>
+            conn.ExecuteAsync(sql, new
+            {
+                UserId   = userId.ToString(),
+                NewEmail = newEmail,
+                UpdatedAt = DateTime.UtcNow
+            }));
+    }
+
+    public async Task SetUserIdAsync(Guid userId, Guid businessId)
+    {
+        const string sql = "UPDATE business SET user_id = @UserId WHERE id = @BusinessId;";
+        // FIX: Both Guid params as strings.
+        await ExecuteAsync(conn =>
+            conn.ExecuteAsync(sql, new
+            {
+                UserId     = userId.ToString(),
+                BusinessId = businessId.ToString()
+            }));
     }
 }

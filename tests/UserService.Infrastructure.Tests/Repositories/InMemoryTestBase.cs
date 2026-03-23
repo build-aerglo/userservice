@@ -7,12 +7,24 @@ namespace UserService.Infrastructure.Tests.Repositories;
 public abstract class InMemoryTestBase
 {
     protected SqliteConnection Connection = null!;
+    
+    // Add this class to your test project
+    public class GuidTypeHandler : SqlMapper.TypeHandler<Guid>
+    {
+        public override void SetValue(IDbDataParameter parameter, Guid value)
+            => parameter.Value = value.ToString();
+
+        public override Guid Parse(object value)
+            => Guid.Parse((string)value);
+    }
 
     [OneTimeSetUp]
     public async Task BaseGlobalSetup()
     {
+        SqlMapper.AddTypeHandler(new GuidTypeHandler()); 
         Connection = new SqliteConnection("Data Source=:memory:");
         await Connection.OpenAsync();
+        await Connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
         await CreateSchemaAsync();
     }
 
@@ -28,17 +40,17 @@ public abstract class InMemoryTestBase
     {
         await Connection.ExecuteAsync(@"
             DELETE FROM point_transactions;
-            DELETE FROM user_points;
-            DELETE FROM user_badges;
-            DELETE FROM business_category;
-            DELETE FROM business_branches;
-            DELETE FROM category;
-            DELETE FROM review;
-            DELETE FROM business_reps;
-            DELETE FROM support_user;
-            DELETE FROM end_user;
-            DELETE FROM business;
-            DELETE FROM users;");
+        DELETE FROM user_points;
+        DELETE FROM user_badges;
+        DELETE FROM review;
+        DELETE FROM business_category;
+        DELETE FROM business_branches;
+        DELETE FROM business_reps;
+        DELETE FROM support_user;
+        DELETE FROM end_user;
+        DELETE FROM business;
+        DELETE FROM category;
+        DELETE FROM users;");
     }
 
     private async Task CreateSchemaAsync()

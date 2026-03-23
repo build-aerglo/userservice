@@ -5,6 +5,7 @@ namespace UserService.Domain.Entities
     {
         public Guid? UserId { get; set; }
         public string? Email { get; set; }
+        
         public EndUserProfileDetailDto? Profile { get; set; }
         public IEnumerable<ReviewResponseDto> Reviews { get; set; } = new List<ReviewResponseDto>();
         
@@ -50,7 +51,9 @@ public record ReviewResponseDto(
     string Name,
     string? Logo,
     bool IsVerified,
-    string BusinessAddress
+    string BusinessAddress,
+    int HelpfulCount,           // NEW
+    string? BusinessReply
 );
 
 public record TopCityStat(
@@ -127,6 +130,7 @@ public class EndUserProfileDetail
     public Guid UserId { get; init; }
     public string Username { get; init; }
     public string Email { get; init; }
+    public bool IsEmailVerified { get; set; }
     public string Phone { get; init; }
     public string? Address { get; init; }
     public DateTime JoinDate { get; init; }
@@ -143,6 +147,7 @@ public record EndUserProfileDetailDto(
     Guid UserId,
     string Username,
     string Email,
+    bool IsEmailVerified,
     string Phone,
     string? Address,
     DateTime JoinDate,
