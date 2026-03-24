@@ -27,22 +27,21 @@ public class UserService(
     IRegistrationVerificationService registrationVerificationService
 ) : IUserService
 {
+    public async Task<User?> GetUserByIdAsync(Guid userId)
+    {
+        return await userRepository.GetByIdAsync(userId);
+    }
 
-public async Task<User?> GetUserByIdAsync(Guid userId)
-{
-    return await userRepository.GetByIdAsync(userId);
-}
-	//Sub business user services
+    // Sub business user services
+
     public async Task<SubBusinessUserResponseDto> CreateSubBusinessUserAsync(CreateSubBusinessUserDto dto)
     {
-        // 1. Check if the target business exists via BusinessService API
         var businessExists = await businessServiceClient.BusinessExistsAsync(dto.BusinessId);
-       if (!businessExists) 
+        if (!businessExists)
             throw new BusinessNotFoundException(dto.BusinessId);
-        
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password,_config["Auth0:Roles:BusinessUser"]);
 
-        // ✅ 2. Create the user entity
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password, _config["Auth0:Roles:BusinessUser"]);
+
         var user = new User(
             username: dto.Username,
             email: dto.Email,
@@ -52,30 +51,24 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
             address: dto.Address,
             auth0UserId
         );
-        // ✅ 3. Save user
         await userRepository.AddAsync(user);
 
-        // ✅ 4. Confirm save
         var savedUser = await userRepository.GetByIdAsync(user.Id);
         if (savedUser is null)
             throw new UserCreationFailedException("Failed to create user record.");
 
-        // ✅ 5. Create business representative link
         var businessRep = new BusinessRep(
             businessId: dto.BusinessId,
             userId: user.Id,
             branchName: dto.BranchName,
             branchAddress: dto.BranchAddress
         );
-
         await businessRepRepository.AddAsync(businessRep);
-       
-        // ✅ 6. Confirm save
+
         var savedBusinessRep = await businessRepRepository.GetByIdAsync(businessRep.Id);
         if (savedBusinessRep is null)
             throw new UserCreationFailedException("Failed to create business representative relationship.");
 
-        // ✅ 7. Map to response DTO
         return new SubBusinessUserResponseDto(
             UserId: user.Id,
             BusinessRepId: businessRep.Id,
@@ -91,38 +84,30 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         );
     }
 
-
     public async Task<SubBusinessUserResponseDto> UpdateSubBusinessUserAsync(Guid userId, UpdateSubBusinessUserDto dto)
     {
-        //Get existing user
         var user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             throw new SubBusinessUserNotFoundException(userId);
-        
-        //Get existing business rep record
+
         var businessRep = await businessRepRepository.GetByUserIdAsync(userId);
         if (businessRep is null)
             throw new SubBusinessUserNotFoundException(userId);
 
-        //Update user details
         user.Update(dto.Email, dto.Phone, dto.Address);
         await userRepository.UpdateAsync(user);
 
-        //Verify user update
         var updatedUser = await userRepository.GetByIdAsync(userId);
         if (updatedUser is null)
             throw new SubBusinessUserUpdateFailedException("Failed to update user record.");
 
-        //Update business rep branch details
         businessRep.UpdateBranch(dto.BranchName, dto.BranchAddress);
         await businessRepRepository.UpdateAsync(businessRep);
 
-        //Verify business rep update
         var updatedBusinessRep = await businessRepRepository.GetByIdAsync(businessRep.Id);
         if (updatedBusinessRep is null)
             throw new SubBusinessUserUpdateFailedException("Failed to update business representative record.");
 
-        //Map to response DTO
         return new SubBusinessUserResponseDto(
             UserId: updatedUser.Id,
             BusinessRepId: updatedBusinessRep.Id,
@@ -138,47 +123,37 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         );
     }
 
-
-	//Support User Services
+    // Support user services
 
     public async Task<SupportUserResponseDto> CreateSupportUserAsync(CreateSupportUserDto dto)
     {
-        // validate email address
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
-        
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password,_config["Auth0:Roles:SupportUser"]);
-        
-        // ✅ 1. Create the user entity with support_user type
+
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password, _config["Auth0:Roles:SupportUser"]);
+
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
-            password:dto.Password,
+            password: dto.Password,
             userType: "support_user",
             address: dto.Address,
-            auth0UserId:auth0UserId
+            auth0UserId: auth0UserId
         );
-
-        // ✅ 2. Save user
         await userRepository.AddAsync(user);
 
-        // ✅ 3. Confirm user was saved
         var savedUser = await userRepository.GetByIdAsync(user.Id);
         if (savedUser is null)
             throw new UserCreationFailedException("Failed to create user record.");
 
-        // ✅ 4. Create support user profile link
         var supportUserProfile = new SupportUserProfile(userId: user.Id);
-
         await supportUserProfileRepository.AddAsync(supportUserProfile);
 
-        // ✅ 5. Confirm support profile was saved
         var savedSupportProfile = await supportUserProfileRepository.GetByIdAsync(supportUserProfile.Id);
         if (savedSupportProfile is null)
             throw new UserCreationFailedException("Failed to create support user profile.");
 
-        // ✅ 6. Map to response DTO
         return new SupportUserResponseDto(
             UserId: user.Id,
             SupportUserProfileId: supportUserProfile.Id,
@@ -193,36 +168,27 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
 
     public async Task<SupportUserResponseDto> UpdateSupportUserAsync(Guid userId, UpdateSupportUserDto dto)
     {
-        // Get the existing user
         var user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             throw new SupportUserNotFoundException(userId);
 
-        // Verify user is a support user
         if (user.UserType != "support_user")
             throw new SupportUserUpdateFailedException($"User with ID {userId} is not a support user.");
 
-        // Get the support user profile
         var supportProfile = await supportUserProfileRepository.GetByUserIdAsync(userId);
         if (supportProfile is null)
             throw new SupportUserNotFoundException(userId);
 
-        // Update user details
         user.Update(dto.Email, dto.Phone, dto.Address);
-
-        // Save updated user
         await userRepository.UpdateAsync(user);
 
-        // Update support profile timestamp
         supportProfile.UpdateTimestamp();
         await supportUserProfileRepository.UpdateAsync(supportProfile);
 
-        // Verify update
         var updatedUser = await userRepository.GetByIdAsync(userId);
         if (updatedUser is null)
             throw new SupportUserUpdateFailedException("Failed to update user record.");
 
-        // Map to response DTO
         return new SupportUserResponseDto(
             UserId: updatedUser.Id,
             SupportUserProfileId: supportProfile.Id,
@@ -235,35 +201,28 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         );
     }
 
-
-	//Business User Services
+    // Business user services
 
     public async Task<(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload)
-    {   
-        // fetch business
+    {
         var businessId = await businessServiceClient.CreateBusinessAsync(userPayload);
         if (businessId == null || businessId == Guid.Empty)
             throw new BusinessUserCreationFailedException("Business creation failed: BusinessId is missing from services.");
-        
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(userPayload.Email, userPayload.Name, userPayload.Password,_config["Auth0:Roles:BusinessUser"]);
 
-        // save user
-        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, userPayload.Password, userPayload.UserType, userPayload.Address,auth0UserId);
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(userPayload.Email, userPayload.Name, userPayload.Password, _config["Auth0:Roles:BusinessUser"]);
+
+        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, userPayload.Password, userPayload.UserType, userPayload.Address, auth0UserId);
         await userRepository.AddAsync(user);
 
-        // confirm save
         var savedUser = await userRepository.GetByIdAsync(user.Id);
         if (savedUser == null)
             throw new UserCreationFailedException("Failed to create user record.");
 
-        // link user to business record
         await userRepository.SetUserIdAsync(savedUser.Id, businessId.Value);
 
-        // save business
         var businessRep = new BusinessRep(businessId.Value, savedUser.Id, userPayload.BranchName, userPayload.BranchAddress);
         await businessRepRepository.AddAsync(businessRep);
 
-        // confirm save
         var savedBusiness = await GetBusinessRepByIdAsync(businessRep.Id);
         if (savedBusiness == null)
             throw new BusinessUserCreationFailedException("Failed to create business record.");
@@ -273,50 +232,40 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
 
         return (user, businessId.Value, businessRep);
     }
-    
+
     public async Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id)
         => await businessRepRepository.GetByIdAsync(id);
-    
+
     public async Task<EndUserResponseDto> CreateEndUserAsync(CreateEndUserDto dto)
     {
-        // ✅ 1. Validate email uniqueness
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
-        
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password,_config["Auth0:Roles:EndUser"]);
 
-        // ✅ 2. Create user entity
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password, _config["Auth0:Roles:EndUser"]);
+
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
-            password:dto.Password,
+            password: dto.Password,
             userType: "end_user",
             address: dto.Address,
             auth0UserId
         );
-
-        // ✅ 3. Save user
         await userRepository.AddAsync(user);
 
-        // ✅ 4. Confirm save
         var savedUser = await userRepository.GetByIdAsync(user.Id);
         if (savedUser is null)
             throw new UserCreationFailedException("Failed to create user record.");
-        
-        // Assign Pioneer badge if eligible
+
         await badgeService.CheckAndAssignPioneerBadgeAsync(user.Id, user.JoinDate);
 
-
-        // ✅ 5. Create end user profile
         var endUserProfile = new EndUserProfile(
             userId: user.Id,
             socialMedia: dto.SocialMedia
         );
-
         await endUserProfileRepository.AddAsync(endUserProfile);
 
-        // ✅ 6. Confirm profile saved
         var savedProfile = await endUserProfileRepository.GetByIdAsync(endUserProfile.Id);
         if (savedProfile is null)
             throw new UserCreationFailedException("Failed to create end user profile.");
@@ -333,51 +282,43 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
             Phone: user.Phone,
             Address: user.Address,
             SocialMedia: endUserProfile.SocialMedia,
-            Auth0UserId:auth0UserId,
+            Auth0UserId: auth0UserId,
             CreatedAt: user.CreatedAt
         );
     }
-    
+
     public async Task<EndUserProfileDetailDto> GetEndUserProfileDetailAsync(Guid userId)
     {
-        // 1. Get the user
         var user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             throw new EndUserNotFoundException(userId);
 
-        // 2. Verify this is an end user
         if (user.UserType != "end_user")
             throw new EndUserNotFoundException(userId);
 
-        // 3. Get the end user profile
         var profile = await endUserProfileRepository.GetByUserIdAsync(userId);
         if (profile is null)
             throw new EndUserNotFoundException(userId);
 
-        // 4. Get user settings (create default if doesn't exist)
         var settings = await userSettingsRepository.GetByUserIdAsync(userId);
         if (settings is null)
         {
-            // Create default settings for this user
             settings = new UserSettings(userId);
             await userSettingsRepository.AddAsync(settings);
         }
 
-        // 5. Parse notification preferences from JSONB
         var notificationPrefs = settings.GetNotificationPreferences();
 
-        // 6. Map to DTO
         return new EndUserProfileDetailDto(
             UserId: user.Id,
             Username: user.Username,
             Email: user.Email,
+            IsEmailVerified: user.IsEmailVerified,
             Phone: user.Phone,
             Address: user.Address,
             JoinDate: user.JoinDate,
-        
             EndUserProfileId: profile.Id,
             SocialMedia: profile.SocialMedia,
-        
             NotificationPreferences: new NotificationPreferencesDto(
                 EmailNotifications: notificationPrefs.EmailNotifications,
                 SmsNotifications: notificationPrefs.SmsNotifications,
@@ -385,7 +326,6 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
                 MarketingEmails: notificationPrefs.MarketingEmails
             ),
             DarkMode: settings.DarkMode,
-        
             CreatedAt: user.CreatedAt,
             UpdatedAt: settings.UpdatedAt
         );
@@ -393,21 +333,17 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
 
     public async Task<EndUserProfileDetailDto> UpdateEndUserProfileAsync(Guid userId, UpdateEndUserProfileDto dto)
     {
-        // 1. Get the user
         var user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             throw new EndUserNotFoundException(userId);
 
-        // 2. Verify this is an end user
         if (user.UserType != "end_user")
             throw new EndUserNotFoundException(userId);
 
-        // 3. Get the end user profile
         var profile = await endUserProfileRepository.GetByUserIdAsync(userId);
         if (profile is null)
             throw new EndUserNotFoundException(userId);
 
-        // 4. Get user settings (create if doesn't exist)
         var settings = await userSettingsRepository.GetByUserIdAsync(userId);
         if (settings is null)
         {
@@ -415,34 +351,23 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
             await userSettingsRepository.AddAsync(settings);
         }
 
-        // 5. Update user basic info (if provided)
-        if (!string.IsNullOrWhiteSpace(dto.Username) || 
-            !string.IsNullOrWhiteSpace(dto.Phone) || 
+        if (!string.IsNullOrWhiteSpace(dto.Username) ||
+            !string.IsNullOrWhiteSpace(dto.Phone) ||
             dto.Address != null)
         {
-            user.Update(
-                email: null, // Email cannot be updated via this endpoint
-                phone: dto.Phone,
-                address: dto.Address
-            );
-            
-            // Update username separately if needed (User entity might not have this in Update method)
-            // If username update is needed, you may need to add it to the User.Update method
+            user.Update(email: null, phone: dto.Phone, address: dto.Address);
             await userRepository.UpdateAsync(user);
         }
 
-        // 6. Update end user profile (if provided)
         if (dto.SocialMedia != null)
         {
             profile.UpdateSocialMedia(dto.SocialMedia);
             await endUserProfileRepository.UpdateAsync(profile);
         }
 
-        // 7. Update user settings (if provided)
         if (dto.NotificationPreferences != null || dto.DarkMode.HasValue)
         {
             NotificationPreferencesModel? notifPrefs = null;
-            
             if (dto.NotificationPreferences != null)
             {
                 notifPrefs = new NotificationPreferencesModel
@@ -453,82 +378,79 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
                     MarketingEmails = dto.NotificationPreferences.MarketingEmails
                 };
             }
-            
-            settings.UpdateSettings(
-                darkMode: dto.DarkMode,
-                notificationPrefs: notifPrefs
-            );
+            settings.UpdateSettings(darkMode: dto.DarkMode, notificationPrefs: notifPrefs);
             await userSettingsRepository.UpdateAsync(settings);
         }
 
-        // 8. Fetch and return updated profile
         return await GetEndUserProfileDetailAsync(userId);
     }
-    
+
     public async Task<EndUserSummaryDto> GetEndUserSummaryAsync(Guid userId, int page = 1, int pageSize = 5, bool recalculate = true)
     {
-        var cacheKey = $"EndUserSummary:{userId}:{page}:{pageSize}";
-
-        if (cache.TryGetValue(cacheKey, out EndUserSummaryDto cachedResult))
-            return cachedResult;
-
-        var result = await BuildEndUserSummaryInternalAsync(userId, page, pageSize, recalculate);
-
-        cache.Set(cacheKey, result, TimeSpan.FromMinutes(2));
-
-        return result;
+        return await BuildEndUserSummaryInternalAsync(userId, page, pageSize, recalculate);
     }
 
     public async Task<EndUserSummaryDto> BuildEndUserSummaryInternalAsync(Guid userId, int page, int pageSize, bool recalculate = true)
     {
+        // Step 1: fetch user first — needed for email (used by GetUserDataAsync)
+        // and for the type guard. This is the only mandatory sequential step.
         var user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             throw new EndUserNotFoundException(userId);
 
-        // ---- PHASE 1 (2 parallel calls max) ----
-        var profileDetailTask = GetEndUserProfileDetailAsync(userId);
-        var entityTask = endUserProfileRepository.GetUserDataAsync(userId, user.Email, page, pageSize);
+        // Step 2: fire everything that can run concurrently in one batch.
+        //
+        // Previously this was three sequential phases:
+        //   Phase1 (profileDetail + getUserData) → Phase2 (points x3) → Phase3 (referral x3)
+        //
+        // Phases 2 and 3 only need userId, which is already known, so there is no
+        // reason to wait for Phase 1 before starting them. Collapsing all into one
+        // WhenAll cuts the critical path from (Phase1 + Phase2 + Phase3) to
+        // max(all tasks) — roughly a 2-3x reduction in wall-clock time.
+        var profileDetailTask        = GetEndUserProfileDetailAsync(userId);
+        var entityTask               = endUserProfileRepository.GetUserDataAsync(userId, user.Email, page, pageSize);
+        var pointsTask               = pointsService.GetUserPointsAsync(userId);
+        var redemptionHistoryTask    = pointsService.GetRedemptionHistoryAsync(userId, limit: 3, offset: 0);
+        var pointsBreakdownTask      = pointsService.GetPointsBreakdownAsync(userId);
+        var referralStatsTask        = referralService.GetReferralStatsAsync(userId);
+        var referralCodeTask         = referralService.GetUserReferralCodeAsync(userId);
+        var referredByTask           = referralService.GetReferredByAsync(userId);
 
-        await Task.WhenAll(profileDetailTask, entityTask);
+        await Task.WhenAll(
+            profileDetailTask,
+            entityTask,
+            pointsTask,
+            redemptionHistoryTask,
+            pointsBreakdownTask,
+            referralStatsTask,
+            referralCodeTask,
+            referredByTask
+        );
 
-        var profileDetail = await profileDetailTask;
-        var entity = await entityTask;
+        var profileDetail     = await profileDetailTask;
+        var entity            = await entityTask;
+        var pointsData        = await pointsTask;
+        var redemptionHistory = await redemptionHistoryTask;
+        var pointsBreakdown   = await pointsBreakdownTask;
+        var referralStats     = await referralStatsTask;
+        var referralCode      = await referralCodeTask;
+        var referredBy        = await referredByTask;
 
-        // ✅ Only recalculate badges when flag is true (e.g. profile load, not pagination)
+        // Step 3: badge recalc — depends on entity.TotalReviewCount from step 2.
+        // Kept sequential here because it writes to the DB and the enrichment
+        // below reads the updated badges immediately after.
         if (recalculate)
         {
             await badgeService.RecalculateAllBadgesAsync(userId, entity.TotalReviewCount);
         }
 
-        // ---- PHASE 2 (3 parallel calls max) ----
-        var pointsTask = pointsService.GetUserPointsAsync(userId);
-        var redemptionHistoryTask = pointsService.GetRedemptionHistoryAsync(userId, limit: 3, offset: 0);
-        var pointsBreakdownTask = pointsService.GetPointsBreakdownAsync(userId);
-
-        await Task.WhenAll(pointsTask, redemptionHistoryTask, pointsBreakdownTask);
-
-        var pointsData = await pointsTask;
-        var redemptionHistory = await redemptionHistoryTask;
-        var pointsBreakdown = await pointsBreakdownTask;
-
-        // ---- PHASE 3 (3 parallel calls max) ----
-        var referralStatsTask = referralService.GetReferralStatsAsync(userId);
-        var referralCodeTask = referralService.GetUserReferralCodeAsync(userId);
-        var referredByTask = referralService.GetReferredByAsync(userId);
-
-        await Task.WhenAll(referralStatsTask, referralCodeTask, referredByTask);
-
-        var referralStats = await referralStatsTask;
-        var referralCode = await referralCodeTask;
-        var referredBy = await referredByTask;
-
-        // Generate referral code once if user doesn't have one
+        // Step 4: referral code generation — rare path, only runs when user has none.
         if (referralCode is null)
         {
             referralCode = await referralService.GenerateReferralCodeAsync(new GenerateReferralCodeDto(userId));
         }
 
-        // ---- Badge enrichment ----
+        // Step 5: badge enrichment (sync, no DB calls).
         var tierBadge = entity.Badges.FirstOrDefault(b => badgeService.IsTierBadge(b.BadgeType));
         var achievementBadges = entity.Badges
             .Where(b => !badgeService.IsTierBadge(b.BadgeType))
@@ -548,15 +470,15 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
             tierBadge.Description = info.Description;
         }
 
-        // ---- Redemption summary ----
+        // Step 6: build response.
         var recentRedemptions = redemptionHistory.Redemptions
             .Select(r => new RedemptionSummaryDto
             {
                 PointsRedeemed = (int)r.PointsRedeemed,
-                AmountInNaira = r.AmountInNaira,
-                PhoneNumber = r.PhoneNumber,
-                Status = r.Status,
-                CreatedAt = r.CreatedAt
+                AmountInNaira  = r.AmountInNaira,
+                PhoneNumber    = r.PhoneNumber,
+                Status         = r.Status,
+                CreatedAt      = r.CreatedAt
             })
             .ToList();
 
@@ -567,52 +489,48 @@ public async Task<User?> GetUserByIdAsync(Guid userId)
         return new EndUserSummaryDto
         {
             UserId = entity.UserId,
-            Email = entity.Email,
+            Email  = entity.Email,
             Profile = profileDetail,
             Reviews = new PaginatedReviews
             {
-                Items = entity.Reviews,
+                Items      = entity.Reviews,
                 TotalCount = entity.TotalReviewCount,
-                Page = page,
-                PageSize = pageSize
+                Page       = page,
+                PageSize   = pageSize
             },
-            TopCities = entity.TopCities,
-            TopCategories = entity.TopCategories,
-            TierBadge = tierBadge,
+            TopCities      = entity.TopCities,
+            TopCategories  = entity.TopCategories,
+            TierBadge      = tierBadge,
             AchievementBadges = achievementBadges,
 
-            // Points
-            Points = entity.Points,
-            Rank = entity.Rank,
-            Streak = entity.Streak,
+            Points        = entity.Points,
+            Rank          = entity.Rank,
+            Streak        = entity.Streak,
             LifetimePoints = entity.LifetimePoints,
-            PointTier = pointsData.Tier,
+            PointTier     = pointsData.Tier,
             LongestStreak = pointsData.LongestStreak,
 
-            // Point breakdown
-            ReviewPoints = pointsBreakdown.ReviewPoints,
+            ReviewPoints   = pointsBreakdown.ReviewPoints,
             ReferralPoints = pointsBreakdown.ReferralPoints,
-            StreakPoints = pointsBreakdown.StreakPoints,
-            BonusPoints = pointsBreakdown.BonusPoints,
-            OtherPoints = pointsBreakdown.OtherPoints,
+            StreakPoints   = pointsBreakdown.StreakPoints,
+            BonusPoints    = pointsBreakdown.BonusPoints,
+            OtherPoints    = pointsBreakdown.OtherPoints,
 
             RecentActivity = entity.RecentActivity,
 
-            // Redemptions
-            TotalPointsRedeemed = totalPointsRedeemed,
-            RemainingRedeemablePoints = entity.Points,
-            RecentRedemptions = recentRedemptions,
+            TotalPointsRedeemed        = totalPointsRedeemed,
+            RemainingRedeemablePoints  = entity.Points,
+            RecentRedemptions          = recentRedemptions,
 
-            // Referral
             Referral = new UserReferralSummaryDto
             {
-                Code = referralCode?.Code,
-                TotalReferrals = referralStats.TotalReferrals,
+                Code                = referralCode?.Code,
+                TotalReferrals      = referralStats.TotalReferrals,
                 SuccessfulReferrals = referralStats.SuccessfulReferrals,
-                PendingReferrals = referralStats.PendingReferrals,
-                TotalPointsEarned = referralStats.TotalPointsEarned,
-                WasReferred = referredBy is not null,
-                ReferredByUsername = referredBy?.ReferrerUsername
+                PendingReferrals    = referralStats.PendingReferrals,
+                TotalPointsEarned   = referralStats.TotalPointsEarned,
+                WasReferred         = referredBy is not null,
+                ReferredByUsername  = referredBy?.ReferrerUsername
             }
         };
     }
