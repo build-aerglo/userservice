@@ -42,4 +42,26 @@ public interface IBusinessServiceClient
     /// <param name="email">The verified email address</param>
     /// <returns>True if update was successful, otherwise false</returns>
     Task<bool> MarkBusinessEmailVerifiedAsync(Guid businessId, string email);
+
+    /// <summary>
+    /// Gets the name of a business by its ID.
+    /// </summary>
+    Task<string?> GetBusinessNameAsync(Guid businessId);
+
+    /// <summary>
+    /// Sets the owner details (userId, email, phone) on a business after a claim registration.
+    /// </summary>
+    Task<bool> UpdateBusinessOwnerAsync(Guid businessId, Guid userId, string email, string? phoneNumber);
+
+    /// <summary>
+    /// Initialises a default subscription for a newly registered business.
+    /// Best-effort — failure is logged but does not fail registration.
+    /// </summary>
+    Task<bool> InitializeBusinessSubscriptionAsync(Guid businessId);
+
+    /// <summary>
+    /// Initialises default settings for a newly registered business.
+    /// Best-effort — failure is logged but does not fail registration.
+    /// </summary>
+    Task<bool> InitializeBusinessSettingsAsync(Guid businessId);
 }

@@ -89,6 +89,9 @@ builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
 // ---------- Registration Email Verification Service ----------
 builder.Services.AddScoped<IRegistrationVerificationService, RegistrationVerificationService>();
 
+// ---------- Contact Service ----------
+builder.Services.AddScoped<IContactService, ContactService>();
+
 // ==================================================================
 //  BUSINESS SERVICE CLIENT — ALLOW HTTP (FIX FOR SSL MISMATCH ERROR)
 // ==================================================================

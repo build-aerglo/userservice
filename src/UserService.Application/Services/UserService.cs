@@ -236,6 +236,62 @@ public class UserService(
     public async Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id)
         => await businessRepRepository.GetByIdAsync(id);
 
+    public async Task<RegisterBusinessResultDto> RegisterBusinessAfterClaimAsync(RegisterBusinessDto dto)
+    {
+        // 1. Fetch business name from business service (used as username)
+        var businessName = await businessServiceClient.GetBusinessNameAsync(dto.BusinessId);
+        if (businessName is null)
+            throw new BusinessNotFoundException(dto.BusinessId);
+
+        // 2. Create Auth0 user with business_user role
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(
+            dto.Email, businessName, dto.Password, _config["Auth0:Roles:BusinessUser"]);
+
+        // 3. Create local user record (username = business name)
+        var user = new User(
+            username: businessName,
+            email: dto.Email,
+            phone: dto.PhoneNumber ?? "",
+            password: dto.Password,
+            userType: "business_user",
+            address: null,
+            auth0UserId: auth0UserId);
+
+        await userRepository.AddAsync(user);
+
+        var savedUser = await userRepository.GetByIdAsync(user.Id);
+        if (savedUser is null)
+            throw new UserCreationFailedException("Failed to create user record.");
+
+        // 4. Link user to the claimed business (sets business.user_id)
+        await userRepository.SetUserIdAsync(savedUser.Id, dto.BusinessId);
+
+        // 5. Update business owner details (email + phone) in business service
+        await businessServiceClient.UpdateBusinessOwnerAsync(dto.BusinessId, savedUser.Id, dto.Email, dto.PhoneNumber);
+
+        // 6. Create BusinessRep record
+        var businessRep = new BusinessRep(dto.BusinessId, savedUser.Id);
+        await businessRepRepository.AddAsync(businessRep);
+
+        // 7. Initialise subscription and settings (best-effort, non-blocking)
+        _ = Task.WhenAll(
+            businessServiceClient.InitializeBusinessSubscriptionAsync(dto.BusinessId),
+            businessServiceClient.InitializeBusinessSettingsAsync(dto.BusinessId));
+
+        // 8. Send registration verification email (non-blocking)
+        await registrationVerificationService.SendVerificationEmailAsync(savedUser.Email, businessName, "business_user");
+
+        return new RegisterBusinessResultDto(
+            UserId: savedUser.Id,
+            BusinessId: dto.BusinessId,
+            Username: businessName,
+            Email: savedUser.Email,
+            Phone: dto.PhoneNumber,
+            Auth0UserId: auth0UserId,
+            CreatedAt: savedUser.CreatedAt);
+    }
+
+
     public async Task<EndUserResponseDto> CreateEndUserAsync(CreateEndUserDto dto)
     {
         if (await userRepository.EmailExistsAsync(dto.Email))

@@ -186,8 +186,118 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
         }
     }
 
+    /// <summary>
+    /// Gets the name of a business by its ID.
+    /// </summary>
+    public async Task<string?> GetBusinessNameAsync(Guid businessId)
+    {
+        try
+        {
+            var response = await httpClient.GetAsync($"/api/businesses/{businessId}");
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                var result = await response.Content.ReadFromJsonAsync<BusinessFetchResponse>();
+                if (result?.Name is not null)
+                {
+                    logger.LogInformation("Retrieved business name '{Name}' for {BusinessId}", result.Name, businessId);
+                    return result.Name;
+                }
+            }
+
+            logger.LogWarning("Business name not found for {BusinessId}: {StatusCode}", businessId, response.StatusCode);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error fetching business name for {BusinessId}", businessId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Sets owner details on the business after a claim registration.
+    /// </summary>
+    public async Task<bool> UpdateBusinessOwnerAsync(Guid businessId, Guid userId, string email, string? phoneNumber)
+    {
+        try
+        {
+            var payload = new { userId, email, phoneNumber };
+            var response = await httpClient.PatchAsJsonAsync($"/api/business/{businessId}/owner", payload);
+
+            if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.NoContent)
+            {
+                logger.LogInformation("Updated owner for business {BusinessId} to user {UserId}", businessId, userId);
+                return true;
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            logger.LogWarning("Failed to update business owner: {StatusCode} | {Error}", response.StatusCode, error);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error updating owner for business {BusinessId}", businessId);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Initialises a default subscription for a business.
+    /// </summary>
+    public async Task<bool> InitializeBusinessSubscriptionAsync(Guid businessId)
+    {
+        try
+        {
+            var response = await httpClient.PostAsJsonAsync($"/api/business/{businessId}/subscription", new { });
+
+            if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Created
+                || response.StatusCode == HttpStatusCode.NoContent)
+            {
+                logger.LogInformation("Subscription initialized for business {BusinessId}", businessId);
+                return true;
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            logger.LogWarning("Failed to initialize subscription for {BusinessId}: {StatusCode} | {Error}", businessId, response.StatusCode, error);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error initializing subscription for business {BusinessId}", businessId);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Initialises default settings for a business.
+    /// </summary>
+    public async Task<bool> InitializeBusinessSettingsAsync(Guid businessId)
+    {
+        try
+        {
+            var response = await httpClient.PostAsJsonAsync($"/api/business/{businessId}/settings", new { });
+
+            if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Created
+                || response.StatusCode == HttpStatusCode.NoContent)
+            {
+                logger.LogInformation("Settings initialized for business {BusinessId}", businessId);
+                return true;
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            logger.LogWarning("Failed to initialize settings for {BusinessId}: {StatusCode} | {Error}", businessId, response.StatusCode, error);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error initializing settings for business {BusinessId}", businessId);
+            return false;
+        }
+    }
+
     private sealed class BusinessFetchResponse
     {
         public Guid Id { get; set; }
+        public string? Name { get; set; }
     }
 }
