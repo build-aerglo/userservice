@@ -215,6 +215,33 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
     }
 
     /// <summary>
+    /// Updates the status field on a business.
+    /// </summary>
+    public async Task<bool> UpdateBusinessStatusAsync(Guid businessId, string status)
+    {
+        try
+        {
+            var payload = new { status };
+            var response = await httpClient.PatchAsJsonAsync($"/api/business/{businessId}/status", payload);
+
+            if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.NoContent)
+            {
+                logger.LogInformation("Business {BusinessId} status updated to '{Status}'", businessId, status);
+                return true;
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            logger.LogWarning("Failed to update business status: {StatusCode} | {Error}", response.StatusCode, error);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error updating status for business {BusinessId}", businessId);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Sets owner details on the business after a claim registration.
     /// </summary>
     public async Task<bool> UpdateBusinessOwnerAsync(Guid businessId, Guid userId, string email, string? phoneNumber)

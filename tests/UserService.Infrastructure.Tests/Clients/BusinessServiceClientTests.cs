@@ -349,4 +349,64 @@ public class BusinessServiceClientTests
         // Assert
         Assert.That(result, Is.False);
     }
+
+    // =========================================================================
+    // UpdateBusinessStatusAsync
+    // =========================================================================
+
+    [Test]
+    public async Task UpdateBusinessStatusAsync_ShouldReturnTrue_WhenOk()
+    {
+        // Arrange
+        var businessId = Guid.NewGuid();
+        _mockHandler.SetupRequestWithResponse(HttpMethod.Patch, $"/api/business/{businessId}/status", HttpStatusCode.OK);
+
+        // Act
+        var result = await _client.UpdateBusinessStatusAsync(businessId, "claimed");
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task UpdateBusinessStatusAsync_ShouldReturnTrue_WhenNoContent()
+    {
+        // Arrange
+        var businessId = Guid.NewGuid();
+        _mockHandler.SetupRequestWithResponse(HttpMethod.Patch, $"/api/business/{businessId}/status", HttpStatusCode.NoContent);
+
+        // Act
+        var result = await _client.UpdateBusinessStatusAsync(businessId, "claimed");
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task UpdateBusinessStatusAsync_ShouldReturnFalse_WhenNotFound()
+    {
+        // Arrange
+        var businessId = Guid.NewGuid();
+        _mockHandler.SetupRequestWithResponse(HttpMethod.Patch, $"/api/business/{businessId}/status", HttpStatusCode.NotFound);
+
+        // Act
+        var result = await _client.UpdateBusinessStatusAsync(businessId, "claimed");
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task UpdateBusinessStatusAsync_ShouldReturnFalse_OnException()
+    {
+        // Arrange
+        var businessId = Guid.NewGuid();
+        _mockHandler.SetupRequestWithException<HttpRequestException>(HttpMethod.Patch, $"/api/business/{businessId}/status");
+
+        // Act
+        var result = await _client.UpdateBusinessStatusAsync(businessId, "claimed");
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
 }

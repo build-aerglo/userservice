@@ -47,6 +47,7 @@ public class RegisterBusinessAfterClaimTests
         _mockBusinessClient.Setup(b => b.UpdateBusinessOwnerAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string?>())).ReturnsAsync(true);
         _mockBusinessClient.Setup(b => b.InitializeBusinessSubscriptionAsync(It.IsAny<Guid>())).ReturnsAsync(true);
         _mockBusinessClient.Setup(b => b.InitializeBusinessSettingsAsync(It.IsAny<Guid>())).ReturnsAsync(true);
+        _mockBusinessClient.Setup(b => b.UpdateBusinessStatusAsync(It.IsAny<Guid>(), It.IsAny<string>())).ReturnsAsync(true);
 
         _mockUserRepo.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
         _mockUserRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
@@ -199,5 +200,18 @@ public class RegisterBusinessAfterClaimTests
 
         // Act & Assert
         Assert.ThrowsAsync<UserCreationFailedException>(() => _service.RegisterBusinessAfterClaimAsync(dto));
+    }
+
+    [Test]
+    public async Task RegisterBusinessAfterClaimAsync_ShouldSetStatusToClaimed()
+    {
+        // Arrange
+        var dto = new RegisterBusinessDto(BusinessId, "owner@biz.com", "Password1!", null);
+
+        // Act
+        await _service.RegisterBusinessAfterClaimAsync(dto);
+
+        // Assert
+        _mockBusinessClient.Verify(b => b.UpdateBusinessStatusAsync(BusinessId, "claimed"), Times.Once);
     }
 }

@@ -266,8 +266,9 @@ public class UserService(
         // 4. Link user to the claimed business (sets business.user_id)
         await userRepository.SetUserIdAsync(savedUser.Id, dto.BusinessId);
 
-        // 5. Update business owner details (email + phone) in business service
+        // 5. Update business owner details (email + phone) and mark as claimed in business service
         await businessServiceClient.UpdateBusinessOwnerAsync(dto.BusinessId, savedUser.Id, dto.Email, dto.PhoneNumber);
+        await businessServiceClient.UpdateBusinessStatusAsync(dto.BusinessId, "claimed");
 
         // 6. Create BusinessRep record
         var businessRep = new BusinessRep(dto.BusinessId, savedUser.Id);

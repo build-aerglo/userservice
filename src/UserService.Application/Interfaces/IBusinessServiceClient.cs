@@ -54,6 +54,11 @@ public interface IBusinessServiceClient
     Task<bool> UpdateBusinessOwnerAsync(Guid businessId, Guid userId, string email, string? phoneNumber);
 
     /// <summary>
+    /// Updates the status field on a business (e.g. "claimed").
+    /// </summary>
+    Task<bool> UpdateBusinessStatusAsync(Guid businessId, string status);
+
+    /// <summary>
     /// Initialises a default subscription for a newly registered business.
     /// Best-effort — failure is logged but does not fail registration.
     /// </summary>
