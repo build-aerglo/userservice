@@ -137,6 +137,14 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             var result = await service.RegisterBusinessAfterClaimAsync(dto);
             return Created("", result);
         }
+        catch (BusinessClaimExpiredException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (BusinessClaimNotApprovedException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
         catch (BusinessNotFoundException ex)
         {
             return NotFound(new { error = ex.Message });

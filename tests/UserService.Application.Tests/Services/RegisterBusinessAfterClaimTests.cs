@@ -43,6 +43,8 @@ public class RegisterBusinessAfterClaimTests
             .Setup(a => a.CreateUserAndAssignRoleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(Auth0Id);
 
+        _mockBusinessClient.Setup(b => b.GetBusinessClaimAsync(BusinessId))
+            .ReturnsAsync(new BusinessClaimDto(BusinessId, 7, DateTime.UtcNow.AddHours(12)));
         _mockBusinessClient.Setup(b => b.GetBusinessNameAsync(BusinessId)).ReturnsAsync(BusinessName);
         _mockBusinessClient.Setup(b => b.UpdateBusinessOwnerAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string?>())).ReturnsAsync(true);
         _mockBusinessClient.Setup(b => b.InitializeBusinessSubscriptionAsync(It.IsAny<Guid>())).ReturnsAsync(true);
@@ -181,14 +183,49 @@ public class RegisterBusinessAfterClaimTests
     // =========================================================================
 
     [Test]
-    public void RegisterBusinessAfterClaimAsync_ShouldThrowBusinessNotFoundException_WhenBusinessNotFound()
+    public void RegisterBusinessAfterClaimAsync_ShouldThrowBusinessNotFoundException_WhenClaimNotFound()
     {
-        // Arrange
+        // Arrange — no claim record at all
+        _mockBusinessClient.Setup(b => b.GetBusinessClaimAsync(BusinessId)).ReturnsAsync((BusinessClaimDto?)null);
+        var dto = new RegisterBusinessDto(BusinessId, "owner@biz.com", "Password1!", null);
+
+        // Act & Assert
+        Assert.ThrowsAsync<BusinessNotFoundException>(() => _service.RegisterBusinessAfterClaimAsync(dto));
+    }
+
+    [Test]
+    public void RegisterBusinessAfterClaimAsync_ShouldThrowBusinessNotFoundException_WhenBusinessNameNotFound()
+    {
+        // Arrange — claim ok, but business name lookup fails
         _mockBusinessClient.Setup(b => b.GetBusinessNameAsync(BusinessId)).ReturnsAsync((string?)null);
         var dto = new RegisterBusinessDto(BusinessId, "owner@biz.com", "Password1!", null);
 
         // Act & Assert
         Assert.ThrowsAsync<BusinessNotFoundException>(() => _service.RegisterBusinessAfterClaimAsync(dto));
+    }
+
+    [Test]
+    public void RegisterBusinessAfterClaimAsync_ShouldThrowBusinessClaimNotApprovedException_WhenStatusIsNot7()
+    {
+        // Arrange — claim exists but status is not 7 (e.g. 5 = pending)
+        _mockBusinessClient.Setup(b => b.GetBusinessClaimAsync(BusinessId))
+            .ReturnsAsync(new BusinessClaimDto(BusinessId, 5, DateTime.UtcNow.AddHours(12)));
+        var dto = new RegisterBusinessDto(BusinessId, "owner@biz.com", "Password1!", null);
+
+        // Act & Assert
+        Assert.ThrowsAsync<BusinessClaimNotApprovedException>(() => _service.RegisterBusinessAfterClaimAsync(dto));
+    }
+
+    [Test]
+    public void RegisterBusinessAfterClaimAsync_ShouldThrowBusinessClaimExpiredException_WhenClaimExpired()
+    {
+        // Arrange — claim status is approved but expires_at is in the past
+        _mockBusinessClient.Setup(b => b.GetBusinessClaimAsync(BusinessId))
+            .ReturnsAsync(new BusinessClaimDto(BusinessId, 7, DateTime.UtcNow.AddHours(-1)));
+        var dto = new RegisterBusinessDto(BusinessId, "owner@biz.com", "Password1!", null);
+
+        // Act & Assert
+        Assert.ThrowsAsync<BusinessClaimExpiredException>(() => _service.RegisterBusinessAfterClaimAsync(dto));
     }
 
     [Test]

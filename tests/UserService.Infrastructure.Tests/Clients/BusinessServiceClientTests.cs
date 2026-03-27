@@ -409,4 +409,55 @@ public class BusinessServiceClientTests
         // Assert
         Assert.That(result, Is.False);
     }
+
+    // =========================================================================
+    // GetBusinessClaimAsync
+    // =========================================================================
+
+    [Test]
+    public async Task GetBusinessClaimAsync_ShouldReturnDto_WhenClaimExists()
+    {
+        // Arrange
+        var businessId = Guid.NewGuid();
+        var expiresAt = DateTime.UtcNow.AddHours(20);
+        var payload = new { Status = 7, ExpiresAt = expiresAt };
+        _mockHandler.SetupRequestWithJsonResponse(HttpMethod.Get, $"/api/business/{businessId}/claim", payload);
+
+        // Act
+        var result = await _client.GetBusinessClaimAsync(businessId);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.BusinessId, Is.EqualTo(businessId));
+        Assert.That(result.Status, Is.EqualTo(7));
+        Assert.That(result.ExpiresAt, Is.EqualTo(expiresAt).Within(TimeSpan.FromSeconds(1)));
+    }
+
+    [Test]
+    public async Task GetBusinessClaimAsync_ShouldReturnNull_WhenNotFound()
+    {
+        // Arrange
+        var businessId = Guid.NewGuid();
+        _mockHandler.SetupRequestWithResponse(HttpMethod.Get, $"/api/business/{businessId}/claim", HttpStatusCode.NotFound);
+
+        // Act
+        var result = await _client.GetBusinessClaimAsync(businessId);
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public async Task GetBusinessClaimAsync_ShouldReturnNull_OnException()
+    {
+        // Arrange
+        var businessId = Guid.NewGuid();
+        _mockHandler.SetupRequestWithException<HttpRequestException>(HttpMethod.Get, $"/api/business/{businessId}/claim");
+
+        // Act
+        var result = await _client.GetBusinessClaimAsync(businessId);
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
 }
