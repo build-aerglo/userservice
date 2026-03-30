@@ -16,6 +16,7 @@ public class UserService(
     IBusinessRepRepository businessRepRepository,
     IBusinessServiceClient businessServiceClient,
     IBusinessClaimRepository businessClaimRepository,
+    IBusinessRepository businessRepository,
     ISupportUserProfileRepository supportUserProfileRepository,
     IEndUserProfileRepository endUserProfileRepository,
     IUserSettingsRepository userSettingsRepository,
@@ -272,23 +273,16 @@ public class UserService(
         if (savedUser is null)
             throw new UserCreationFailedException("Failed to create user record.");
 
-        // 5. Link user to the claimed business (sets business.user_id)
+        // 5. Link user to the claimed business and update owner details + status
         await userRepository.SetUserIdAsync(savedUser.Id, dto.BusinessId);
+        await businessRepository.UpdateOwnerAsync(dto.BusinessId, savedUser.Id, dto.Email, dto.PhoneNumber);
+        await businessRepository.UpdateStatusAsync(dto.BusinessId, "claimed");
 
-        // 6. Update business owner details (email + phone) and mark as claimed in business service
-        await businessServiceClient.UpdateBusinessOwnerAsync(dto.BusinessId, savedUser.Id, dto.Email, dto.PhoneNumber);
-        await businessServiceClient.UpdateBusinessStatusAsync(dto.BusinessId, "claimed");
-
-        // 7. Create BusinessRep record
+        // 6. Create BusinessRep record
         var businessRep = new BusinessRep(dto.BusinessId, savedUser.Id);
         await businessRepRepository.AddAsync(businessRep);
 
-        // 8. Initialise subscription and settings (best-effort, non-blocking)
-        _ = Task.WhenAll(
-            businessServiceClient.InitializeBusinessSubscriptionAsync(dto.BusinessId),
-            businessServiceClient.InitializeBusinessSettingsAsync(dto.BusinessId));
-
-        // 9. Send registration verification email (non-blocking)
+        // 7. Send registration verification email
         await registrationVerificationService.SendVerificationEmailAsync(savedUser.Email, businessName, "business_user");
 
         return new RegisterBusinessResultDto(

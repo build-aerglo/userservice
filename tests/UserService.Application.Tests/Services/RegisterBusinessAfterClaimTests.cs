@@ -19,6 +19,7 @@ public class RegisterBusinessAfterClaimTests
     private Mock<IBusinessRepRepository> _mockBusinessRepRepo = null!;
     private Mock<IBusinessServiceClient> _mockBusinessClient = null!;
     private Mock<IBusinessClaimRepository> _mockBusinessClaimRepo = null!;
+    private Mock<IBusinessRepository> _mockBusinessRepo = null!;
     private Mock<IAuth0ManagementService> _mockAuth0 = null!;
     private Mock<IConfiguration> _mockConfig = null!;
     private Mock<IRegistrationVerificationService> _mockRegVerification = null!;
@@ -35,6 +36,7 @@ public class RegisterBusinessAfterClaimTests
         _mockBusinessRepRepo = new Mock<IBusinessRepRepository>();
         _mockBusinessClient = new Mock<IBusinessServiceClient>();
         _mockBusinessClaimRepo = new Mock<IBusinessClaimRepository>();
+        _mockBusinessRepo = new Mock<IBusinessRepository>();
         _mockAuth0 = new Mock<IAuth0ManagementService>();
         _mockConfig = new Mock<IConfiguration>();
         _mockRegVerification = new Mock<IRegistrationVerificationService>();
@@ -47,10 +49,8 @@ public class RegisterBusinessAfterClaimTests
 
         _mockBusinessClaimRepo.Setup(r => r.GetByBusinessIdAsync(BusinessId))
             .ReturnsAsync(new BusinessClaim { BusinessId = BusinessId, BusinessName = BusinessName, Status = 7, ExpiresAt = DateTime.UtcNow.AddHours(12) });
-        _mockBusinessClient.Setup(b => b.UpdateBusinessOwnerAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string?>())).ReturnsAsync(true);
-        _mockBusinessClient.Setup(b => b.InitializeBusinessSubscriptionAsync(It.IsAny<Guid>())).ReturnsAsync(true);
-        _mockBusinessClient.Setup(b => b.InitializeBusinessSettingsAsync(It.IsAny<Guid>())).ReturnsAsync(true);
-        _mockBusinessClient.Setup(b => b.UpdateBusinessStatusAsync(It.IsAny<Guid>(), It.IsAny<string>())).ReturnsAsync(true);
+        _mockBusinessRepo.Setup(r => r.UpdateOwnerAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string?>())).Returns(Task.CompletedTask);
+        _mockBusinessRepo.Setup(r => r.UpdateStatusAsync(It.IsAny<Guid>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
         _mockUserRepo.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
         _mockUserRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>()))
@@ -73,6 +73,7 @@ public class RegisterBusinessAfterClaimTests
             _mockBusinessRepRepo.Object,
             _mockBusinessClient.Object,
             _mockBusinessClaimRepo.Object,
+            _mockBusinessRepo.Object,
             new Mock<ISupportUserProfileRepository>().Object,
             new Mock<IEndUserProfileRepository>().Object,
             new Mock<IUserSettingsRepository>().Object,
@@ -149,7 +150,7 @@ public class RegisterBusinessAfterClaimTests
         await _service.RegisterBusinessAfterClaimAsync(dto);
 
         // Assert
-        _mockBusinessClient.Verify(b => b.UpdateBusinessOwnerAsync(
+        _mockBusinessRepo.Verify(r => r.UpdateOwnerAsync(
             BusinessId, It.IsAny<Guid>(), "owner@biz.com", "+2348012345678"), Times.Once);
     }
 
@@ -240,6 +241,6 @@ public class RegisterBusinessAfterClaimTests
         await _service.RegisterBusinessAfterClaimAsync(dto);
 
         // Assert
-        _mockBusinessClient.Verify(b => b.UpdateBusinessStatusAsync(BusinessId, "claimed"), Times.Once);
+        _mockBusinessRepo.Verify(r => r.UpdateStatusAsync(BusinessId, "claimed"), Times.Once);
     }
 }

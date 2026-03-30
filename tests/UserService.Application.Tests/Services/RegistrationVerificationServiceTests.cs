@@ -15,7 +15,7 @@ public class RegistrationVerificationServiceTests
     private Mock<IUserRepository> _mockUserRepo = null!;
     private Mock<IEncryptionService> _mockEncryption = null!;
     private Mock<INotificationServiceClient> _mockNotificationClient = null!;
-    private Mock<IBusinessServiceClient> _mockBusinessClient = null!;
+    private Mock<IBusinessRepository> _mockBusinessRepo = null!;
     private Mock<ILogger<RegistrationVerificationService>> _mockLogger = null!;
     private RegistrationVerificationService _service = null!;
 
@@ -26,7 +26,7 @@ public class RegistrationVerificationServiceTests
         _mockUserRepo = new Mock<IUserRepository>();
         _mockEncryption = new Mock<IEncryptionService>();
         _mockNotificationClient = new Mock<INotificationServiceClient>();
-        _mockBusinessClient = new Mock<IBusinessServiceClient>();
+        _mockBusinessRepo = new Mock<IBusinessRepository>();
         _mockLogger = new Mock<ILogger<RegistrationVerificationService>>();
 
         _service = new RegistrationVerificationService(
@@ -34,7 +34,7 @@ public class RegistrationVerificationServiceTests
             _mockUserRepo.Object,
             _mockEncryption.Object,
             _mockNotificationClient.Object,
-            _mockBusinessClient.Object,
+            _mockBusinessRepo.Object,
             _mockLogger.Object
         );
     }
@@ -167,7 +167,7 @@ public class RegistrationVerificationServiceTests
         Assert.That(result.Message, Does.Contain("verified"));
         _mockUserRepo.Verify(r => r.UpdateEmailVerifiedAsync(user.Id), Times.Once);
         _mockRegVerificationRepo.Verify(r => r.DeleteByEmailAsync(email), Times.Once);
-        _mockBusinessClient.Verify(b => b.GetBusinessIdByEmailAsync(It.IsAny<string>()), Times.Never);
+        _mockBusinessRepo.Verify(r => r.GetIdByEmailAsync(It.IsAny<string>()), Times.Never);
     }
 
     [Test]
@@ -183,8 +183,8 @@ public class RegistrationVerificationServiceTests
         _mockEncryption.Setup(e => e.Decrypt(token)).Returns(email);
         _mockUserRepo.Setup(r => r.GetByEmailAsync(email)).ReturnsAsync(user);
         _mockRegVerificationRepo.Setup(r => r.GetByEmailAsync(email)).ReturnsAsync(verification);
-        _mockBusinessClient.Setup(b => b.GetBusinessIdByEmailAsync(email)).ReturnsAsync(businessId);
-        _mockBusinessClient.Setup(b => b.MarkBusinessEmailVerifiedAsync(businessId, email)).ReturnsAsync(true);
+        _mockBusinessRepo.Setup(r => r.GetIdByEmailAsync(email)).ReturnsAsync(businessId);
+        _mockBusinessRepo.Setup(r => r.MarkEmailVerifiedAsync(businessId)).Returns(Task.CompletedTask);
         _mockUserRepo.Setup(r => r.UpdateEmailVerifiedAsync(user.Id)).Returns(Task.CompletedTask);
         _mockRegVerificationRepo.Setup(r => r.DeleteByEmailAsync(email)).Returns(Task.CompletedTask);
 
@@ -193,8 +193,8 @@ public class RegistrationVerificationServiceTests
 
         // Assert
         Assert.That(result.Success, Is.True);
-        _mockBusinessClient.Verify(b => b.GetBusinessIdByEmailAsync(email), Times.Once);
-        _mockBusinessClient.Verify(b => b.MarkBusinessEmailVerifiedAsync(businessId, email), Times.Once);
+        _mockBusinessRepo.Verify(r => r.GetIdByEmailAsync(email), Times.Once);
+        _mockBusinessRepo.Verify(r => r.MarkEmailVerifiedAsync(businessId), Times.Once);
     }
 
     [Test]

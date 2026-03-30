@@ -12,7 +12,7 @@ public class RegistrationVerificationService(
     IUserRepository userRepository,
     IEncryptionService encryptionService,
     INotificationServiceClient notificationClient,
-    IBusinessServiceClient businessServiceClient,
+    IBusinessRepository businessRepository,
     ILogger<RegistrationVerificationService> logger
 ) : IRegistrationVerificationService
 {
@@ -92,20 +92,14 @@ public class RegistrationVerificationService(
         if (verification.IsExpired)
             throw new VerificationTokenExpiredException();
 
-        // c) For business_user: update business_verification via business service
+        // c) For business_user: mark is_verified on the business table
         if (string.Equals(user.UserType, "business_user", StringComparison.OrdinalIgnoreCase))
         {
-            var businessId = await businessServiceClient.GetBusinessIdByEmailAsync(email);
+            var businessId = await businessRepository.GetIdByEmailAsync(email);
             if (businessId.HasValue)
-            {
-                var updated = await businessServiceClient.MarkBusinessEmailVerifiedAsync(businessId.Value, email);
-                if (!updated)
-                    logger.LogWarning("Could not update business_verification for business {BusinessId}", businessId.Value);
-            }
+                await businessRepository.MarkEmailVerifiedAsync(businessId.Value);
             else
-            {
                 logger.LogWarning("No business found for email {Email} during email verification", email);
-            }
         }
 
         // For both user types: mark is_email_verified on users table

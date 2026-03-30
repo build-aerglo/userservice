@@ -53,6 +53,7 @@ builder.Services.AddScoped<IPasswordResetRequestRepository, PasswordResetRequest
 builder.Services.AddScoped<IEmailUpdateRequestRepository, EmailUpdateRequestRepository>();
 builder.Services.AddScoped<IRegistrationVerificationRepository, RegistrationVerificationRepository>();
 builder.Services.AddScoped<IBusinessClaimRepository, BusinessClaimRepository>();
+builder.Services.AddScoped<IBusinessRepository, BusinessRepository>();
 
 // ---------- Auth0 Login HTTP Client (TLS forced) ----------
 builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(client =>
