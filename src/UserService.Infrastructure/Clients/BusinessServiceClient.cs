@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Logging;
+using UserService.Application.DTOs;
 using UserService.Application.Interfaces;
 using UserService.Domain.Exceptions;
 
