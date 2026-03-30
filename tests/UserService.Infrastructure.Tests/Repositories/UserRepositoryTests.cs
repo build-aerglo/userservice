@@ -195,4 +195,20 @@ public class UserRepository : IUserRepository
                 BusinessId = businessId.ToString()
             }));
     }
+
+    public async Task UpdateEmailVerifiedAsync(Guid userId)
+    {
+        const string sql = @"
+            UPDATE users
+            SET is_email_verified = 1,
+                updated_at        = @UpdatedAt
+            WHERE id = @UserId;";
+
+        await ExecuteAsync(conn =>
+            conn.ExecuteAsync(sql, new
+            {
+                UserId    = userId.ToString(),
+                UpdatedAt = DateTime.UtcNow
+            }));
+    }
 }

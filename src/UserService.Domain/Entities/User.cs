@@ -6,7 +6,7 @@ public class User
     public string Username { get; private set; } = default!;
     public string Password { get; private set; } = default!;
     public string Email { get; private set; } = default!;
-    public bool IsEmailVerified { get; private set; } = default!;
+    public bool IsEmailVerified { get; private set; }
     public string Phone { get; private set; } = default!;
     public string UserType { get; private set; } = default!;
     public string? Address { get; private set; }
@@ -16,7 +16,6 @@ public class User
 
     public string Auth0UserId { get; private set; }
     public string LoginType { get; private set; } = "email-password";
-    public bool IsEmailVerified { get; private set; }
 
     // Dapper needs a parameterless constructor
     protected User() { }
