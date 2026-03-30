@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Logging;
-using UserService.Application.DTOs;
 using UserService.Application.Interfaces;
 using UserService.Domain.Exceptions;
 
@@ -215,35 +214,6 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
     }
 
     /// <summary>
-    /// Retrieves the claim record for a business from business_claim_request.
-    /// </summary>
-    public async Task<BusinessClaimDto?> GetBusinessClaimAsync(Guid businessId)
-    {
-        try
-        {
-            var response = await httpClient.GetAsync($"/api/business/{businessId}/claim");
-
-            if (response.StatusCode == HttpStatusCode.OK)
-            {
-                var result = await response.Content.ReadFromJsonAsync<BusinessClaimResponse>();
-                if (result is not null)
-                {
-                    logger.LogInformation("Retrieved claim for business {BusinessId}: status={Status}", businessId, result.Status);
-                    return new BusinessClaimDto(businessId, result.Status, result.ExpiresAt);
-                }
-            }
-
-            logger.LogWarning("Claim not found for business {BusinessId}: {StatusCode}", businessId, response.StatusCode);
-            return null;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error fetching claim for business {BusinessId}", businessId);
-            return null;
-        }
-    }
-
-    /// <summary>
     /// Updates the status field on a business.
     /// </summary>
     public async Task<bool> UpdateBusinessStatusAsync(Guid businessId, string status)
@@ -357,9 +327,5 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
         public string? Name { get; set; }
     }
 
-    private sealed class BusinessClaimResponse
-    {
-        public int Status { get; set; }
-        public DateTime ExpiresAt { get; set; }
-    }
+
 }

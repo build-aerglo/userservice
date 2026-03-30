@@ -15,6 +15,7 @@ public class UserService(
     IUserRepository userRepository,
     IBusinessRepRepository businessRepRepository,
     IBusinessServiceClient businessServiceClient,
+    IBusinessClaimRepository businessClaimRepository,
     ISupportUserProfileRepository supportUserProfileRepository,
     IEndUserProfileRepository endUserProfileRepository,
     IUserSettingsRepository userSettingsRepository,
@@ -239,7 +240,7 @@ public class UserService(
     public async Task<RegisterBusinessResultDto> RegisterBusinessAfterClaimAsync(RegisterBusinessDto dto)
     {
         // 1. Validate business claim
-        var claim = await businessServiceClient.GetBusinessClaimAsync(dto.BusinessId);
+        var claim = await businessClaimRepository.GetByBusinessIdAsync(dto.BusinessId);
         if (claim is null)
             throw new BusinessNotFoundException(dto.BusinessId);
 

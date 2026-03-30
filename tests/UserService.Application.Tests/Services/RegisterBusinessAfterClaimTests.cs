@@ -18,6 +18,7 @@ public class RegisterBusinessAfterClaimTests
     private Mock<IUserRepository> _mockUserRepo = null!;
     private Mock<IBusinessRepRepository> _mockBusinessRepRepo = null!;
     private Mock<IBusinessServiceClient> _mockBusinessClient = null!;
+    private Mock<IBusinessClaimRepository> _mockBusinessClaimRepo = null!;
     private Mock<IAuth0ManagementService> _mockAuth0 = null!;
     private Mock<IConfiguration> _mockConfig = null!;
     private Mock<IRegistrationVerificationService> _mockRegVerification = null!;
@@ -33,6 +34,7 @@ public class RegisterBusinessAfterClaimTests
         _mockUserRepo = new Mock<IUserRepository>();
         _mockBusinessRepRepo = new Mock<IBusinessRepRepository>();
         _mockBusinessClient = new Mock<IBusinessServiceClient>();
+        _mockBusinessClaimRepo = new Mock<IBusinessClaimRepository>();
         _mockAuth0 = new Mock<IAuth0ManagementService>();
         _mockConfig = new Mock<IConfiguration>();
         _mockRegVerification = new Mock<IRegistrationVerificationService>();
@@ -43,8 +45,8 @@ public class RegisterBusinessAfterClaimTests
             .Setup(a => a.CreateUserAndAssignRoleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(Auth0Id);
 
-        _mockBusinessClient.Setup(b => b.GetBusinessClaimAsync(BusinessId))
-            .ReturnsAsync(new BusinessClaimDto(BusinessId, 7, DateTime.UtcNow.AddHours(12)));
+        _mockBusinessClaimRepo.Setup(r => r.GetByBusinessIdAsync(BusinessId))
+            .ReturnsAsync(new BusinessClaim { BusinessId = BusinessId, Status = 7, ExpiresAt = DateTime.UtcNow.AddHours(12) });
         _mockBusinessClient.Setup(b => b.GetBusinessNameAsync(BusinessId)).ReturnsAsync(BusinessName);
         _mockBusinessClient.Setup(b => b.UpdateBusinessOwnerAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string?>())).ReturnsAsync(true);
         _mockBusinessClient.Setup(b => b.InitializeBusinessSubscriptionAsync(It.IsAny<Guid>())).ReturnsAsync(true);
@@ -71,6 +73,7 @@ public class RegisterBusinessAfterClaimTests
             _mockUserRepo.Object,
             _mockBusinessRepRepo.Object,
             _mockBusinessClient.Object,
+            _mockBusinessClaimRepo.Object,
             new Mock<ISupportUserProfileRepository>().Object,
             new Mock<IEndUserProfileRepository>().Object,
             new Mock<IUserSettingsRepository>().Object,
@@ -186,7 +189,7 @@ public class RegisterBusinessAfterClaimTests
     public void RegisterBusinessAfterClaimAsync_ShouldThrowBusinessNotFoundException_WhenClaimNotFound()
     {
         // Arrange — no claim record at all
-        _mockBusinessClient.Setup(b => b.GetBusinessClaimAsync(BusinessId)).ReturnsAsync((BusinessClaimDto?)null);
+        _mockBusinessClaimRepo.Setup(r => r.GetByBusinessIdAsync(BusinessId)).ReturnsAsync((BusinessClaim?)null);
         var dto = new RegisterBusinessDto(BusinessId, "owner@biz.com", "Password1!", null);
 
         // Act & Assert
@@ -208,8 +211,8 @@ public class RegisterBusinessAfterClaimTests
     public void RegisterBusinessAfterClaimAsync_ShouldThrowBusinessClaimNotApprovedException_WhenStatusIsNot7()
     {
         // Arrange — claim exists but status is not 7 (e.g. 5 = pending)
-        _mockBusinessClient.Setup(b => b.GetBusinessClaimAsync(BusinessId))
-            .ReturnsAsync(new BusinessClaimDto(BusinessId, 5, DateTime.UtcNow.AddHours(12)));
+        _mockBusinessClaimRepo.Setup(r => r.GetByBusinessIdAsync(BusinessId))
+            .ReturnsAsync(new BusinessClaim { BusinessId = BusinessId, Status = 5, ExpiresAt = DateTime.UtcNow.AddHours(12) });
         var dto = new RegisterBusinessDto(BusinessId, "owner@biz.com", "Password1!", null);
 
         // Act & Assert
@@ -220,8 +223,8 @@ public class RegisterBusinessAfterClaimTests
     public void RegisterBusinessAfterClaimAsync_ShouldThrowBusinessClaimExpiredException_WhenClaimExpired()
     {
         // Arrange — claim status is approved but expires_at is in the past
-        _mockBusinessClient.Setup(b => b.GetBusinessClaimAsync(BusinessId))
-            .ReturnsAsync(new BusinessClaimDto(BusinessId, 7, DateTime.UtcNow.AddHours(-1)));
+        _mockBusinessClaimRepo.Setup(r => r.GetByBusinessIdAsync(BusinessId))
+            .ReturnsAsync(new BusinessClaim { BusinessId = BusinessId, Status = 7, ExpiresAt = DateTime.UtcNow.AddHours(-1) });
         var dto = new RegisterBusinessDto(BusinessId, "owner@biz.com", "Password1!", null);
 
         // Act & Assert

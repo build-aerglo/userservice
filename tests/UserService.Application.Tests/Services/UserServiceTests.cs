@@ -76,6 +76,7 @@ public class UserServiceTests
             _mockUserRepository.Object,
             _mockBusinessRepRepository.Object,
             _mockBusinessServiceClient.Object,
+            new Mock<IBusinessClaimRepository>().Object,
             _mockSupportUserProfileRepository.Object,
             _mockEndUserProfileRepository.Object,
             _mockUserSettingsRepository.Object,

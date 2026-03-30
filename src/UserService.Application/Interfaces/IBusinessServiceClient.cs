@@ -59,12 +59,6 @@ public interface IBusinessServiceClient
     Task<bool> UpdateBusinessStatusAsync(Guid businessId, string status);
 
     /// <summary>
-    /// Retrieves the claim record for a business from business_claim_request.
-    /// Returns null if no claim record exists.
-    /// </summary>
-    Task<BusinessClaimDto?> GetBusinessClaimAsync(Guid businessId);
-
-    /// <summary>
     /// Initialises a default subscription for a newly registered business.
     /// Best-effort — failure is logged but does not fail registration.
     /// </summary>
