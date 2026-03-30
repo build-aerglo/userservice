@@ -46,7 +46,7 @@ public class BusinessClaimRepository : IBusinessClaimRepository
     public async Task<BusinessClaim?> GetByBusinessIdAsync(Guid businessId)
     {
         const string sql = @"
-            SELECT id, business_id, business_name, status, expires_at
+            SELECT id, business_id, name AS business_name, status, expires_at
             FROM business_claim_request
             WHERE business_id = @BusinessId
             ORDER BY created_at DESC
