@@ -251,9 +251,12 @@ public class UserService(
         if (DateTime.UtcNow > claim.ExpiresAt)
             throw new BusinessClaimExpiredException(dto.BusinessId);
 
-        var businessName = claim.BusinessName;
+        // 2. Fetch business name from business table
+        var businessName = await businessRepository.GetNameByIdAsync(dto.BusinessId);
+        if (businessName is null)
+            throw new BusinessNotFoundException(dto.BusinessId);
 
-        // 2. Create Auth0 user with business_user role
+        // 3. Create Auth0 user with business_user role
         var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(
             dto.Email, businessName, dto.Password, _config["Auth0:Roles:BusinessUser"]);
 

@@ -42,6 +42,18 @@ public class BusinessRepository : IBusinessRepository
             await ((IAsyncDisposable)connection).DisposeAsync();
     }
 
+    public async Task<string?> GetNameByIdAsync(Guid businessId)
+    {
+        const string sql = "SELECT name FROM business WHERE id = @BusinessId;";
+        var conn = GetConnection();
+        try
+        {
+            await EnsureOpenAsync(conn);
+            return await conn.ExecuteScalarAsync<string?>(sql, new { BusinessId = GuidParam(businessId) });
+        }
+        finally { await DisposeIfOwnedAsync(conn); }
+    }
+
     public async Task<Guid?> GetIdByEmailAsync(string email)
     {
         const string sql = "SELECT id FROM business WHERE LOWER(business_email) = LOWER(@Email);";

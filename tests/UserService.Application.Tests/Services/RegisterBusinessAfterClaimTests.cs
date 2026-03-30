@@ -48,7 +48,8 @@ public class RegisterBusinessAfterClaimTests
             .ReturnsAsync(Auth0Id);
 
         _mockBusinessClaimRepo.Setup(r => r.GetByBusinessIdAsync(BusinessId))
-            .ReturnsAsync(new BusinessClaim { BusinessId = BusinessId, BusinessName = BusinessName, Status = 7, ExpiresAt = DateTime.UtcNow.AddHours(12) });
+            .ReturnsAsync(new BusinessClaim { BusinessId = BusinessId, Status = 7, ExpiresAt = DateTime.UtcNow.AddHours(12) });
+        _mockBusinessRepo.Setup(r => r.GetNameByIdAsync(BusinessId)).ReturnsAsync(BusinessName);
         _mockBusinessRepo.Setup(r => r.UpdateOwnerAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string?>())).Returns(Task.CompletedTask);
         _mockBusinessRepo.Setup(r => r.UpdateStatusAsync(It.IsAny<Guid>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
