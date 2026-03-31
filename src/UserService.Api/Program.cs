@@ -279,6 +279,9 @@ app.UseCookiePolicy();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// health
+app.MapGet("/health", () => Results.Ok("Healthy"));
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
