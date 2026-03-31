@@ -121,6 +121,49 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     
     [HttpPost("create-business-user")]
 
+    /// <summary>
+    /// Registers credentials for a business owner after a business has been claimed.
+    /// Receives the businessId (pre-existing), email, password and optional phone.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("register-business")]
+    public async Task<IActionResult> RegisterBusinessAfterClaim([FromBody] RegisterBusinessDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var result = await service.RegisterBusinessAfterClaimAsync(dto);
+            return Created("", result);
+        }
+        catch (BusinessClaimExpiredException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (BusinessClaimNotApprovedException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (BusinessNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (DuplicateUserEmailException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+        catch (UserCreationFailedException ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error registering business after claim for businessId {BusinessId}", dto.BusinessId);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
     // PUBLIC business registration
     [AllowAnonymous]
     [HttpPost("business")]

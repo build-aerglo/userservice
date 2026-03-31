@@ -15,6 +15,8 @@ public class UserService(
     IUserRepository userRepository,
     IBusinessRepRepository businessRepRepository,
     IBusinessServiceClient businessServiceClient,
+    IBusinessClaimRepository businessClaimRepository,
+    IBusinessRepository businessRepository,
     ISupportUserProfileRepository supportUserProfileRepository,
     IEndUserProfileRepository endUserProfileRepository,
     IUserSettingsRepository userSettingsRepository,
@@ -23,7 +25,8 @@ public class UserService(
     IReferralService referralService,
     IAuth0ManagementService _auth0,
     IConfiguration _config,
-    IMemoryCache cache
+    IMemoryCache cache,
+    IRegistrationVerificationService registrationVerificationService
 ) : IUserService
 {
     public async Task<User?> GetUserByIdAsync(Guid userId)
@@ -226,11 +229,75 @@ public class UserService(
         if (savedBusiness == null)
             throw new BusinessUserCreationFailedException("Failed to create business record.");
 
+        // Send registration verification email (non-blocking)
+        await registrationVerificationService.SendVerificationEmailAsync(user.Email, user.Username, "business_user");
+
         return (user, businessId.Value, businessRep);
     }
 
     public async Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id)
         => await businessRepRepository.GetByIdAsync(id);
+
+    public async Task<RegisterBusinessResultDto> RegisterBusinessAfterClaimAsync(RegisterBusinessDto dto)
+    {
+        // 1. Validate business claim
+        var claim = await businessClaimRepository.GetByBusinessIdAsync(dto.BusinessId);
+        if (claim is null)
+            throw new BusinessNotFoundException(dto.BusinessId);
+
+        if (claim.Status != 7)
+            throw new BusinessClaimNotApprovedException(dto.BusinessId);
+
+        if (DateTime.UtcNow > claim.ExpiresAt)
+            throw new BusinessClaimExpiredException(dto.BusinessId);
+
+        // 2. Fetch business name from business table
+        var businessName = await businessRepository.GetNameByIdAsync(dto.BusinessId);
+        if (businessName is null)
+            throw new BusinessNotFoundException(dto.BusinessId);
+
+        // 3. Create Auth0 user with business_user role
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(
+            dto.Email, businessName, dto.Password, _config["Auth0:Roles:BusinessUser"]);
+
+        // 4. Create local user record (username = business name)
+        var user = new User(
+            username: businessName,
+            email: dto.Email,
+            phone: dto.PhoneNumber ?? "",
+            password: dto.Password,
+            userType: "business_user",
+            address: null,
+            auth0UserId: auth0UserId);
+
+        await userRepository.AddAsync(user);
+
+        var savedUser = await userRepository.GetByIdAsync(user.Id);
+        if (savedUser is null)
+            throw new UserCreationFailedException("Failed to create user record.");
+
+        // 5. Link user to the claimed business and update owner details + status
+        await userRepository.SetUserIdAsync(savedUser.Id, dto.BusinessId);
+        await businessRepository.UpdateOwnerAsync(dto.BusinessId, savedUser.Id, dto.Email, dto.PhoneNumber);
+        await businessRepository.UpdateStatusAsync(dto.BusinessId, "claimed");
+
+        // 6. Create BusinessRep record
+        var businessRep = new BusinessRep(dto.BusinessId, savedUser.Id);
+        await businessRepRepository.AddAsync(businessRep);
+
+        // 7. Send registration verification email
+        await registrationVerificationService.SendVerificationEmailAsync(savedUser.Email, businessName, "business_user");
+
+        return new RegisterBusinessResultDto(
+            UserId: savedUser.Id,
+            BusinessId: dto.BusinessId,
+            Username: businessName,
+            Email: savedUser.Email,
+            Phone: dto.PhoneNumber,
+            Auth0UserId: auth0UserId,
+            CreatedAt: savedUser.CreatedAt);
+    }
+
 
     public async Task<EndUserResponseDto> CreateEndUserAsync(CreateEndUserDto dto)
     {
@@ -266,6 +333,10 @@ public class UserService(
         if (savedProfile is null)
             throw new UserCreationFailedException("Failed to create end user profile.");
 
+        // ✅ 8. Send registration verification email (non-blocking)
+        await registrationVerificationService.SendVerificationEmailAsync(user.Email, user.Username, "end_user");
+
+        // ✅ 7. Map to response DTO
         return new EndUserResponseDto(
             UserId: user.Id,
             EndUserProfileId: endUserProfile.Id,

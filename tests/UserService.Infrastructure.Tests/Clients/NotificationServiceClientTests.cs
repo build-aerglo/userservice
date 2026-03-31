@@ -112,4 +112,96 @@ public class NotificationServiceClientTests
         // Assert
         Assert.That(result, Is.False);
     }
+
+    // =========================================================================
+    // SendNotificationAsync tests
+    // =========================================================================
+
+    [Test]
+    public async Task SendNotificationAsync_ShouldReturnTrue_WhenStatusOk()
+    {
+        // Arrange
+        _mockHandler
+            .SetupRequestWithResponse(HttpMethod.Post, "/api/notification", HttpStatusCode.OK);
+
+        // Act
+        var result = await _client.SendNotificationAsync("registeration", "user@example.com", "email", new { username = "alice" });
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task SendNotificationAsync_ShouldReturnTrue_WhenStatusCreated()
+    {
+        // Arrange
+        _mockHandler
+            .SetupRequestWithResponse(HttpMethod.Post, "/api/notification", HttpStatusCode.Created);
+
+        // Act
+        var result = await _client.SendNotificationAsync("registeration", "user@example.com", "email", new { username = "alice" });
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task SendNotificationAsync_ShouldReturnFalse_WhenStatusBadRequest()
+    {
+        // Arrange
+        _mockHandler
+            .SetupRequestWithResponse(HttpMethod.Post, "/api/notification", HttpStatusCode.BadRequest, "Invalid request");
+
+        // Act
+        var result = await _client.SendNotificationAsync("registeration", "user@example.com", "email", new { });
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task SendNotificationAsync_ShouldReturnFalse_OnHttpRequestException()
+    {
+        // Arrange
+        _mockHandler
+            .SetupRequestWithException<HttpRequestException>(HttpMethod.Post, "/api/notification");
+
+        // Act
+        var result = await _client.SendNotificationAsync("registeration", "user@example.com", "email", new { });
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task SendNotificationAsync_ShouldReturnFalse_OnUnexpectedException()
+    {
+        // Arrange
+        _mockHandler.Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("Unexpected error"));
+
+        // Act
+        var result = await _client.SendNotificationAsync("registeration", "user@example.com", "email", new { });
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task SendNotificationAsync_ShouldPostToCorrectEndpoint()
+    {
+        // Arrange
+        _mockHandler
+            .SetupRequestWithResponse(HttpMethod.Post, "/api/notification", HttpStatusCode.OK);
+
+        // Act
+        await _client.SendNotificationAsync("registeration", "user@example.com", "email", new { username = "alice" });
+
+        // Assert
+        _mockHandler.VerifyRequest(HttpMethod.Post, "/api/notification", Times.Once());
+    }
 }

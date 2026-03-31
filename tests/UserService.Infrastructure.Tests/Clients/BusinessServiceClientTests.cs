@@ -203,4 +203,5 @@ public class BusinessServiceClientTests
 
         Assert.That(result, Is.Null);
     }
+
 }
