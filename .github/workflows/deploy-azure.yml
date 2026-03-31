@@ -126,16 +126,21 @@ jobs:
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --src-path userservice.zip \
             --type zip \
-            --clean true
+            --clean true \
+            --async true
 
-      - name: Verify deployment
+      - name: Wait for app to be healthy
         run: |
-          STATE=$(az webapp show \
-            --name ${{ env.APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query "state" -o tsv)
-          echo "App Service state: $STATE"
-          if [ "$STATE" != "Running" ]; then
-            echo "App Service is not running after deployment"
-            exit 1
-          fi
+          URL="https://${{ env.APP_NAME }}.azurewebsites.net/health"
+          echo "Polling health endpoint: $URL"
+          for i in {1..36}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ App is live and healthy after attempt $i!"
+              exit 0
+            fi
+            echo "Attempt $i/36: not ready yet (HTTP $STATUS) — waiting 10s..."
+            sleep 10
+          done
+          echo "❌ App failed to become healthy within 6 minutes"
+          exit 1
