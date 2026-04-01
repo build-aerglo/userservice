@@ -26,6 +26,11 @@ public class AfricaTalkingClient : IAfricaTalkingClient
 
     public async Task<AirtimeResponse> SendAirtimeAsync(string phoneNumber, decimal amount)
     {
+        if (phoneNumber.StartsWith("0"))
+            phoneNumber = "+234" + phoneNumber.Substring(1);
+        else if (phoneNumber.StartsWith("234") && !phoneNumber.StartsWith("+"))
+            phoneNumber = "+" + phoneNumber;
+            
         try
         {
             var username = _config["AfricaTalking:Username"];

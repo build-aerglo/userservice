@@ -333,7 +333,7 @@ public class PointRedemption
 
     public void MarkAsCompleted(string transactionReference, string? providerResponse = null)
     {
-        Status = "COMPLETED";
+        Status = "completed";
         TransactionReference = transactionReference;
         ProviderResponse = providerResponse;
         CompletedAt = DateTime.UtcNow;
@@ -342,7 +342,7 @@ public class PointRedemption
 
     public void MarkAsFailed(string? providerResponse = null)
     {
-        Status = "FAILED";
+        Status = "failed";
         ProviderResponse = providerResponse;
         UpdatedAt = DateTime.UtcNow;
     }

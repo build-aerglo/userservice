@@ -300,7 +300,6 @@ public class PointsController(
     
     // Redemption Endpoints
 // [Authorize(Roles = "end_user")]
-[AllowAnonymous]
 [HttpPost("redeem")]
 public async Task<IActionResult> RedeemPoints([FromBody] RedeemPointsDto dto)
 {
