@@ -34,12 +34,20 @@ public class EncryptionService : IEncryptionService
         Buffer.BlockCopy(aes.IV, 0, result, 0, aes.IV.Length);
         Buffer.BlockCopy(encryptedBytes, 0, result, aes.IV.Length, encryptedBytes.Length);
 
-        return Convert.ToBase64String(result);
+        return Convert.ToBase64String(result)
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
     }
 
     public string Decrypt(string encryptedText)
     {
-        var fullCipher = Convert.FromBase64String(encryptedText);
+        // Normalize URL-safe Base64 back to standard Base64 before decoding
+        var normalized = encryptedText.Replace('-', '+').Replace('_', '/');
+        var padding = (4 - normalized.Length % 4) % 4;
+        normalized += new string('=', padding);
+
+        var fullCipher = Convert.FromBase64String(normalized);
 
         var iv = new byte[IvLength];
         var cipher = new byte[fullCipher.Length - IvLength];
