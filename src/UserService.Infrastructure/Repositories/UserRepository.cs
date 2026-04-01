@@ -192,4 +192,16 @@ public class UserRepository : IUserRepository
                 BusinessId = GuidParam(businessId)
             }));
     }
+
+    public async Task UpdateEmailVerifiedAsync(Guid userId)
+    {
+        const string sql = @"
+            UPDATE users
+            SET is_email_verified = TRUE,
+                updated_at = @UpdatedAt
+            WHERE id = @UserId;";
+
+        await ExecuteAsync(conn =>
+            conn.ExecuteAsync(sql, new { UserId = userId, UpdatedAt = DateTime.UtcNow }));
+    }
 }

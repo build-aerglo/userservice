@@ -6,7 +6,7 @@ public class User
     public string Username { get; private set; } = default!;
     public string Password { get; private set; } = default!;
     public string Email { get; private set; } = default!;
-    public bool IsEmailVerified { get; private set; } = default!;
+    public bool IsEmailVerified { get; private set; }
     public string Phone { get; private set; } = default!;
     public string UserType { get; private set; } = default!;
     public string? Address { get; private set; }
@@ -35,6 +35,13 @@ public class User
         UpdatedAt = DateTime.UtcNow;
         Auth0UserId = auth0UserId;
         LoginType = loginType;
+        IsEmailVerified = false;
+    }
+
+    public void MarkEmailVerified()
+    {
+        IsEmailVerified = true;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void Update(string? email, string? phone, string? address)

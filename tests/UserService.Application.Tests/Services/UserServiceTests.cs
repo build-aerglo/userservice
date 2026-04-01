@@ -26,6 +26,7 @@ public class UserServiceTests
     private Mock<IReferralService> _mockReferralService = null!;
     private Mock<IConfiguration> _mockConfig = null!;
     private Mock<IMemoryCache> _mockCache = null!;
+    private Mock<IRegistrationVerificationService> _mockRegisterationVerificationRepository = null!;
     private Application.Services.UserService _service = null!;
 
     [SetUp]
@@ -43,6 +44,7 @@ public class UserServiceTests
         _mockAuth0 = new Mock<IAuth0ManagementService>();
         _mockCache = new Mock<IMemoryCache>();
         _mockConfig = new Mock<IConfiguration>();
+        _mockRegisterationVerificationRepository = new Mock<IRegistrationVerificationService>();
 
         // Auth0 role mappings
         _mockConfig.Setup(c => c["Auth0:Roles:BusinessUser"]).Returns("auth0_business_role");
@@ -74,6 +76,8 @@ public class UserServiceTests
             _mockUserRepository.Object,
             _mockBusinessRepRepository.Object,
             _mockBusinessServiceClient.Object,
+            new Mock<IBusinessClaimRepository>().Object,
+            new Mock<IBusinessRepository>().Object,
             _mockSupportUserProfileRepository.Object,
             _mockEndUserProfileRepository.Object,
             _mockUserSettingsRepository.Object,
@@ -82,7 +86,8 @@ public class UserServiceTests
             _mockReferralService.Object,
             _mockAuth0.Object,
             _mockConfig.Object,
-            _mockCache.Object 
+            _mockCache.Object,
+            _mockRegisterationVerificationRepository.Object
         );
     }
 

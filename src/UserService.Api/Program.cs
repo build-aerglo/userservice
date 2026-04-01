@@ -51,6 +51,9 @@ builder.Services.AddScoped<IPointMultiplierRepository, PointMultiplierRepository
 builder.Services.AddScoped<IPointRedemptionRepository, PointRedemptionRepository>();
 builder.Services.AddScoped<IPasswordResetRequestRepository, PasswordResetRequestRepository>();
 builder.Services.AddScoped<IEmailUpdateRequestRepository, EmailUpdateRequestRepository>();
+builder.Services.AddScoped<IRegistrationVerificationRepository, RegistrationVerificationRepository>();
+builder.Services.AddScoped<IBusinessClaimRepository, BusinessClaimRepository>();
+builder.Services.AddScoped<IBusinessRepository, BusinessRepository>();
 
 // ---------- Auth0 Login HTTP Client (TLS forced) ----------
 builder.Services.AddHttpClient<IAuth0UserLoginService, Auth0UserLoginService>(client =>
@@ -84,6 +87,12 @@ builder.Services.AddScoped<IGeolocationService, GeolocationService>();
 // ---------- Password Reset & Encryption Services ----------
 builder.Services.AddScoped<IEncryptionService, EncryptionService>();
 builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
+
+// ---------- Registration Email Verification Service ----------
+builder.Services.AddScoped<IRegistrationVerificationService, RegistrationVerificationService>();
+
+// ---------- Contact Service ----------
+builder.Services.AddScoped<IContactService, ContactService>();
 
 // ==================================================================
 //  BUSINESS SERVICE CLIENT — ALLOW HTTP (FIX FOR SSL MISMATCH ERROR)
@@ -269,6 +278,9 @@ app.UseCors("FrontendPolicy");
 app.UseCookiePolicy();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// health
+app.MapGet("/health", () => Results.Ok("Healthy"));
 
 app.UseDefaultFiles();
 app.UseStaticFiles();

@@ -55,3 +55,15 @@ public record VerifyEmailDto(
     Guid UserId,
     string Token
 );
+
+// Registration verification DTOs
+public record VerifyRegistrationEmailResultDto(
+    bool Success,
+    string Message
+);
+
+public record ReverifyEmailResultDto(
+    bool Success,
+    string Message,
+    DateTime ExpiresAt
+);

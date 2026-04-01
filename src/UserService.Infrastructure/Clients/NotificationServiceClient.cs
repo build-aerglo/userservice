@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Microsoft.Extensions.Logging;
 using UserService.Application.Interfaces;
 
@@ -41,6 +42,48 @@ public class NotificationServiceClient(HttpClient httpClient, ILogger<Notificati
         catch (Exception ex)
         {
             logger.LogError(ex, "Unexpected error creating OTP for {Id}", id);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sends a templated notification via the Notification Service.
+    /// </summary>
+    public async Task<bool> SendNotificationAsync(string template, string recipient, string channel, object payload)
+    {
+        try
+        {
+            var body = new
+            {
+                template,
+                channel,
+                recipient,
+                payload
+            };
+
+            logger.LogInformation("Sending notification: template={Template}, channel={Channel}, recipient={Recipient}",
+                template, channel, recipient);
+
+            var response = await httpClient.PostAsJsonAsync("/api/notification", body);
+
+            if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Created)
+            {
+                logger.LogInformation("Notification sent successfully: template={Template}, recipient={Recipient}", template, recipient);
+                return true;
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            logger.LogWarning("Notification send failed: {StatusCode} | {Error}", response.StatusCode, error);
+            return false;
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogError(ex, "Network error sending notification: template={Template}, recipient={Recipient}", template, recipient);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error sending notification: template={Template}, recipient={Recipient}", template, recipient);
             return false;
         }
     }

@@ -7,15 +7,9 @@ using UserService.Domain.Exceptions;
 
 namespace UserService.Infrastructure.Clients;
 
-/// <summary>
-/// Client for communicating with the Business Service API.
-/// </summary>
 public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServiceClient> logger)
     : IBusinessServiceClient
 {
-    /// <summary>
-    /// Checks if a business exists in the Business Service by ID.
-    /// </summary>
     public async Task<bool> BusinessExistsAsync(Guid businessId)
     {
         try
@@ -23,35 +17,21 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
             var response = await httpClient.GetAsync($"/api/businesses/{businessId}");
 
             if (response.StatusCode == HttpStatusCode.OK)
-            {
-                logger.LogInformation("✅ Business {BusinessId} exists.", businessId);
                 return true;
-            }
 
             if (response.StatusCode == HttpStatusCode.NotFound)
-            {
-                logger.LogWarning("❌ Business {BusinessId} not found.", businessId);
                 return false;
-            }
 
-            logger.LogWarning("⚠️ Unexpected response from Business Service: {StatusCode}", response.StatusCode);
-            return false;
-        }
-        catch (HttpRequestException ex)
-        {
-            logger.LogError(ex, "Network error checking if business {BusinessId} exists.", businessId);
+            logger.LogWarning("Unexpected response checking business {BusinessId}: {StatusCode}", businessId, response.StatusCode);
             return false;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Unexpected error checking business existence for {BusinessId}.", businessId);
+            logger.LogError(ex, "Error checking if business {BusinessId} exists.", businessId);
             return false;
         }
     }
 
-    /// <summary>
-    /// Creates a new business in the Business Service.
-    /// </summary>
     public async Task<Guid?> CreateBusinessAsync(BusinessUserDto business)
     {
         try
@@ -61,7 +41,7 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
             if (response.StatusCode != HttpStatusCode.Created)
             {
                 var error = await response.Content.ReadAsStringAsync();
-                logger.LogError("❌ Business creation failed: {StatusCode} | {Error}", response.StatusCode, error);
+                logger.LogError("Business creation failed: {StatusCode} | {Error}", response.StatusCode, error);
                 throw new BusinessUserCreationFailedException("Business creation failed in Business Service.");
             }
 
@@ -69,7 +49,6 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
             if (result == null || result.Id == Guid.Empty)
                 throw new BusinessUserCreationFailedException("Invalid business creation response. ID missing.");
 
-            logger.LogInformation("✅ Business successfully created with ID: {BusinessId}", result.Id);
             return result.Id;
         }
         catch (HttpRequestException ex)
@@ -79,7 +58,7 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
         }
         catch (BusinessUserCreationFailedException)
         {
-            throw; // allow upper layers to handle domain exception
+            throw;
         }
         catch (Exception ex)
         {
@@ -88,9 +67,6 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
         }
     }
 
-    /// <summary>
-    /// Updates the business email in the Business Service by old email.
-    /// </summary>
     public async Task<bool> UpdateBusinessEmailAsync(string oldEmail, string newEmail)
     {
         try
@@ -99,27 +75,19 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
             var response = await httpClient.PatchAsJsonAsync("/api/business/email", payload);
 
             if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.NoContent)
-            {
-                logger.LogInformation("Business email updated from {OldEmail} to {NewEmail}", oldEmail, newEmail);
                 return true;
-            }
 
             var error = await response.Content.ReadAsStringAsync();
             logger.LogWarning("Failed to update business email: {StatusCode} | {Error}", response.StatusCode, error);
             return false;
         }
-        catch (HttpRequestException ex)
-        {
-            logger.LogError(ex, "Network error updating business email from {OldEmail}", oldEmail);
-            return false;
-        }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Unexpected error updating business email from {OldEmail}", oldEmail);
+            logger.LogError(ex, "Error updating business email from {OldEmail}", oldEmail);
             return false;
         }
     }
-    
+
     private sealed class BusinessFetchResponse
     {
         public Guid Id { get; set; }

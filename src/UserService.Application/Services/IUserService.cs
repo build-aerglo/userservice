@@ -15,6 +15,9 @@ namespace UserService.Application.Services
 		
 		// Register business
 		Task <(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload);
+
+		// Register business after a business claim
+		Task<RegisterBusinessResultDto> RegisterBusinessAfterClaimAsync(RegisterBusinessDto dto);
 		
 		Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id);
 

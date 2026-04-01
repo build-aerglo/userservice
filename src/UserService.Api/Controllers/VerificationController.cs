@@ -8,7 +8,10 @@ namespace UserService.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class VerificationController(IVerificationService verificationService, ILogger<VerificationController> logger) : ControllerBase
+public class VerificationController(
+    IVerificationService verificationService,
+    IRegistrationVerificationService registrationVerificationService,
+    ILogger<VerificationController> logger) : ControllerBase
 {
     /// <summary>
     /// Get user's verification status
@@ -243,4 +246,74 @@ public class VerificationController(IVerificationService verificationService, IL
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
+
+    // =========================================================================
+    // REGISTRATION EMAIL VERIFICATION
+    // =========================================================================
+
+    /// <summary>
+    /// Verifies a user's email address using the token from the sign-up email.
+    /// Query parameters: email and token (both from the verification link).
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("verify-email")]
+    public async Task<IActionResult> VerifyRegistrationEmail(
+        [FromQuery] string email,
+        [FromQuery] string token)
+    {
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(token))
+            return BadRequest(new { error = "Both email and token are required." });
+
+        try
+        {
+            var result = await registrationVerificationService.VerifyEmailAsync(email, token);
+            return Ok(result);
+        }
+        catch (InvalidVerificationTokenException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (VerificationTokenExpiredException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (EndUserNotFoundException)
+        {
+            return NotFound(new { error = "No account found for this email address." });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error verifying registration email for {Email}", email);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    /// <summary>
+    /// Re-sends the registration verification email for a user who missed it.
+    /// Request body: { "email": "user@example.com" }
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("reverify-email")]
+    public async Task<IActionResult> ReverifyEmail([FromBody] ReverifyEmailRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request?.Email))
+            return BadRequest(new { error = "Email is required." });
+
+        try
+        {
+            var result = await registrationVerificationService.ReverifyEmailAsync(request.Email);
+            return Ok(result);
+        }
+        catch (EndUserNotFoundException)
+        {
+            return NotFound(new { error = "No account found for this email address." });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error re-sending verification email for {Email}", request.Email);
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
 }
+
+public record ReverifyEmailRequest(string Email);
