@@ -35,7 +35,7 @@ packages/
 # appsettings.json     → empty strings (safe to commit)
 # appsettings.Development.json → real local values (gitignored)
 # ============================================================
-appsettings.Development.json
+src/UserService.Api/appsettings.Development.json
 appsettings.development.json
 appsettings.local.json
 appsettings.Local.json
