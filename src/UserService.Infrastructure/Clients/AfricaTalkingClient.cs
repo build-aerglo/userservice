@@ -30,33 +30,31 @@ public class AfricaTalkingClient : IAfricaTalkingClient
             phoneNumber = "+234" + phoneNumber.Substring(1);
         else if (phoneNumber.StartsWith("234") && !phoneNumber.StartsWith("+"))
             phoneNumber = "+" + phoneNumber;
-            
+
         try
         {
             var username = _config["AfricaTalking:Username"];
-            
-            var request = new
+
+            // Africa's Talking requires form-encoded, NOT JSON
+            var formData = new Dictionary<string, string>
             {
-                username = username,
-                recipients = new[]
+                ["username"] = username!,
+                ["recipients"] = JsonSerializer.Serialize(new[]
                 {
                     new
                     {
                         phoneNumber = phoneNumber,
                         currencyCode = "NGN",
-                        amount = amount.ToString("F2")
+                        amount = $"NGN {amount:F2}"  // ← AT sandbox requires "NGN 500.00" format
                     }
-                }
+                })
             };
 
-            var json = JsonSerializer.Serialize(request);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
+            var content = new FormUrlEncodedContent(formData);
             var response = await _httpClient.PostAsync("/version1/airtime/send", content);
             var responseContent = await response.Content.ReadAsStringAsync();
 
             _logger.LogInformation("AfricaTalking API Response: {Response}", responseContent);
-
             if (!response.IsSuccessStatusCode)
             {
                 return new AirtimeResponse
