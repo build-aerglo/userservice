@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using UserService.Application.Services;
@@ -8,7 +9,7 @@ namespace UserService.Application.Tests.Services;
 public class EncryptionServiceTests
 {
     private EncryptionService _encryptionService = null!;
-    private const string TestKey = "TestSecure32CharacterKeyHere123";
+    private const string TestKey = "TestSecure32CharacterKeyHere1234";
 
     [SetUp]
     public void Setup()
@@ -22,16 +23,19 @@ public class EncryptionServiceTests
     [Test]
     public void Encrypt_ShouldReturnBase64String()
     {
-        // Arrange
         var plainText = "TestPassword123!";
 
-        // Act
         var encrypted = _encryptionService.Encrypt(plainText);
 
-        // Assert
         Assert.That(encrypted, Is.Not.Null);
         Assert.That(encrypted, Is.Not.Empty);
-        Assert.DoesNotThrow(() => Convert.FromBase64String(encrypted));
+
+        // Normalize URL-safe Base64 back to standard before validating
+        var normalized = encrypted.Replace('-', '+').Replace('_', '/');
+        var padding = (4 - normalized.Length % 4) % 4;
+        normalized += new string('=', padding);
+
+        Assert.DoesNotThrow(() => Convert.FromBase64String(normalized));
     }
 
     [Test]

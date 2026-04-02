@@ -848,7 +848,7 @@ public class PointsServiceTests
 
         // ASSERT
         Assert.That(result.PointsRedeemed, Is.EqualTo(50m));
-        Assert.That(result.Status, Is.EqualTo("COMPLETED"));
+        Assert.That(result.Status, Is.EqualTo("completed"));
         _mockAfricaTalkingClient.Verify(c => c.SendAirtimeAsync("+2348012345678", 50m), Times.Once);
     }
 
@@ -909,7 +909,7 @@ public class PointsServiceTests
         );
 
         _mockRedemptionRepository.Verify(r => r.UpdateAsync(It.Is<PointRedemption>(
-            pr => pr.Status == "FAILED"
+            pr => pr.Status == "failed"
         )), Times.Once);
     }
 
@@ -947,7 +947,7 @@ public class PointsServiceTests
         var result = await _service.RedeemPointsAsync(dto);
 
         // ASSERT
-        Assert.That(result.Status, Is.EqualTo("COMPLETED"));
+        Assert.That(result.Status, Is.EqualTo("completed"));
     }
 
     // ========================================================================
