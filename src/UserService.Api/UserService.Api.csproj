@@ -8,6 +8,11 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- Azure App Configuration + Key Vault integration -->
+        <PackageReference Include="Azure.Identity" Version="1.13.2" />
+        <PackageReference Include="Microsoft.Azure.AppConfiguration.AspNetCore" Version="8.0.0" />
+
+        <!-- Existing packages — do not change versions -->
         <PackageReference Include="Dapper" Version="2.1.66" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.9" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.2"/>
@@ -20,19 +25,19 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Content Include="..\.dockerignore">
-        <Link>.dockerignore</Link>
-      </Content>
+        <Content Include="..\..\.dockerignore">
+            <Link>.dockerignore</Link>
+        </Content>
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\UserService.Application\UserService.Application.csproj" />
-      <ProjectReference Include="..\UserService.Domain\UserService.Domain.csproj" />
-      <ProjectReference Include="..\UserService.Infrastructure\UserService.Infrastructure.csproj" />
+        <ProjectReference Include="..\UserService.Application\UserService.Application.csproj" />
+        <ProjectReference Include="..\UserService.Domain\UserService.Domain.csproj" />
+        <ProjectReference Include="..\UserService.Infrastructure\UserService.Infrastructure.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-      <None Remove="UserService.Api.http" />
+        <None Remove="UserService.Api.http" />
     </ItemGroup>
 
 </Project>

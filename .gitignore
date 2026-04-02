@@ -1,5 +1,50 @@
+# ============================================================
+# .gitignore — Clereview Services
+# ============================================================
+
+# Build outputs
 bin/
 obj/
-/packages/
+publish/
+*.zip
+
+# IDE
+.idea/
+.vs/
+*.user
+*.suo
+*.userprefs
 riderModule.iml
 /_ReSharper.Caches/
+/shelf/
+/workspace.xml
+/contentModel.xml
+/modules.xml
+/projectSettingsUpdater.xml
+/httpRequests/
+/dataSources/
+/dataSources.local.xml
+
+# NuGet
+packages/
+*.nupkg
+.nuget/
+
+# ============================================================
+# SECRETS — never commit real values
+# appsettings.json     → empty strings (safe to commit)
+# appsettings.Development.json → real local values (gitignored)
+# ============================================================
+appsettings.Development.json
+appsettings.development.json
+appsettings.local.json
+appsettings.Local.json
+local.settings.json
+
+# Docker
+.dockerignore
+Dockerfile
+
+# OS
+.DS_Store
+Thumbs.db

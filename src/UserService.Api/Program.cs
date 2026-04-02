@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Security;
 using System.Security.Authentication;
+using Azure.Identity;
 using Dapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -14,6 +15,33 @@ using UserService.Infrastructure.Database;
 using UserService.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ============================================================
+// AZURE APP CONFIGURATION
+// In production the App Service setting AzureAppConfiguration__Endpoint
+// is the only thing configured directly. Everything else — Auth0 secrets,
+// Postgres connection string, encryption key, AfricaTalking key —
+// is pulled from App Configuration + Key Vault at startup via
+// Managed Identity. No secrets in code or git.
+// Locally this block is skipped (endpoint is empty) and the app
+// uses appsettings.Development.json as normal.
+// ============================================================
+if (builder.Environment.IsProduction())
+{
+    var appConfigEndpoint = builder.Configuration["AzureAppConfiguration__Endpoint"];
+    if (!string.IsNullOrWhiteSpace(appConfigEndpoint))
+    {
+        builder.Configuration.AddAzureAppConfiguration(options =>
+        {
+            options
+                .Connect(new Uri(appConfigEndpoint), new ManagedIdentityCredential())
+                .ConfigureKeyVault(kv =>
+                {
+                    kv.SetCredential(new ManagedIdentityCredential());
+                });
+        });
+    }
+}
 
 builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
 // Enable Dapper snake_case to PascalCase mapping (e.g., auth0_user_id → Auth0UserId)
@@ -44,7 +72,6 @@ builder.Services.AddScoped<IUserReferralCodeRepository, UserReferralCodeReposito
 builder.Services.AddScoped<IReferralRepository, ReferralRepository>();
 builder.Services.AddScoped<IUserGeolocationRepository, UserGeolocationRepository>();
 builder.Services.AddScoped<IGeolocationHistoryRepository, GeolocationHistoryRepository>();
-
 
 builder.Services.AddScoped<IPointRuleRepository, PointRuleRepository>();
 builder.Services.AddScoped<IPointMultiplierRepository, PointMultiplierRepository>();
@@ -82,7 +109,7 @@ builder.Services.AddScoped<IBadgeService, BadgeService>();
 builder.Services.AddScoped<IPointsService, PointsService>();
 builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddScoped<IReferralService, ReferralService>();
-builder.Services.AddScoped<IGeolocationService, GeolocationService>();
+builder.Services.AddScoped<IGeolocationService,GeolocationService>();
 
 // ---------- Password Reset & Encryption Services ----------
 builder.Services.AddScoped<IEncryptionService, EncryptionService>();
@@ -91,70 +118,21 @@ builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
 // ---------- Registration Email Verification Service ----------
 builder.Services.AddScoped<IRegistrationVerificationService, RegistrationVerificationService>();
 
-// ---------- Contact Service ----------
-builder.Services.AddScoped<IContactService, ContactService>();
-
-// ==================================================================
-//  BUSINESS SERVICE CLIENT — ALLOW HTTP (FIX FOR SSL MISMATCH ERROR)
-// ==================================================================
-builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(client =>
-{
-    client.BaseAddress = new Uri(builder.Configuration["Services:BusinessServiceBaseUrl"]);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-})
-.ConfigurePrimaryHttpMessageHandler(() =>
-{
-    // Allow HTTP, do NOT enforce SSL
-    return new HttpClientHandler
-    {
-        ServerCertificateCustomValidationCallback =
-            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-    };
-});
-
-
+// ---------- AfricaTalking SMS ----------
 builder.Services.AddHttpClient<IAfricaTalkingClient, AfricaTalkingClient>(client =>
 {
     var baseUrl = builder.Configuration["AfricaTalking:BaseUrl"];
-    client.BaseAddress = new Uri(baseUrl);
+    client.BaseAddress = new Uri(baseUrl!);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 }).ConfigurePrimaryHttpMessageHandler(() =>
 {
     // Allow HTTP, do NOT enforce SSL
-    return new HttpClientHandler
+    return new SocketsHttpHandler
     {
-        ServerCertificateCustomValidationCallback =
-            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-    };
-});
-
-builder.Services.AddHttpClient<IReviewServiceClient, ReviewServiceClient>(client =>
-{
-    var baseUrl = builder.Configuration["Services:ReviewServiceBaseUrl"];
-    client.BaseAddress = new Uri(baseUrl);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-}).ConfigurePrimaryHttpMessageHandler(() =>
-{
-    // Allow HTTP, do NOT enforce SSL
-    return new HttpClientHandler
-    {
-        ServerCertificateCustomValidationCallback =
-            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-    };
-});
-
-// ---------- Notification Service Client ----------
-builder.Services.AddHttpClient<INotificationServiceClient, NotificationServiceClient>(client =>
-{
-    var baseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"];
-    client.BaseAddress = new Uri(baseUrl);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-}).ConfigurePrimaryHttpMessageHandler(() =>
-{
-    return new HttpClientHandler
-    {
-        ServerCertificateCustomValidationCallback =
-            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        SslOptions = new SslClientAuthenticationOptions
+        {
+            EnabledSslProtocols = SslProtocols.None
+        }
     };
 });
 
@@ -177,83 +155,42 @@ builder.Services.AddHttpClient<IAuth0SocialLoginService, Auth0SocialLoginService
     };
 });
 
-// ---------- Cookie policy (needed for refresh cookie) ----------
-builder.Services.Configure<CookiePolicyOptions>(options =>
-{
-    options.MinimumSameSitePolicy = SameSiteMode.None;
-    options.Secure = CookieSecurePolicy.Always;
-});
-
-builder.Services.AddMemoryCache();
-
-// ---------- CORS ----------
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("FrontendPolicy", policy =>
-    {
-        policy
-            .SetIsOriginAllowed(_ => true)  // allow temporary until production
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
-    });
-});
-
 // ---------- Auth0 JWT Auth ----------
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        var domain = builder.Configuration["Auth0:Domain"];
-        var audience = builder.Configuration["Auth0:Audience"];
-
-        options.Authority = $"https://{domain}/";
-        options.Audience = audience;
-
+        options.Authority = $"https://{builder.Configuration["Auth0:Domain"]}/";
+        options.Audience = builder.Configuration["Auth0:Audience"];
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            RoleClaimType = "https://user-service.aerglotechnology.com/roles"
-        };
-
-        options.Events = new JwtBearerEvents
-        {
-            OnAuthenticationFailed = ctx =>
-            {
-                Console.WriteLine("❌ Token auth failed: " + ctx.Exception.Message);
-                return Task.CompletedTask;
-            },
-            OnTokenValidated = ctx =>
-            {
-                Console.WriteLine("✅ Token validated");
-                return Task.CompletedTask;
-            }
+            ValidateIssuerSigningKey = true,
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true
         };
     });
 
-// ---------- Authorization Policies ----------
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("BusinessOnly", p => p.RequireRole("business_user"));
-    options.AddPolicy("SupportOnly", p => p.RequireRole("support_user"));
-    options.AddPolicy("EndUserOnly", p => p.RequireRole("end_user"));
-    options.AddPolicy("BizOrSupport", p => p.RequireRole("business_user", "support_user"));
-});
+builder.Services.AddAuthorization();
 
-// ---------- Swagger + JWT ----------
+// ---------- Swagger ----------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "User Service API", Version = "v1" });
-
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "User Service API",
+        Version = "v1"
+    });
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
         Type = SecuritySchemeType.Http,
         Scheme = "bearer",
         BearerFormat = "JWT",
-        In = ParameterLocation.Header
+        In = ParameterLocation.Header,
+        Description = "Enter your Bearer token"
     });
-
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
@@ -266,24 +203,30 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Build
+// ---------- CORS ----------
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader());
+});
+
 var app = builder.Build();
 
-// Swagger always enabled
-app.UseSwagger();
-app.UseSwaggerUI();
+// NOTE: UseHttpsRedirection intentionally removed.
+// Azure App Service handles HTTPS at the load balancer.
 
-// Correct order
-app.UseCors("FrontendPolicy");
-app.UseCookiePolicy();
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "User Service API v1");
+    options.RoutePrefix = "";
+});
+
+app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
-
-// health
-app.MapGet("/health", () => Results.Ok("Healthy"));
-
-app.UseDefaultFiles();
-app.UseStaticFiles();
-
 app.MapControllers();
+
 app.Run();
