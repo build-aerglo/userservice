@@ -26,36 +26,32 @@ var builder = WebApplication.CreateBuilder(args);
 // Locally this block is skipped (endpoint is empty) and the app
 // uses appsettings.Development.json as normal.
 // ============================================================
-if (builder.Environment.IsProduction())
+var appConfigEndpoint = builder.Configuration["AzureAppConfiguration:Endpoint"];
+
+if (!string.IsNullOrWhiteSpace(appConfigEndpoint))
 {
-    var appConfigEndpoint = builder.Configuration["AzureAppConfiguration__Endpoint"];
-
-    if (!string.IsNullOrWhiteSpace(appConfigEndpoint))
+    try
     {
-        try
+        builder.Configuration.AddAzureAppConfiguration(options =>
         {
-            builder.Configuration.AddAzureAppConfiguration(options =>
-            {
-                options
-                    .Connect(new Uri(appConfigEndpoint), new DefaultAzureCredential())
-                    .ConfigureKeyVault(kv =>
-                    {
-                        kv.SetCredential(new DefaultAzureCredential());
-                    });
-            });
-
-            Console.WriteLine($"[AppConfig] Connected: {appConfigEndpoint}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[AppConfig] FAILED TO CONNECT: {ex.GetType().Name}: {ex.Message}");
-            Console.WriteLine($"[AppConfig] Inner: {ex.InnerException?.Message}");
-        }
+            options
+                .Connect(new Uri(appConfigEndpoint), new DefaultAzureCredential())
+                .ConfigureKeyVault(kv =>
+                {
+                    kv.SetCredential(new DefaultAzureCredential());
+                });
+        });
+        Console.WriteLine($"[AppConfig] Connected: {appConfigEndpoint}");
     }
-    else
+    catch (Exception ex)
     {
-        Console.WriteLine("[AppConfig] Endpoint not set — skipping.");
+        Console.WriteLine($"[AppConfig] FAILED: {ex.GetType().Name}: {ex.Message}");
+        Console.WriteLine($"[AppConfig] Inner: {ex.InnerException?.Message}");
     }
+}
+else
+{
+    Console.WriteLine("[AppConfig] Endpoint not set — skipping.");
 }
 
 builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
