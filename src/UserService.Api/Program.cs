@@ -136,6 +136,16 @@ builder.Services.AddHttpClient<IAfricaTalkingClient, AfricaTalkingClient>(client
     };
 });
 
+
+// ---------- Review Service HTTP Client ----------
+builder.Services.AddHttpClient<IReviewServiceClient, ReviewServiceClient>(client =>
+{
+    var baseUrl = builder.Configuration["Services:ReviewServiceBaseUrl"];
+    if (!string.IsNullOrWhiteSpace(baseUrl))
+        client.BaseAddress = new Uri(baseUrl);
+});
+
+
 // ---------- Auth0 Management API ----------
 builder.Services.AddHttpClient<IAuth0ManagementService, Auth0ManagementService>();
 
