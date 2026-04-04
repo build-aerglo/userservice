@@ -29,17 +29,20 @@ var builder = WebApplication.CreateBuilder(args);
 if (builder.Environment.IsProduction())
 {
     var appConfigEndpoint = builder.Configuration["AzureAppConfiguration__Endpoint"];
+
     if (!string.IsNullOrWhiteSpace(appConfigEndpoint))
     {
         builder.Configuration.AddAzureAppConfiguration(options =>
         {
             options
-                .Connect(new Uri(appConfigEndpoint), new ManagedIdentityCredential())
+                .Connect(new Uri(appConfigEndpoint), new DefaultAzureCredential())
                 .ConfigureKeyVault(kv =>
                 {
-                    kv.SetCredential(new ManagedIdentityCredential());
+                    kv.SetCredential(new DefaultAzureCredential());
                 });
         });
+
+        Console.WriteLine($"Azure App Configuration connected: {appConfigEndpoint}");
     }
 }
 
