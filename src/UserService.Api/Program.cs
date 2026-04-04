@@ -32,17 +32,29 @@ if (builder.Environment.IsProduction())
 
     if (!string.IsNullOrWhiteSpace(appConfigEndpoint))
     {
-        builder.Configuration.AddAzureAppConfiguration(options =>
+        try
         {
-            options
-                .Connect(new Uri(appConfigEndpoint), new DefaultAzureCredential())
-                .ConfigureKeyVault(kv =>
-                {
-                    kv.SetCredential(new DefaultAzureCredential());
-                });
-        });
+            builder.Configuration.AddAzureAppConfiguration(options =>
+            {
+                options
+                    .Connect(new Uri(appConfigEndpoint), new DefaultAzureCredential())
+                    .ConfigureKeyVault(kv =>
+                    {
+                        kv.SetCredential(new DefaultAzureCredential());
+                    });
+            });
 
-        Console.WriteLine($"Azure App Configuration connected: {appConfigEndpoint}");
+            Console.WriteLine($"[AppConfig] Connected: {appConfigEndpoint}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AppConfig] FAILED TO CONNECT: {ex.GetType().Name}: {ex.Message}");
+            Console.WriteLine($"[AppConfig] Inner: {ex.InnerException?.Message}");
+        }
+    }
+    else
+    {
+        Console.WriteLine("[AppConfig] Endpoint not set — skipping.");
     }
 }
 
