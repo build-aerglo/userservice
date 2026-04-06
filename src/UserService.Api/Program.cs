@@ -57,6 +57,7 @@ else
     Console.WriteLine("[AppConfig] Endpoint not set — skipping.");
 }
 
+builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
 // Enable Dapper snake_case to PascalCase mapping (e.g., auth0_user_id → Auth0UserId)
 DefaultTypeMap.MatchNamesWithUnderscores = true;
