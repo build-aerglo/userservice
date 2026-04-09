@@ -225,12 +225,20 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 // ---------- CORS ----------
+// AllowAnyOrigin() is incompatible with AllowCredentials(), which is required
+// for the browser to send/receive the HttpOnly refresh_token cookie cross-origin.
+// Origins are configured per-environment via AllowedOrigins in appsettings.
+var allowedOrigins = builder.Configuration
+    .GetSection("AllowedOrigins")
+    .Get<string[]>() ?? [];
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyOrigin()
+    options.AddPolicy("AllowFrontend", policy =>
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyMethod()
-              .AllowAnyHeader());
+              .AllowAnyHeader()
+              .AllowCredentials());
 });
 
 var app = builder.Build();
@@ -245,7 +253,7 @@ app.UseSwaggerUI(options =>
     options.RoutePrefix = "";
 });
 
-app.UseCors("AllowAll");
+app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
