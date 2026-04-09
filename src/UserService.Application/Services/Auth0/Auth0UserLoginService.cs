@@ -70,7 +70,11 @@ public class Auth0UserLoginService(HttpClient httpClient, IConfiguration config,
         var response = await httpClient.PostAsJsonAsync(
             $"https://{config["Auth0:Domain"]}/oauth/token", body);
 
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<Auth0ErrorResponse>();
+            throw new AuthLoginFailedException(error?.Error, error?.Error_Description);
+        }
 
         return await response.Content.ReadFromJsonAsync<TokenResponse>()
                ?? throw new Exception("Failed to refresh token");
