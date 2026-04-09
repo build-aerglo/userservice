@@ -60,6 +60,7 @@ DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 // MVC
 builder.Services.AddControllers();
+builder.Services.AddMemoryCache();
 
 // TLS for macOS + Auth0 issue
 ServicePointManager.SecurityProtocol =
