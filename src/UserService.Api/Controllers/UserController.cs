@@ -26,7 +26,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         {
             var result = await service.CreateSubBusinessUserAsync(dto);
 
-            return Created("", new 
+            return Created("", new
             {
                 result.UserId,
                 result.BusinessId,
@@ -38,7 +38,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
                 result.BranchName,
                 result.BranchAddress,
                 result.CreatedAt,
-                result.Auth0UserId   // ✅ return Auth0 ID
+                result.Auth0UserId
             });
         }
         catch (BusinessNotFoundException ex) { return NotFound(new { error = ex.Message }); }
@@ -62,7 +62,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     }
 
     // SUPPORT ADMIN creates support users
-    //[Authorize(Roles = "support_user")]
+    [Authorize(Roles = "support_user")]
     [HttpPost("support")]
     public async Task<IActionResult> CreateSupportUser([FromBody] CreateSupportUserDto dto)
     {
@@ -80,18 +80,15 @@ public class UserController(IUserService service, IBusinessRepRepository busines
                 result.Username,
                 result.SupportUserProfileId,
                 result.CreatedAt,
-                result.Auth0UserId  // ✅ return Auth0 ID
+                result.Auth0UserId
             });
         }
         catch (DuplicateUserEmailException ex) { return Conflict(new { error = ex.Message }); }
         catch (UserCreationFailedException ex) { return StatusCode(500, new { error = ex.Message }); }
     }
 
-
-		
-
-
-	[HttpPut("support/{userId:guid}")]
+    [Authorize(Roles = "support_user")]
+    [HttpPut("support/{userId:guid}")]
     public async Task<IActionResult> UpdateSupportUser(Guid userId, [FromBody] UpdateSupportUserDto dto)
     {
         if (!ModelState.IsValid)
@@ -118,8 +115,6 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return StatusCode(500, new { error = "Internal server error occurred." });
         }
     }
-    
-    [HttpPost("create-business-user")]
 
     /// <summary>
     /// Registers credentials for a business owner after a business has been claimed.
@@ -177,7 +172,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             user.Email,
             businessId,
             business,
-            user.Auth0UserId  // ✅ return Auth0 ID
+            user.Auth0UserId
         });
     }
 
@@ -188,8 +183,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         var result = await service.GetBusinessRepByIdAsync(id);
         return result is not null ? Ok(result) : NotFound();
     }
-    
-    
+
     [AllowAnonymous]
     [HttpPost("end-user")]
     public async Task<IActionResult> CreateEndUser([FromBody] CreateEndUserDto dto)
@@ -210,28 +204,25 @@ public class UserController(IUserService service, IBusinessRepRepository busines
                 result.Address,
                 result.SocialMedia,
                 result.CreatedAt,
-                result.Auth0UserId  // ✅ return Auth0 ID
+                result.Auth0UserId
             });
         }
         catch (DuplicateUserEmailException ex) { return Conflict(new { error = ex.Message }); }
         catch (UserCreationFailedException ex) { return StatusCode(500, new { error = ex.Message }); }
     }
 
-
-    [AllowAnonymous]
+    [Authorize]
     [HttpGet("business-rep/{businessRepId:guid}")]
     public async Task<IActionResult> GetBusinessRep(Guid businessRepId)
     {
         try
         {
             var businessRep = await businessRepRepository.GetByIdAsync(businessRepId);
-            
-            if (businessRep == null)
-            {
-                return NotFound(new { error = $"Business rep {businessRepId} not found" });
-            }
 
-            var dto = new
+            if (businessRep == null)
+                return NotFound(new { error = $"Business rep {businessRepId} not found" });
+
+            return Ok(new
             {
                 Id = businessRep.Id,
                 BusinessId = businessRep.BusinessId,
@@ -239,9 +230,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
                 BranchName = businessRep.BranchName,
                 BranchAddress = businessRep.BranchAddress,
                 CreatedAt = businessRep.CreatedAt
-            };
-
-            return Ok(dto);
+            });
         }
         catch (Exception ex)
         {
@@ -249,21 +238,19 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
-    
-    [AllowAnonymous]
+
+    [Authorize]
     [HttpGet("business-rep/parent/{businessId:guid}")]
     public async Task<IActionResult> GetParentRepByBusinessId(Guid businessId)
     {
         try
         {
             var parentRep = await businessRepRepository.GetParentRepByBusinessIdAsync(businessId);
-            
-            if (parentRep == null)
-            {
-                return NotFound(new { error = $"Parent business rep for business {businessId} not found" });
-            }
 
-            var dto = new
+            if (parentRep == null)
+                return NotFound(new { error = $"Parent business rep for business {businessId} not found" });
+
+            return Ok(new
             {
                 Id = parentRep.Id,
                 BusinessId = parentRep.BusinessId,
@@ -271,9 +258,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
                 BranchName = parentRep.BranchName,
                 BranchAddress = parentRep.BranchAddress,
                 CreatedAt = parentRep.CreatedAt
-            };
-
-            return Ok(dto);
+            });
         }
         catch (Exception ex)
         {
@@ -281,24 +266,19 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
-    
-    [AllowAnonymous]
+
+    [Authorize]
     [HttpGet("support-user/{userId:guid}/exists")]
     public async Task<IActionResult> IsSupportUser(Guid userId)
     {
         try
         {
             var user = await service.GetUserByIdAsync(userId);
-            
+
             if (user == null)
-            {
                 return NotFound(new { error = $"User {userId} not found" });
-            }
 
-            // Check if user type is support_user
-            var isSupportUser = user.UserType == "support_user";
-
-            return Ok(new { IsSupportUser = isSupportUser });
+            return Ok(new { IsSupportUser = user.UserType == "support_user" });
         }
         catch (Exception ex)
         {
@@ -306,7 +286,9 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
-    
+
+    // Public: end-user profiles are intentionally readable without authentication
+    // (allows other users and services to view reviewer profiles).
     [AllowAnonymous]
     [HttpGet("end-user/{userId:guid}/profile")]
     public async Task<IActionResult> GetEndUserProfileDetail(Guid userId)
@@ -314,9 +296,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         try
         {
             logger.LogInformation("Fetching end user profile for user {UserId}", userId);
-            
             var result = await service.GetEndUserProfileDetailAsync(userId);
-            
             return Ok(result);
         }
         catch (EndUserNotFoundException ex)
@@ -330,29 +310,28 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
-    
-    
-    [AllowAnonymous]
+
+    [Authorize]
     [HttpPut("end-user/{userId:guid}/profile")]
     public async Task<IActionResult> UpdateEndUserProfileDetail(
-        Guid userId, 
+        Guid userId,
         [FromBody] UpdateEndUserProfileDto dto)
     {
-        if (!ModelState.IsValid)  
+        if (!ModelState.IsValid)
             return BadRequest(ModelState);
-        
-        
+
+        // Enforce ownership: only the user themselves may update their own profile.
+        var sub = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                  ?? User.FindFirst("sub")?.Value;
+
+        if (!Guid.TryParse(sub, out var currentUserId) || currentUserId != userId)
+            return Forbid();
+
         try
         {
-            var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var userRoles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
-
             logger.LogInformation("Updating end user profile for user {UserId}", userId);
-            
             var result = await service.UpdateEndUserProfileAsync(userId, dto);
-            
             logger.LogInformation("Successfully updated end user profile for user {UserId}", userId);
-            
             return Ok(result);
         }
         catch (EndUserNotFoundException ex)
@@ -367,7 +346,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         }
     }
 
-
+    // Public: user summary is visible to anyone (review platform public data)
     [AllowAnonymous]
     [HttpGet("user-summary/{id:guid}")]
     public async Task<IActionResult> GetEndUserSummary(

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using UserService.Application.DTOs;
 using UserService.Application.DTOs.Auth;
 using UserService.Application.Interfaces;
@@ -46,6 +47,7 @@ public class AuthController : ControllerBase
     // ========================================================================
 
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest dto, CancellationToken cancellationToken)
     {

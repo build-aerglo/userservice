@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using UserService.Api.Filters;
 using UserService.Application.DTOs.Referral;
 using UserService.Application.Interfaces;
 using UserService.Domain.Exceptions;
@@ -24,14 +25,13 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
         try
         {
             var result = await referralService.GetUserReferralCodeAsync(userId);
-            
-            // If user doesn't have a code, generate one automatically
+
             if (result is null)
             {
                 result = await referralService.GenerateReferralCodeAsync(new GenerateReferralCodeDto(userId));
                 return Created($"/api/referral/user/{userId}/code", result);
             }
-            
+
             return Ok(result);
         }
         catch (Exception ex)
@@ -224,9 +224,10 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
     }
 
     /// <summary>
-    /// POST /api/referral/{referralId}/complete - Complete a referral (after 3rd approved review)
+    /// POST /api/referral/{referralId}/complete - Complete a referral (after 3rd approved review).
+    /// Internal use — called by ReviewService only. Requires X-Internal-Api-Key header.
     /// </summary>
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("{referralId:guid}/complete")]
     public async Task<IActionResult> CompleteReferral(Guid referralId)
     {
@@ -251,10 +252,10 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
     }
 
     /// <summary>
-    /// POST /api/referral/review/process - Process a review approval for referral tracking
-    /// Called by ReviewService when a review is approved
+    /// POST /api/referral/review/process - Process a review approval for referral tracking.
+    /// Internal use — called by ReviewService only. Requires X-Internal-Api-Key header.
     /// </summary>
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("review/process")]
     public async Task<IActionResult> ProcessReferralReview([FromBody] ProcessReferralReviewDto dto)
     {
@@ -428,26 +429,26 @@ public class ReferralController(IReferralService referralService, ILogger<Referr
 
     [AllowAnonymous]
     [HttpGet("code/{userId:guid}")]
-    [ApiExplorerSettings(IgnoreApi = true)] // Hide from Swagger
-    public Task<IActionResult> GetUserReferralCodeLegacy(Guid userId) 
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public Task<IActionResult> GetUserReferralCodeLegacy(Guid userId)
         => GetUserReferralCode(userId);
 
     [AllowAnonymous]
     [HttpPost("apply")]
     [ApiExplorerSettings(IgnoreApi = true)]
-    public Task<IActionResult> ApplyReferralCodeLegacy([FromBody] ApplyReferralCodeDto dto) 
+    public Task<IActionResult> ApplyReferralCodeLegacy([FromBody] ApplyReferralCodeDto dto)
         => UseReferralCode(dto);
 
     [AllowAnonymous]
     [HttpGet("user/{userId:guid}")]
     [ApiExplorerSettings(IgnoreApi = true)]
-    public Task<IActionResult> GetUserReferralsLegacy(Guid userId) 
+    public Task<IActionResult> GetUserReferralsLegacy(Guid userId)
         => GetUserReferrals(userId);
 
     [AllowAnonymous]
     [HttpGet("stats/{userId:guid}")]
     [ApiExplorerSettings(IgnoreApi = true)]
-    public Task<IActionResult> GetReferralStatsLegacy(Guid userId) 
+    public Task<IActionResult> GetReferralStatsLegacy(Guid userId)
         => GetReferralSummary(userId);
 
     [AllowAnonymous]

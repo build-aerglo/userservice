@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using UserService.Api.Filters;
 using UserService.Application.DTOs.Points;
 using UserService.Application.Interfaces;
 using UserService.Domain.Exceptions;
@@ -10,12 +12,10 @@ namespace UserService.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 public class PointsController(
-    IPointsService pointsService, 
+    IPointsService pointsService,
     ILogger<PointsController> logger,
-    IReviewServiceClient reviewServiceClient) : ControllerBase 
+    IReviewServiceClient reviewServiceClient) : ControllerBase
 {
-    private readonly IReviewServiceClient _reviewServiceClient;
-    
     /// <summary>
     /// Get user's points and statistics
     /// </summary>
@@ -59,9 +59,10 @@ public class PointsController(
     }
 
     /// <summary>
-    /// Award points to a user (Internal use - called by other services)
+    /// Award points to a user. Internal use — called by ReviewService and other trusted services only.
+    /// Requires X-Internal-Api-Key header.
     /// </summary>
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("award")]
     public async Task<IActionResult> AwardPoints([FromBody] AwardPointsDto dto)
     {
@@ -107,9 +108,10 @@ public class PointsController(
     }
 
     /// <summary>
-    /// Award points for a review
+    /// Award points for a review. Internal use — called by ReviewService only.
+    /// Requires X-Internal-Api-Key header.
     /// </summary>
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("award/review")]
     public async Task<IActionResult> AwardReviewPoints([FromBody] CalculateReviewPointsDto dto)
     {
@@ -186,9 +188,10 @@ public class PointsController(
     }
 
     /// <summary>
-    /// Update user's streak (Internal - called when user performs activity)
+    /// Update user's streak. Internal use — called by activity services only.
+    /// Requires X-Internal-Api-Key header.
     /// </summary>
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("streak/{userId:guid}")]
     public async Task<IActionResult> UpdateStreak(Guid userId)
     {
@@ -205,9 +208,10 @@ public class PointsController(
     }
 
     /// <summary>
-    /// Check and award milestone bonuses
+    /// Check and award streak milestone bonus. Internal use only.
+    /// Requires X-Internal-Api-Key header.
     /// </summary>
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("milestone/streak/{userId:guid}")]
     public async Task<IActionResult> CheckStreakMilestone(Guid userId)
     {
@@ -226,9 +230,10 @@ public class PointsController(
     }
 
     /// <summary>
-    /// Check and award review milestone
+    /// Check and award review milestone. Internal use only.
+    /// Requires X-Internal-Api-Key header.
     /// </summary>
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("milestone/reviews/{userId:guid}")]
     public async Task<IActionResult> CheckReviewMilestone(Guid userId, [FromQuery] int totalReviews)
     {
@@ -245,27 +250,26 @@ public class PointsController(
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
-    
+
     /// <summary>
-    /// Check and award helpful vote milestone (100 helpful votes)
-    /// Called by ReviewService when a reviewer reaches 100 total helpful votes
+    /// Check and award helpful vote milestone. Internal use — called by ReviewService only.
+    /// Requires X-Internal-Api-Key header.
     /// </summary>
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("milestone/helpful-votes/{userId:guid}")]
     public async Task<IActionResult> CheckHelpfulVoteMilestone(Guid userId)
     {
         try
         {
-            // Get total helpful votes from ReviewService
             var totalHelpfulVotes = await reviewServiceClient.GetTotalHelpfulVotesForUserAsync(userId);
-        
+
             logger.LogInformation(
-                "Checking helpful vote milestone for user {UserId} with {TotalVotes} total votes", 
-                userId, 
+                "Checking helpful vote milestone for user {UserId} with {TotalVotes} total votes",
+                userId,
                 totalHelpfulVotes);
 
             var result = await pointsService.CheckAndAwardHelpfulVoteMilestoneAsync(userId, totalHelpfulVotes);
-        
+
             return result is null
                 ? Ok(new { message = "No milestone reached", totalHelpfulVotes })
                 : Ok(result);
@@ -277,11 +281,11 @@ public class PointsController(
         }
     }
 
-
     /// <summary>
-    /// Initialize points for a new user
+    /// Initialize points for a new user. Internal use only.
+    /// Requires X-Internal-Api-Key header.
     /// </summary>
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("initialize/{userId:guid}")]
     public async Task<IActionResult> InitializeUserPoints(Guid userId)
     {
@@ -296,205 +300,215 @@ public class PointsController(
             return StatusCode(500, new { error = "Internal server error" });
         }
     }
-    
-    
+
+    // -------------------------------------------------------------------------
     // Redemption Endpoints
-// [Authorize(Roles = "end_user")]
-[HttpPost("redeem")]
-public async Task<IActionResult> RedeemPoints([FromBody] RedeemPointsDto dto)
-{
-    try
-    {
-        var result = await pointsService.RedeemPointsAsync(dto);
-        return Ok(result);
-    }
-    catch (InsufficientPointsException ex)
-    {
-        return BadRequest(new { error = ex.Message });
-    }
-    catch (InvalidPhoneNumberException ex)
-    {
-        return BadRequest(new { error = ex.Message });
-    }
-    catch (PointRedemptionFailedException ex)
-    {
-        return StatusCode(500, new { error = ex.Message });
-    }
-}
+    // -------------------------------------------------------------------------
 
-// [Authorize(Roles = "end_user")]
+    [Authorize(Roles = "end_user")]
+    [HttpPost("redeem")]
+    public async Task<IActionResult> RedeemPoints([FromBody] RedeemPointsDto dto)
+    {
+        try
+        {
+            var result = await pointsService.RedeemPointsAsync(dto);
+            return Ok(result);
+        }
+        catch (InsufficientPointsException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidPhoneNumberException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (PointRedemptionFailedException ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [Authorize]
+    [HttpGet("user/{userId:guid}/redemptions")]
+    public async Task<IActionResult> GetRedemptionHistory(Guid userId, [FromQuery] int limit = 50, [FromQuery] int offset = 0)
+    {
+        try
+        {
+            var result = await pointsService.GetRedemptionHistoryAsync(userId, limit, offset);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting redemption history");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Point Rules Endpoints
+    // -------------------------------------------------------------------------
+
     [AllowAnonymous]
-[HttpGet("user/{userId:guid}/redemptions")]
-public async Task<IActionResult> GetRedemptionHistory(Guid userId, [FromQuery] int limit = 50, [FromQuery] int offset = 0)
-{
-    try
+    [HttpGet("rules")]
+    public async Task<IActionResult> GetAllRules()
     {
-        var result = await pointsService.GetRedemptionHistoryAsync(userId, limit, offset);
-        return Ok(result);
+        try
+        {
+            var result = await pointsService.GetAllPointRulesAsync();
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting point rules");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
     }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error getting redemption history");
-        return StatusCode(500, new { error = "Internal server error" });
-    }
-}
 
-// Point Rules Endpoints
-[AllowAnonymous]
-[HttpGet("rules")]
-public async Task<IActionResult> GetAllRules()
-{
-    try
+    [AllowAnonymous]
+    [HttpGet("rules/{actionType}")]
+    public async Task<IActionResult> GetRuleByActionType(string actionType)
     {
-        var result = await pointsService.GetAllPointRulesAsync();
-        return Ok(result);
+        try
+        {
+            var result = await pointsService.GetPointRuleByActionTypeAsync(actionType);
+            return Ok(result);
+        }
+        catch (PointRuleNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
     }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error getting point rules");
-        return StatusCode(500, new { error = "Internal server error" });
-    }
-}
 
-[AllowAnonymous]
-[HttpGet("rules/{actionType}")]
-public async Task<IActionResult> GetRuleByActionType(string actionType)
-{
-    try
+    [Authorize(Roles = "support_user")]
+    [HttpPost("rules")]
+    public async Task<IActionResult> CreatePointRule([FromBody] CreatePointRuleDto dto)
     {
-        var result = await pointsService.GetPointRuleByActionTypeAsync(actionType);
-        return Ok(result);
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await pointsService.CreatePointRuleAsync(dto, userId);
+            return Created("", result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error creating point rule");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
     }
-    catch (PointRuleNotFoundException ex)
-    {
-        return NotFound(new { error = ex.Message });
-    }
-}
 
-[Authorize(Roles = "support_user")]
-[HttpPost("rules")]
-public async Task<IActionResult> CreatePointRule([FromBody] CreatePointRuleDto dto)
-{
-    try
-    {
-        var userId = GetCurrentUserId();
-        var result = await pointsService.CreatePointRuleAsync(dto, userId);
-        return Created("", result);
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error creating point rule");
-        return StatusCode(500, new { error = "Internal server error" });
-    }
-}
+    // -------------------------------------------------------------------------
+    // Point Multipliers Endpoints
+    // -------------------------------------------------------------------------
 
-// Point Multipliers Endpoints
-[AllowAnonymous]
-[HttpGet("multipliers")]
-public async Task<IActionResult> GetActiveMultipliers()
-{
-    try
+    [AllowAnonymous]
+    [HttpGet("multipliers")]
+    public async Task<IActionResult> GetActiveMultipliers()
     {
-        var result = await pointsService.GetActivePointMultipliersAsync();
-        return Ok(result);
+        try
+        {
+            var result = await pointsService.GetActivePointMultipliersAsync();
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting multipliers");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
     }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error getting multipliers");
-        return StatusCode(500, new { error = "Internal server error" });
-    }
-}
 
-[Authorize(Roles = "support_user")]
-[HttpPost("multipliers")]
-public async Task<IActionResult> CreateMultiplier([FromBody] CreatePointMultiplierDto dto)
-{
-    try
+    [Authorize(Roles = "support_user")]
+    [HttpPost("multipliers")]
+    public async Task<IActionResult> CreateMultiplier([FromBody] CreatePointMultiplierDto dto)
     {
-        var userId = GetCurrentUserId();
-        var result = await pointsService.CreatePointMultiplierAsync(dto, userId);
-        return Created("", result);
+        try
+        {
+            var userId = GetCurrentUserId();
+            var result = await pointsService.CreatePointMultiplierAsync(dto, userId);
+            return Created("", result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error creating multiplier");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
     }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error creating multiplier");
-        return StatusCode(500, new { error = "Internal server error" });
-    }
-}
 
-// Summary and Transaction Query Endpoints
-[AllowAnonymous]
-[HttpGet("user/{userId:guid}/summary")]
-public async Task<IActionResult> GetPointsSummary(Guid userId, [FromQuery] int transactionLimit = 10)
-{
-    try
-    {
-        var result = await pointsService.GetUserPointsSummaryAsync(userId, transactionLimit);
-        return Ok(result);
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error getting points summary");
-        return StatusCode(500, new { error = "Internal server error" });
-    }
-}
+    // -------------------------------------------------------------------------
+    // Summary and Transaction Query Endpoints
+    // -------------------------------------------------------------------------
 
-[AllowAnonymous]
-[HttpGet("user/{userId:guid}/transactions/type/{type}")]
-public async Task<IActionResult> GetTransactionsByType(Guid userId, string type)
-{
-    try
+    [AllowAnonymous]
+    [HttpGet("user/{userId:guid}/summary")]
+    public async Task<IActionResult> GetPointsSummary(Guid userId, [FromQuery] int transactionLimit = 10)
     {
-        var result = await pointsService.GetTransactionsByTypeAsync(userId, type);
-        return Ok(result);
+        try
+        {
+            var result = await pointsService.GetUserPointsSummaryAsync(userId, transactionLimit);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting points summary");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
     }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error getting transactions by type");
-        return StatusCode(500, new { error = "Internal server error" });
-    }
-}
 
-[AllowAnonymous]
-[HttpGet("user/{userId:guid}/transactions/range")]
-public async Task<IActionResult> GetTransactionsByDateRange(
-    Guid userId, 
-    [FromQuery] DateTime startDate, 
-    [FromQuery] DateTime endDate)
-{
-    try
+    [AllowAnonymous]
+    [HttpGet("user/{userId:guid}/transactions/type/{type}")]
+    public async Task<IActionResult> GetTransactionsByType(Guid userId, string type)
     {
-        var result = await pointsService.GetTransactionsByDateRangeAsync(userId, startDate, endDate);
-        return Ok(result);
+        try
+        {
+            var result = await pointsService.GetTransactionsByTypeAsync(userId, type);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting transactions by type");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
     }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error getting transactions by date range");
-        return StatusCode(500, new { error = "Internal server error" });
-    }
-}
 
-[AllowAnonymous]
-[HttpGet("user/{userId:guid}/rank")]
-public async Task<IActionResult> GetUserRank(Guid userId)
-{
-    try
+    [AllowAnonymous]
+    [HttpGet("user/{userId:guid}/transactions/range")]
+    public async Task<IActionResult> GetTransactionsByDateRange(
+        Guid userId,
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate)
     {
-        var userPoints = await pointsService.GetUserPointsAsync(userId);
-        return Ok(new { userId, rank = userPoints.Rank });
+        try
+        {
+            var result = await pointsService.GetTransactionsByDateRangeAsync(userId, startDate, endDate);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting transactions by date range");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
     }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error getting user rank");
-        return StatusCode(500, new { error = "Internal server error" });
-    }
-}
 
-// Helper method
-private Guid? GetCurrentUserId()
-{
-    var subClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                   ?? User.FindFirst("sub")?.Value;
-    return Guid.TryParse(subClaim, out var userId) ? userId : null;
-}
+    [AllowAnonymous]
+    [HttpGet("user/{userId:guid}/rank")]
+    public async Task<IActionResult> GetUserRank(Guid userId)
+    {
+        try
+        {
+            var userPoints = await pointsService.GetUserPointsAsync(userId);
+            return Ok(new { userId, rank = userPoints.Rank });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting user rank");
+            return StatusCode(500, new { error = "Internal server error" });
+        }
+    }
+
+    // Helper method
+    private Guid? GetCurrentUserId()
+    {
+        var subClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                       ?? User.FindFirst("sub")?.Value;
+        return Guid.TryParse(subClaim, out var userId) ? userId : null;
+    }
 }
