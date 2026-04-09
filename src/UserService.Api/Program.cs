@@ -156,6 +156,22 @@ builder.Services.AddHttpClient<IReviewServiceClient, ReviewServiceClient>(client
         client.BaseAddress = new Uri(baseUrl);
 });
 
+// ---------- Business Service HTTP Client ----------
+builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(client =>
+{
+    var baseUrl = builder.Configuration["Services:BusinessServiceBaseUrl"];
+    if (!string.IsNullOrWhiteSpace(baseUrl))
+        client.BaseAddress = new Uri(baseUrl);
+});
+
+// ---------- Notification Service HTTP Client ----------
+builder.Services.AddHttpClient<INotificationServiceClient, NotificationServiceClient>(client =>
+{
+    var baseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"];
+    if (!string.IsNullOrWhiteSpace(baseUrl))
+        client.BaseAddress = new Uri(baseUrl);
+});
+
 
 // ---------- Auth0 Management API ----------
 builder.Services.AddHttpClient<IAuth0ManagementService, Auth0ManagementService>();
