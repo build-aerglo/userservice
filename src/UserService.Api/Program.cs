@@ -164,6 +164,10 @@ builder.Services.AddHttpClient<INotificationServiceClient, NotificationServiceCl
     var baseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"];
     if (!string.IsNullOrWhiteSpace(baseUrl))
         client.BaseAddress = new Uri(baseUrl);
+    
+    var apiKey = builder.Configuration["Services:NotificationApiKey"];
+    if (!string.IsNullOrWhiteSpace(apiKey))
+        client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
 });
 
 // ---------- Business Service HTTP Client ----------

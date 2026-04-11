@@ -211,7 +211,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         catch (UserCreationFailedException ex) { return StatusCode(500, new { error = ex.Message }); }
     }
 
-    [Authorize]
+    [InternalOrJwt]  
     [HttpGet("business-rep/{businessRepId:guid}")]
     public async Task<IActionResult> GetBusinessRep(Guid businessRepId)
     {
@@ -267,7 +267,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         }
     }
 
-    [Authorize]
+    [InternalOrJwt]  
     [HttpGet("support-user/{userId:guid}/exists")]
     public async Task<IActionResult> IsSupportUser(Guid userId)
     {
