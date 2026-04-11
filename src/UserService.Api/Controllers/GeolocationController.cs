@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using UserService.Api.Filters;
 using UserService.Application.DTOs.Geolocation;
 using UserService.Application.Interfaces;
 using UserService.Domain.Exceptions;
@@ -11,7 +12,7 @@ namespace UserService.Api.Controllers;
 public class GeolocationController(IGeolocationService geolocationService, ILogger<GeolocationController> logger) : ControllerBase
 {
     /// <summary>
-    /// Get user's current geolocation
+    /// Get user's current geolocation. Public — used by leaderboard and location features.
     /// </summary>
     [AllowAnonymous]
     [HttpGet("user/{userId:guid}")]
@@ -32,9 +33,9 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Update user's geolocation
+    /// Update user's geolocation. Requires authentication.
     /// </summary>
-    [AllowAnonymous]
+    [Authorize]
     [HttpPut]
     public async Task<IActionResult> UpdateGeolocation([FromBody] UpdateGeolocationDto dto)
     {
@@ -66,9 +67,9 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Record geolocation history entry
+    /// Record geolocation history entry. Requires authentication.
     /// </summary>
-    [AllowAnonymous]
+    [Authorize]
     [HttpPost("history")]
     public async Task<IActionResult> RecordGeolocationHistory([FromBody] RecordGeolocationHistoryDto dto)
     {
@@ -92,9 +93,9 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Get user's geolocation history
+    /// Get user's geolocation history. Requires authentication.
     /// </summary>
-    [AllowAnonymous]
+    [Authorize]
     [HttpGet("user/{userId:guid}/history")]
     public async Task<IActionResult> GetGeolocationHistory(Guid userId, [FromQuery] int limit = 50, [FromQuery] int offset = 0)
     {
@@ -111,9 +112,9 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Enable/disable geolocation tracking for a user
+    /// Enable/disable geolocation tracking for a user. Requires authentication.
     /// </summary>
-    [AllowAnonymous]
+    [Authorize]
     [HttpPost("toggle")]
     public async Task<IActionResult> ToggleGeolocation([FromBody] ToggleGeolocationDto dto)
     {
@@ -133,9 +134,10 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Validate location for review
+    /// Validate location for review. Internal use — called by ReviewService only.
+    /// Requires X-Internal-Api-Key header.
     /// </summary>
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("validate")]
     public async Task<IActionResult> ValidateLocationForReview([FromBody] ValidateLocationForReviewDto dto)
     {
@@ -155,7 +157,7 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Get users by state
+    /// Get users by state. Public — used by leaderboard and location-based features.
     /// </summary>
     [AllowAnonymous]
     [HttpGet("state/{state}")]
@@ -174,7 +176,7 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Get users by LGA
+    /// Get users by LGA. Public — used by leaderboard and location-based features.
     /// </summary>
     [AllowAnonymous]
     [HttpGet("lga/{lga}")]
@@ -193,7 +195,7 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Get user count by state
+    /// Get user count by state. Public — used by analytics and location features.
     /// </summary>
     [AllowAnonymous]
     [HttpGet("state/{state}/count")]
@@ -212,9 +214,9 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Get VPN detection count for a user
+    /// Get VPN detection count for a user. Requires authentication.
     /// </summary>
-    [AllowAnonymous]
+    [Authorize]
     [HttpGet("user/{userId:guid}/vpn-count")]
     public async Task<IActionResult> GetVpnDetectionCount(Guid userId)
     {
@@ -231,7 +233,7 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Calculate distance between two coordinates
+    /// Calculate distance between two coordinates.
     /// </summary>
     [AllowAnonymous]
     [HttpGet("distance")]
@@ -252,9 +254,10 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Initialize geolocation for new user
+    /// Initialize geolocation for new user. Internal use only.
+    /// Requires X-Internal-Api-Key header.
     /// </summary>
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("initialize/{userId:guid}")]
     public async Task<IActionResult> InitializeGeolocation(Guid userId)
     {
@@ -271,7 +274,8 @@ public class GeolocationController(IGeolocationService geolocationService, ILogg
     }
 
     /// <summary>
-    /// Cleanup old geolocation history (Background job endpoint)
+    /// Cleanup old geolocation history (Background job endpoint).
+    /// Requires support_user role.
     /// </summary>
     [Authorize(Roles = "support_user")]
     [HttpPost("cleanup")]

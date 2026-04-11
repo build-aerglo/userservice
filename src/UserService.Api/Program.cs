@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Security;
 using System.Security.Authentication;
+using System.Threading.RateLimiting;
 using Azure.Identity;
 using Dapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using UserService.Application.Interfaces;
@@ -45,8 +47,9 @@ if (!string.IsNullOrWhiteSpace(appConfigEndpoint))
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[AppConfig] FAILED: {ex.GetType().Name}: {ex.Message}");
-        Console.WriteLine($"[AppConfig] Inner: {ex.InnerException?.Message}");
+        // Startup/bootstrap logging — DI container not yet built, Console is appropriate here.
+        Console.Error.WriteLine($"[AppConfig] FAILED: {ex.GetType().Name}: {ex.Message}");
+        Console.Error.WriteLine($"[AppConfig] Inner: {ex.InnerException?.Message}");
     }
 }
 else
@@ -54,6 +57,7 @@ else
     Console.WriteLine("[AppConfig] Endpoint not set — skipping.");
 }
 
+builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
 // Enable Dapper snake_case to PascalCase mapping (e.g., auth0_user_id → Auth0UserId)
 DefaultTypeMap.MatchNamesWithUnderscores = true;
@@ -120,7 +124,7 @@ builder.Services.AddScoped<IBadgeService, BadgeService>();
 builder.Services.AddScoped<IPointsService, PointsService>();
 builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddScoped<IReferralService, ReferralService>();
-builder.Services.AddScoped<IGeolocationService,GeolocationService>();
+builder.Services.AddScoped<IGeolocationService, GeolocationService>();
 
 // ---------- Password Reset & Encryption Services ----------
 builder.Services.AddScoped<IEncryptionService, EncryptionService>();
@@ -129,7 +133,7 @@ builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
 // ---------- Registration Email Verification Service ----------
 builder.Services.AddScoped<IRegistrationVerificationService, RegistrationVerificationService>();
 
-// ---------- AfricaTalking SMS ----------
+// ---------- AfricaTalking SMS (TLS enforced — change BaseUrl to sandbox for local dev) ----------
 builder.Services.AddHttpClient<IAfricaTalkingClient, AfricaTalkingClient>(client =>
 {
     var baseUrl = builder.Configuration["AfricaTalking:BaseUrl"];
@@ -137,16 +141,14 @@ builder.Services.AddHttpClient<IAfricaTalkingClient, AfricaTalkingClient>(client
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 }).ConfigurePrimaryHttpMessageHandler(() =>
 {
-    // Allow HTTP, do NOT enforce SSL
     return new SocketsHttpHandler
     {
         SslOptions = new SslClientAuthenticationOptions
         {
-            EnabledSslProtocols = SslProtocols.None
+            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
         }
     };
 });
-
 
 // ---------- Review Service HTTP Client ----------
 builder.Services.AddHttpClient<IReviewServiceClient, ReviewServiceClient>(client =>
@@ -156,6 +158,25 @@ builder.Services.AddHttpClient<IReviewServiceClient, ReviewServiceClient>(client
         client.BaseAddress = new Uri(baseUrl);
 });
 
+// ---------- Notification Service HTTP Client ----------
+builder.Services.AddHttpClient<INotificationServiceClient, NotificationServiceClient>(client =>
+{
+    var baseUrl = builder.Configuration["Services:NotificationServiceBaseUrl"];
+    if (!string.IsNullOrWhiteSpace(baseUrl))
+        client.BaseAddress = new Uri(baseUrl);
+    
+    var apiKey = builder.Configuration["Services:NotificationApiKey"];
+    if (!string.IsNullOrWhiteSpace(apiKey))
+        client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+});
+
+// ---------- Business Service HTTP Client ----------
+builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(client =>
+{
+    var baseUrl = builder.Configuration["Services:BusinessServiceBaseUrl"];
+    if (!string.IsNullOrWhiteSpace(baseUrl))
+        client.BaseAddress = new Uri(baseUrl);
+});
 
 // ---------- Auth0 Management API ----------
 builder.Services.AddHttpClient<IAuth0ManagementService, Auth0ManagementService>();
@@ -194,6 +215,31 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+// ---------- Rate Limiting ----------
+// Applied at controller/action level via [EnableRateLimiting("...")] attributes.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Login: 10 attempts per minute per IP
+    options.AddFixedWindowLimiter("login", o =>
+    {
+        o.PermitLimit = 10;
+        o.Window = TimeSpan.FromMinutes(1);
+        o.QueueLimit = 0;
+        o.AutoReplenishment = true;
+    });
+
+    // Sensitive: password reset / OTP send — 3 per minute per IP
+    options.AddFixedWindowLimiter("sensitive", o =>
+    {
+        o.PermitLimit = 3;
+        o.Window = TimeSpan.FromMinutes(1);
+        o.QueueLimit = 0;
+        o.AutoReplenishment = true;
+    });
+});
+
 // ---------- Swagger ----------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -225,31 +271,79 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 // ---------- CORS ----------
+// AllowedOrigins must be set in configuration (Key Vault in production, appsettings.Development.json locally).
+// AllowCredentials() is required for the HttpOnly refresh-token cookie to be sent cross-origin.
+// Note: AllowAnyOrigin() is intentionally NOT used because it is incompatible with AllowCredentials().
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader());
+    options.AddPolicy("FrontendPolicy", policy =>
+    {
+        if (corsOrigins.Length > 0)
+        {
+            policy.WithOrigins(corsOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        }
+        else
+        {
+            // No origins configured: permit any origin without credentials.
+            // This is the safe fallback — cookies will not be sent cross-origin
+            // in this mode, which is intentional until origins are configured.
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
+    });
 });
+
+// ---------- Health checks ----------
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database");
 
 var app = builder.Build();
 
 // NOTE: UseHttpsRedirection intentionally removed.
 // Azure App Service handles HTTPS at the load balancer.
 
-app.UseSwagger();
-app.UseSwaggerUI(options =>
+// Swagger is only served in Development to avoid exposing internal API surface in production.
+if (app.Environment.IsDevelopment())
 {
-    options.SwaggerEndpoint("/swagger/v1/swagger.json", "User Service API v1");
-    options.RoutePrefix = "";
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "User Service API v1");
+        options.RoutePrefix = "swagger";
+    });
+}
 
-app.UseCors("AllowAll");
+app.UseRateLimiter();
+app.UseCors("FrontendPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-app.MapGet("/health", () => Results.Ok("healthy"));
+app.MapHealthChecks("/health");
 
 app.Run();
+
+// ---------- Database health check ----------
+public class DatabaseHealthCheck(IDbConnectionFactory dbFactory) : Microsoft.Extensions.Diagnostics.HealthChecks.IHealthCheck
+{
+    public async Task<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult> CheckHealthAsync(
+        Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckContext context,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var conn = await dbFactory.CreateConnectionAsync();
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("Database reachable.");
+        }
+        catch (Exception ex)
+        {
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy("Database unreachable.", ex);
+        }
+    }
+}

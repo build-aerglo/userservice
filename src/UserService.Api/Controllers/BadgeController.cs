@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using UserService.Api.Filters;
 using UserService.Application.DTOs.Badge;
 using UserService.Application.Interfaces;
 using UserService.Domain.Exceptions;
@@ -126,10 +127,10 @@ public class BadgeController(IBadgeService badgeService, ILogger<BadgeController
     }
 
     /// <summary>
-    /// Recalculate all badges for a user (Internal/Background job)
+    /// Recalculate all badges for a user. Internal use — called by background jobs only.
+    /// Requires X-Internal-Api-Key header.
     /// </summary>
-    // [Authorize(Roles = "support_user")]
-    [AllowAnonymous]
+    [InternalApiKey]
     [HttpPost("recalculate/{userId:guid}")]
     public async Task<IActionResult> RecalculateBadges(Guid userId)
     {

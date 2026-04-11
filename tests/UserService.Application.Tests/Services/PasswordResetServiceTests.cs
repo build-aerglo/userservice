@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Moq;
 using UserService.Application.DTOs.PasswordReset;
 using UserService.Application.Interfaces;
@@ -18,6 +19,7 @@ public class PasswordResetServiceTests
     private Mock<IBusinessServiceClient> _mockBusinessClient = null!;
     private Mock<INotificationServiceClient> _mockNotificationClient = null!;
     private Mock<IEncryptionService> _mockEncryption = null!;
+    private Mock<ILogger<PasswordResetService>> _mockLogger = null!;
     private PasswordResetService _service = null!;
 
     [SetUp]
@@ -30,6 +32,7 @@ public class PasswordResetServiceTests
         _mockBusinessClient = new Mock<IBusinessServiceClient>();
         _mockNotificationClient = new Mock<INotificationServiceClient>();
         _mockEncryption = new Mock<IEncryptionService>();
+        _mockLogger = new Mock<ILogger<PasswordResetService>>();
 
         _service = new PasswordResetService(
             _mockUserRepo.Object,
@@ -38,7 +41,8 @@ public class PasswordResetServiceTests
             _mockAuth0UserLogin.Object,
             _mockBusinessClient.Object,
             _mockNotificationClient.Object,
-            _mockEncryption.Object
+            _mockEncryption.Object,
+            _mockLogger.Object
         );
     }
 
