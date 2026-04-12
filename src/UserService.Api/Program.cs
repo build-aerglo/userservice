@@ -43,6 +43,7 @@ if (!string.IsNullOrWhiteSpace(appConfigEndpoint))
                     kv.SetCredential(new DefaultAzureCredential());
                 });
         });
+        builder.Configuration.AddEnvironmentVariables();
         Console.WriteLine($"[AppConfig] Connected: {appConfigEndpoint}");
     }
     catch (Exception ex)
