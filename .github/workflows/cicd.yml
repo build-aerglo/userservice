@@ -1,0 +1,159 @@
+name: UserService CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  SOLUTION_PATH: UserService.sln
+  PROJECT_PATH: src/UserService.Api/UserService.Api.csproj
+  DOCKERFILE_PATH: src/UserService.Api/Dockerfile
+  IMAGE_NAME: userservice
+  PROD_APP_NAME: userservice-api-cc
+  PROD_RESOURCE_GROUP: rg-userservice-prod
+  STAGING_APP_NAME: userservice-staging
+  STAGING_RESOURCE_GROUP: rg-clereview-staging
+  ACR_LOGIN_SERVER: clereviewregistry123.azurecr.io
+
+jobs:
+
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Build
+        run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore --configuration Release
+
+      - name: Test
+        run: |
+          dotnet test ${{ env.SOLUTION_PATH }} \
+            --no-build --configuration Release \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory ./test-results
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: UserService Tests
+          path: '**/test-results.trx'
+          reporter: dotnet-trx
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS_STAGING }}
+
+      - name: Login to ACR
+        run: az acr login --name clereviewregistry123
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_TAG=${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:staging-${{ github.sha }}
+          IMAGE_LATEST=${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:staging-latest
+          docker build -f ${{ env.DOCKERFILE_PATH }} -t $IMAGE_TAG -t $IMAGE_LATEST ./src
+          docker push $IMAGE_TAG
+          docker push $IMAGE_LATEST
+
+      - name: Update staging Container App
+        run: |
+          az containerapp update \
+            --name ${{ env.STAGING_APP_NAME }} \
+            --resource-group ${{ env.STAGING_RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:staging-${{ github.sha }}
+
+  publish-prod:
+    name: Publish Production Artifact
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Publish
+        run: |
+          dotnet publish ${{ env.PROJECT_PATH }} \
+            --configuration Release --output ./publish --no-restore
+
+      - name: Zip
+        run: cd publish && zip -r ../app.zip . && cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: userservice-prod-app
+          path: app.zip
+          retention-days: 7
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: publish-prod
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: userservice-prod-app
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to production
+        run: |
+          az webapp deploy \
+            --name ${{ env.PROD_APP_NAME }} \
+            --resource-group ${{ env.PROD_RESOURCE_GROUP }} \
+            --src-path app.zip \
+            --type zip --clean true
+
+      - name: Restart and verify
+        run: |
+          az webapp restart --name ${{ env.PROD_APP_NAME }} --resource-group ${{ env.PROD_RESOURCE_GROUP }}
+          sleep 45
+          STATUS=$(az webapp show --name ${{ env.PROD_APP_NAME }} --resource-group ${{ env.PROD_RESOURCE_GROUP }} --query "state" -o tsv)
+          echo "App state: $STATUS"
+          [ "$STATUS" = "Running" ] || exit 1
+
+      - if: always()
+        run: az logout

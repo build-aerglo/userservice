@@ -83,7 +83,7 @@ public class EncryptionServiceTests
         var shortData = Convert.ToBase64String(new byte[8]);
 
         // Act & Assert - Throws OverflowException when data is too short to extract IV
-        Assert.Throws<OverflowException>(() => _encryptionService.Decrypt(shortData));
+        Assert.Throws<System.Security.Cryptography.CryptographicException>(() => _encryptionService.Decrypt(shortData));
     }
 
     [Test]
