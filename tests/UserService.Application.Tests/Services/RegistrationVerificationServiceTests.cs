@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using UserService.Application.Interfaces;
@@ -17,6 +18,7 @@ public class RegistrationVerificationServiceTests
     private Mock<INotificationServiceClient> _mockNotificationClient = null!;
     private Mock<IBusinessRepository> _mockBusinessRepo = null!;
     private Mock<ILogger<RegistrationVerificationService>> _mockLogger = null!;
+    private Mock<IConfiguration> _mockConfig = null!;
     private RegistrationVerificationService _service = null!;
 
     [SetUp]
@@ -28,6 +30,8 @@ public class RegistrationVerificationServiceTests
         _mockNotificationClient = new Mock<INotificationServiceClient>();
         _mockBusinessRepo = new Mock<IBusinessRepository>();
         _mockLogger = new Mock<ILogger<RegistrationVerificationService>>();
+        _mockConfig = new Mock<IConfiguration>();
+        _mockConfig.Setup(c => c["FrontendUrl"]).Returns("https://www.clereview.com");
 
         _service = new RegistrationVerificationService(
             _mockRegVerificationRepo.Object,
@@ -35,7 +39,8 @@ public class RegistrationVerificationServiceTests
             _mockEncryption.Object,
             _mockNotificationClient.Object,
             _mockBusinessRepo.Object,
-            _mockLogger.Object
+            _mockLogger.Object,
+            _mockConfig.Object
         );
     }
 

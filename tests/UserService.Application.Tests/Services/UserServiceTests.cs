@@ -1042,5 +1042,104 @@ public void GetEndUserSummaryAsync_ShouldThrow_WhenUserNotFound()
     );
 }
 
+    // -----------------------------------------------
+    // DUPLICATE EMAIL TESTS
+    // -----------------------------------------------
+
+    [Test]
+    public void CreateSubBusinessUser_ShouldThrow_WhenEmailAlreadyExists()
+    {
+        var dto = new CreateSubBusinessUserDto(Guid.NewGuid(), "john_rep", "existing@business.com", "123", "pass", "123 St", null, null);
+
+        _mockBusinessServiceClient.Setup(c => c.BusinessExistsAsync(dto.BusinessId)).ReturnsAsync(true);
+        _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(true);
+
+        Assert.ThrowsAsync<DuplicateUserEmailException>(() => _service.CreateSubBusinessUserAsync(dto));
+        _mockUserRepository.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Test]
+    public void RegisterBusinessAccountAsync_ShouldThrow_WhenEmailAlreadyExists()
+    {
+        var dto = new BusinessUserDto(
+            Name: "Dupe Corp",
+            Email: "existing@corp.com",
+            Password: "Pass1234",
+            Phone: "5551234567",
+            UserType: "business_user",
+            Address: "1 Dupe St",
+            BranchName: null,
+            BranchAddress: null,
+            Website: null,
+            CategoryIds: new List<string>()
+        );
+
+        _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(true);
+
+        Assert.ThrowsAsync<DuplicateUserEmailException>(() => _service.RegisterBusinessAccountAsync(dto));
+        _mockBusinessServiceClient.Verify(c => c.CreateBusinessAsync(It.IsAny<BusinessUserDto>()), Times.Never);
+    }
+
+    [Test]
+    public void RegisterBusinessAfterClaimAsync_ShouldThrow_WhenEmailAlreadyExists()
+    {
+        var businessId = Guid.NewGuid();
+        var dto = new RegisterBusinessDto(businessId, "existing@business.com", "Pass1234", "08012345678");
+
+        var mockClaimRepo = new Mock<IBusinessClaimRepository>();
+        mockClaimRepo.Setup(r => r.GetByBusinessIdAsync(businessId))
+            .ReturnsAsync(new BusinessClaim { BusinessId = businessId, Status = 7, ExpiresAt = DateTime.UtcNow.AddHours(12) });
+
+        var mockBizRepo = new Mock<IBusinessRepository>();
+        mockBizRepo.Setup(r => r.GetNameByIdAsync(businessId)).ReturnsAsync("Test Business");
+
+        _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(true);
+
+        var service = new Application.Services.UserService(
+            _mockUserRepository.Object,
+            _mockBusinessRepRepository.Object,
+            _mockBusinessServiceClient.Object,
+            mockClaimRepo.Object,
+            mockBizRepo.Object,
+            _mockSupportUserProfileRepository.Object,
+            _mockEndUserProfileRepository.Object,
+            _mockUserSettingsRepository.Object,
+            _mockBadgeService.Object,
+            _mockPointsService.Object,
+            _mockReferralService.Object,
+            _mockAuth0.Object,
+            _mockConfig.Object,
+            _mockCache.Object,
+            _mockRegisterationVerificationRepository.Object
+        );
+
+        Assert.ThrowsAsync<DuplicateUserEmailException>(() => service.RegisterBusinessAfterClaimAsync(dto));
+        _mockAuth0.Verify(
+            a => a.CreateUserAndAssignRoleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Test]
+    public void CreateSupportUser_ShouldThrow_WhenEmailAlreadyExists()
+    {
+        var dto = new CreateSupportUserDto("support", "existing@support.com", "111", "123456", "addr");
+
+        _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(true);
+
+        Assert.ThrowsAsync<DuplicateUserEmailException>(() => _service.CreateSupportUserAsync(dto));
+        _mockUserRepository.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Never);
+    }
+
+    [Test]
+    public void CreateEndUser_ShouldThrow_WhenEmailAlreadyExists()
+    {
+        var dto = new CreateEndUserDto("jane", "existing@test.com", "123", "123456", "addr", "instagram.com/jane");
+
+        _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(true);
+
+        Assert.ThrowsAsync<DuplicateUserEmailException>(() => _service.CreateEndUserAsync(dto));
+        _mockUserRepository.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Never);
+    }
+
 
 }
