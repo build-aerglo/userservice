@@ -432,7 +432,7 @@ public class AuthController : ControllerBase
 
         try
         {
-            var userId = GetCurrentUserId();
+            var userId = await GetCurrentUserIdAsync();
 
             // --- 401: No valid user in token ---
             if (userId == null)
@@ -531,7 +531,7 @@ public class AuthController : ControllerBase
 
         try
         {
-            var userId = GetCurrentUserId();
+            var userId = await GetCurrentUserIdAsync();
 
             // --- 401: No valid user in token ---
             if (userId == null)
@@ -607,7 +607,7 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var userId = GetCurrentUserId();
+            var userId = await GetCurrentUserIdAsync();
 
             // --- 401: No valid user in token ---
             if (userId == null)
@@ -679,23 +679,26 @@ public class AuthController : ControllerBase
     // PRIVATE HELPERS
     // ========================================================================
 
-    private Guid? GetCurrentUserId()
+    private async Task<Guid?> GetCurrentUserIdAsync()
     {
-        var subClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                       ?? User.FindFirst("sub")?.Value;
+        var auth0Id = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                      ?? User.FindFirst("sub")?.Value;
 
-        if (string.IsNullOrEmpty(subClaim))
+        if (string.IsNullOrEmpty(auth0Id))
         {
             _logger.LogWarning("No NameIdentifier or sub claim found in token. Claims present: {Claims}",
                 string.Join(", ", User.Claims.Select(c => c.Type)));
             return null;
         }
 
-        if (Guid.TryParse(subClaim, out var userId))
-            return userId;
+        var user = await _userRepository.GetByAuth0IdAsync(auth0Id);
+        if (user == null)
+        {
+            _logger.LogWarning("No user found for Auth0 ID: {Auth0Id}", auth0Id);
+            return null;
+        }
 
-        _logger.LogWarning("Could not parse user ID from claim value: {ClaimValue}", subClaim);
-        return null;
+        return user.Id;
     }
 
     private async Task TrackLoginStreakAsync(string email)

@@ -52,12 +52,18 @@ public class AuthControllerTests
         };
     }
 
+    private const string TestAuth0Id = "auth0|testuser";
+
     private void SetupUserClaims(Guid userId)
     {
+        var user = new User("test", "test@test.com", "1234567890", "pass", "end_user", null, TestAuth0Id);
+        typeof(User).GetProperty("Id")!.SetValue(user, userId);
+        _mockUserRepository.Setup(r => r.GetByAuth0IdAsync(TestAuth0Id)).ReturnsAsync(user);
+
         var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-            new Claim("sub", userId.ToString())
+            new Claim(ClaimTypes.NameIdentifier, TestAuth0Id),
+            new Claim("sub", TestAuth0Id)
         };
         var identity = new ClaimsIdentity(claims, "TestAuth");
         var claimsPrincipal = new ClaimsPrincipal(identity);

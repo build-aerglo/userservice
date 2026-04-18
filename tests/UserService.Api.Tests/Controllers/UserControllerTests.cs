@@ -24,7 +24,10 @@ public class UserControllerTests
     private Mock<IBadgeService> _mockBadgeService = null!;
     private Mock<IReferralService> _mockReferralService = null!;
     private Mock<ILogger<UserController>> _mockLogger = null!;
+    private Mock<IUserRepository> _mockUserRepository = null!;
     private UserController _controller = null!;
+
+    private const string TestAuth0Id = "auth0|testuser";
 
     [SetUp]
     public void Setup()
@@ -34,13 +37,34 @@ public class UserControllerTests
         _mockBadgeService = new Mock<IBadgeService>();
         _mockReferralService = new Mock<IReferralService>();
         _mockLogger = new Mock<ILogger<UserController>>();
+        _mockUserRepository = new Mock<IUserRepository>();
         _controller = new UserController(
             _mockUserService.Object,
             _mockBusinessRepRepository.Object,
             _mockBadgeService.Object,
             _mockReferralService.Object,
-            _mockLogger.Object
+            _mockLogger.Object,
+            _mockUserRepository.Object
         );
+    }
+
+    private void SetupOwnerClaims(Guid userId)
+    {
+        var user = new User("test", "test@test.com", "1234567890", "pass", "end_user", null, TestAuth0Id);
+        typeof(User).GetProperty("Id")!.SetValue(user, userId);
+        _mockUserRepository.Setup(r => r.GetByAuth0IdAsync(TestAuth0Id)).ReturnsAsync(user);
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, TestAuth0Id),
+                    new Claim(ClaimTypes.Role, "end_user")
+                }, "TestAuth"))
+            }
+        };
     }
 
     // ========================================================================
@@ -968,17 +992,7 @@ public class UserControllerTests
             .Setup(s => s.UpdateEndUserProfileAsync(userId, It.IsAny<UpdateEndUserProfileDto>()))
             .ReturnsAsync(expectedResponse);
 
-        _controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext
-            {
-                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-                    new Claim(ClaimTypes.Role, "end_user")
-                }, "TestAuth"))
-            }
-        };
+        SetupOwnerClaims(userId);
 
         // Act
         var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
@@ -1054,17 +1068,7 @@ public class UserControllerTests
             .Setup(s => s.UpdateEndUserProfileAsync(userId, It.IsAny<UpdateEndUserProfileDto>()))
             .ReturnsAsync(expectedResponse);
 
-        _controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext
-            {
-                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-                    new Claim(ClaimTypes.Role, "end_user")
-                }, "TestAuth"))
-            }
-        };
+        SetupOwnerClaims(userId);
 
         // Act
         var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
@@ -1135,17 +1139,7 @@ public class UserControllerTests
             .Setup(s => s.UpdateEndUserProfileAsync(userId, It.IsAny<UpdateEndUserProfileDto>()))
             .ReturnsAsync(expectedResponse);
 
-        _controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext
-            {
-                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-                    new Claim(ClaimTypes.Role, "end_user")
-                }, "TestAuth"))
-            }
-        };
+        SetupOwnerClaims(userId);
 
         // Act
         var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
@@ -1200,17 +1194,7 @@ public class UserControllerTests
             .Setup(s => s.UpdateEndUserProfileAsync(It.IsAny<Guid>(), It.IsAny<UpdateEndUserProfileDto>()))
             .ThrowsAsync(new EndUserNotFoundException(userId));
 
-        _controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext
-            {
-                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-                    new Claim(ClaimTypes.Role, "end_user")
-                }, "TestAuth"))
-            }
-        };
+        SetupOwnerClaims(userId);
 
         // Act
         var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);
@@ -1264,17 +1248,7 @@ public class UserControllerTests
             .Setup(s => s.UpdateEndUserProfileAsync(It.IsAny<Guid>(), It.IsAny<UpdateEndUserProfileDto>()))
             .ThrowsAsync(new Exception("Database connection failed"));
 
-        _controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext
-            {
-                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-                    new Claim(ClaimTypes.Role, "end_user")
-                }, "TestAuth"))
-            }
-        };
+        SetupOwnerClaims(userId);
 
         // Act
         var result = await _controller.UpdateEndUserProfileDetail(userId, updateDto);

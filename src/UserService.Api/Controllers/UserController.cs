@@ -12,7 +12,7 @@ namespace UserService.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class UserController(IUserService service, IBusinessRepRepository businessRepRepository, IBadgeService badgeService, IReferralService referralService, ILogger<UserController> logger) : ControllerBase
+public class UserController(IUserService service, IBusinessRepRepository businessRepRepository, IBadgeService badgeService, IReferralService referralService, ILogger<UserController> logger, IUserRepository userRepository) : ControllerBase
 {
     // BUSINESS USER creates sub-business users
     [Authorize(Roles = "business_user")]
@@ -321,10 +321,14 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return BadRequest(ModelState);
 
         // Enforce ownership: only the user themselves may update their own profile.
-        var sub = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                  ?? User.FindFirst("sub")?.Value;
+        var auth0Id = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                      ?? User.FindFirst("sub")?.Value;
 
-        if (!Guid.TryParse(sub, out var currentUserId) || currentUserId != userId)
+        if (string.IsNullOrEmpty(auth0Id))
+            return Forbid();
+
+        var currentUser = await userRepository.GetByAuth0IdAsync(auth0Id);
+        if (currentUser == null || currentUser.Id != userId)
             return Forbid();
 
         try
