@@ -18,4 +18,5 @@ public interface IUserRepository
     Task UpdateEmailAsync(Guid userId, string newEmail);
     Task SetUserIdAsync(Guid userId, Guid businessId);
     Task UpdateEmailVerifiedAsync(Guid userId);
+    Task<User?> GetByAuth0IdAsync(string auth0UserId);
 }

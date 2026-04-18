@@ -6,7 +6,9 @@ using System.Security.Claims;
 using UserService.Api.Controllers;
 using UserService.Application.DTOs.Points;
 using UserService.Application.Interfaces;
+using UserService.Domain.Entities;
 using UserService.Domain.Exceptions;
+using UserService.Domain.Repositories;
 
 namespace UserService.Api.Tests.Controllers;
 
@@ -16,7 +18,10 @@ public class PointsControllerTests
     private Mock<IPointsService> _mockPointsService = null!;
     private Mock<ILogger<PointsController>> _mockLogger = null!;
     private Mock<IReviewServiceClient> _mockReviewServiceClient = null!;
+    private Mock<IUserRepository> _mockUserRepository = null!;
     private PointsController _controller = null!;
+
+    private const string TestAuth0Id = "auth0|testuser";
 
     [SetUp]
     public void Setup()
@@ -24,15 +29,20 @@ public class PointsControllerTests
         _mockPointsService = new Mock<IPointsService>();
         _mockLogger = new Mock<ILogger<PointsController>>();
         _mockReviewServiceClient = new Mock<IReviewServiceClient>();
-        _controller = new PointsController(_mockPointsService.Object, _mockLogger.Object, _mockReviewServiceClient.Object);
+        _mockUserRepository = new Mock<IUserRepository>();
+        _controller = new PointsController(_mockPointsService.Object, _mockLogger.Object, _mockReviewServiceClient.Object, _mockUserRepository.Object);
     }
 
     private void SetupUserClaims(Guid userId)
     {
+        var user = new User("test", "test@test.com", "1234567890", "pass", "end_user", null, TestAuth0Id);
+        typeof(User).GetProperty("Id")!.SetValue(user, userId);
+        _mockUserRepository.Setup(r => r.GetByAuth0IdAsync(TestAuth0Id)).ReturnsAsync(user);
+
         var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-            new Claim("sub", userId.ToString())
+            new Claim(ClaimTypes.NameIdentifier, TestAuth0Id),
+            new Claim("sub", TestAuth0Id)
         };
         var identity = new ClaimsIdentity(claims, "TestAuth");
         var claimsPrincipal = new ClaimsPrincipal(identity);

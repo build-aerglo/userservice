@@ -6,6 +6,7 @@ using UserService.Api.Filters;
 using UserService.Application.DTOs.Points;
 using UserService.Application.Interfaces;
 using UserService.Domain.Exceptions;
+using UserService.Domain.Repositories;
 
 namespace UserService.Api.Controllers;
 
@@ -14,7 +15,8 @@ namespace UserService.Api.Controllers;
 public class PointsController(
     IPointsService pointsService,
     ILogger<PointsController> logger,
-    IReviewServiceClient reviewServiceClient) : ControllerBase
+    IReviewServiceClient reviewServiceClient,
+    IUserRepository userRepository) : ControllerBase
 {
     /// <summary>
     /// Get user's points and statistics
@@ -385,7 +387,7 @@ public class PointsController(
     {
         try
         {
-            var userId = GetCurrentUserId();
+            var userId = await GetCurrentUserIdAsync();
             var result = await pointsService.CreatePointRuleAsync(dto, userId);
             return Created("", result);
         }
@@ -422,7 +424,7 @@ public class PointsController(
     {
         try
         {
-            var userId = GetCurrentUserId();
+            var userId = await GetCurrentUserIdAsync();
             var result = await pointsService.CreatePointMultiplierAsync(dto, userId);
             return Created("", result);
         }
@@ -504,11 +506,13 @@ public class PointsController(
         }
     }
 
-    // Helper method
-    private Guid? GetCurrentUserId()
+    private async Task<Guid?> GetCurrentUserIdAsync()
     {
-        var subClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                       ?? User.FindFirst("sub")?.Value;
-        return Guid.TryParse(subClaim, out var userId) ? userId : null;
+        var auth0Id = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                      ?? User.FindFirst("sub")?.Value;
+        if (string.IsNullOrEmpty(auth0Id))
+            return null;
+        var user = await userRepository.GetByAuth0IdAsync(auth0Id);
+        return user?.Id;
     }
 }

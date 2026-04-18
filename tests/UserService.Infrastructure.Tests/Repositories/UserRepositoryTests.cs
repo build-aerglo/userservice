@@ -211,4 +211,11 @@ public class UserRepository : IUserRepository
                 UpdatedAt = DateTime.UtcNow
             }));
     }
+
+    public async Task<User?> GetByAuth0IdAsync(string auth0UserId)
+    {
+        const string sql = "SELECT * FROM users WHERE auth0_user_id = @Auth0UserId;";
+        return await QueryAsync(conn =>
+            conn.QueryFirstOrDefaultAsync<User>(sql, new { Auth0UserId = auth0UserId }));
+    }
 }
