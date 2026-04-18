@@ -42,6 +42,9 @@ public class UserService(
         if (!businessExists)
             throw new BusinessNotFoundException(dto.BusinessId);
 
+        if (await userRepository.EmailExistsAsync(dto.Email))
+            throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
+
         var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password, _config["Auth0:Roles:BusinessUser"]);
 
         var user = new User(
@@ -207,6 +210,9 @@ public class UserService(
 
     public async Task<(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload)
     {
+        if (await userRepository.EmailExistsAsync(userPayload.Email))
+            throw new DuplicateUserEmailException($"Email '{userPayload.Email}' already exists.");
+
         var businessId = await businessServiceClient.CreateBusinessAsync(userPayload);
         if (businessId == null || businessId == Guid.Empty)
             throw new BusinessUserCreationFailedException("Business creation failed: BusinessId is missing from services.");
@@ -255,6 +261,10 @@ public class UserService(
         var businessName = await businessRepository.GetNameByIdAsync(dto.BusinessId);
         if (businessName is null)
             throw new BusinessNotFoundException(dto.BusinessId);
+
+        // 2b. Ensure email is not already registered
+        if (await userRepository.EmailExistsAsync(dto.Email))
+            throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
 
         // 3. Create Auth0 user with business_user role
         var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(
