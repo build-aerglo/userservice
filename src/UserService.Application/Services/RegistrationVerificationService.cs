@@ -99,7 +99,10 @@ public class RegistrationVerificationService(
         {
             var businessId = await businessRepository.GetIdByEmailAsync(email);
             if (businessId.HasValue)
+            {
                 await businessRepository.MarkEmailVerifiedAsync(businessId.Value);
+                await businessRepository.MarkEmailVerifiedOnVerificationTableAsync(businessId.Value);
+            }
             else
                 logger.LogWarning("No business found for email {Email} during email verification", email);
         }

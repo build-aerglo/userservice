@@ -85,6 +85,23 @@ public class BusinessRepository : IBusinessRepository
         finally { await DisposeIfOwnedAsync(conn); }
     }
 
+    public async Task MarkEmailVerifiedOnVerificationTableAsync(Guid businessId)
+    {
+        const string sql = @"
+            UPDATE business_verification
+            SET email_verified = true,
+                updated_at     = NOW()
+            WHERE business_id = @BusinessId;";
+
+        var conn = GetConnection();
+        try
+        {
+            await EnsureOpenAsync(conn);
+            await conn.ExecuteAsync(sql, new { BusinessId = GuidParam(businessId) });
+        }
+        finally { await DisposeIfOwnedAsync(conn); }
+    }
+
     public async Task UpdateOwnerAsync(Guid businessId, Guid userId, string email, string? phoneNumber)
     {
         const string sql = @"
