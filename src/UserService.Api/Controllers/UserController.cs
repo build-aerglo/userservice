@@ -164,16 +164,36 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     [HttpPost("business")]
     public async Task<IActionResult> CreateBusinessUser([FromBody] BusinessUserDto dto)
     {
-        var (user, businessId, business) = await service.RegisterBusinessAccountAsync(dto);
-
-        return Created("", new
+        try
         {
-            user.Id,
-            user.Email,
-            businessId,
-            business,
-            user.Auth0UserId
-        });
+            var (user, businessId, business) = await service.RegisterBusinessAccountAsync(dto);
+            return Created("", new
+            {
+                user.Id,
+                user.Email,
+                businessId,
+                business,
+                user.Auth0UserId
+            });
+        }
+        catch (DuplicateUserEmailException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+        catch (DuplicateBusinessException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+        catch (BusinessUserCreationFailedException ex)
+        {
+            logger.LogError(ex, "Business registration failed for {Email}", dto.Email);
+            return StatusCode(500, new { error = "Registration failed. Please try again." });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error registering business for {Email}", dto.Email);
+            return StatusCode(500, new { error = "An unexpected error occurred. Please try again." });
+        }
     }
 
     [Authorize(Roles = "business_user,support_user")]
@@ -321,8 +341,9 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return BadRequest(ModelState);
 
         // Enforce ownership: only the user themselves may update their own profile.
-        var auth0Id = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                      ?? User.FindFirst("sub")?.Value;
+        // MapInboundClaims=false → Auth0 "sub" arrives as "sub", not ClaimTypes.NameIdentifier.
+        var auth0Id = User.FindFirst("sub")?.Value
+                      ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
         if (string.IsNullOrEmpty(auth0Id))
             return Forbid();

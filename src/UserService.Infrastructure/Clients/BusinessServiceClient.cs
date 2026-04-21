@@ -38,6 +38,28 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
         {
             var response = await httpClient.PostAsJsonAsync("/api/business", business);
 
+            if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                // BusinessService returned 409 — duplicate name, email, or phone.
+                // Read the error body and propagate it so the controller can return a proper 409.
+                var errorBody = await response.Content.ReadAsStringAsync();
+                string errorMessage;
+                try
+                {
+                    var doc = System.Text.Json.JsonDocument.Parse(errorBody);
+                    errorMessage = doc.RootElement.TryGetProperty("error", out var errProp)
+                        ? errProp.GetString() ?? "A business with these details already exists."
+                        : doc.RootElement.TryGetProperty("message", out var msgProp)
+                            ? msgProp.GetString() ?? "A business with these details already exists."
+                            : "A business with these details already exists.";
+                }
+                catch
+                {
+                    errorMessage = "A business with these details already exists.";
+                }
+                throw new DuplicateBusinessException(errorMessage);
+            }
+
             if (response.StatusCode != HttpStatusCode.Created)
             {
                 var error = await response.Content.ReadAsStringAsync();
