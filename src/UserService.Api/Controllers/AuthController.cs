@@ -22,6 +22,7 @@ public class AuthController : ControllerBase
     private readonly IUserRepository _userRepository;
     private readonly IPointsService _pointsService;
     private readonly IEmailUpdateRequestRepository _emailUpdateRequestRepository;
+    private readonly IEncryptionService _encryptionService;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
@@ -31,6 +32,7 @@ public class AuthController : ControllerBase
         IUserRepository userRepository,
         IPointsService pointsService,
         IEmailUpdateRequestRepository emailUpdateRequestRepository,
+        IEncryptionService encryptionService,
         ILogger<AuthController> logger)
     {
         _auth0Login = auth0Login ?? throw new ArgumentNullException(nameof(auth0Login));
@@ -39,6 +41,7 @@ public class AuthController : ControllerBase
         _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         _pointsService = pointsService ?? throw new ArgumentNullException(nameof(pointsService));
         _emailUpdateRequestRepository = emailUpdateRequestRepository ?? throw new ArgumentNullException(nameof(emailUpdateRequestRepository));
+        _encryptionService = encryptionService ?? throw new ArgumentNullException(nameof(encryptionService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -67,15 +70,23 @@ public class AuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Password))
             return BadRequest(ErrorResponse("password_required", "Please enter your password."));
 
-        // --- 400: Password too short ---
-        if (dto.Password.Length < 6)
-            return BadRequest(ErrorResponse("invalid_password", "Password must be at least 6 characters."));
+        // --- 400: Invalid password format (must be encrypted) ---
+        string decryptedPassword;
+        try
+        {
+            decryptedPassword = _encryptionService.Decrypt(dto.Password);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Password decryption failed during login for email: {Email}", MaskEmail(dto.Email));
+            return BadRequest(ErrorResponse("invalid_password_format", "The password format is invalid."));
+        }
 
         try
         {
             _logger.LogInformation("Login attempt for email: {Email}", MaskEmail(dto.Email));
 
-            var token = await _auth0Login.LoginAsync(dto.Email, dto.Password);
+            var token = await _auth0Login.LoginAsync(dto.Email, decryptedPassword);
 
             // --- 502: Auth provider returned nothing ---
             if (token == null)
