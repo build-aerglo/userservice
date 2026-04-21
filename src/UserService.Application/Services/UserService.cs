@@ -210,6 +210,9 @@ public class UserService(
 
     public async Task<(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload)
     {
+        if (await businessRepository.AnyFieldTakenAsync(userPayload.Name, userPayload.Email, userPayload.Phone))
+            throw new DuplicateBusinessException("Business data already used.");
+
         if (await userRepository.EmailExistsAsync(userPayload.Email))
             throw new DuplicateUserEmailException($"Email '{userPayload.Email}' already exists.");
 
