@@ -42,10 +42,16 @@ public class RegistrationVerificationService(
         var frontendUrl = config["FrontendUrl"]?.TrimEnd('/');
         var url = $"{frontendUrl}/auth/verify-email?token={encodedToken}&e={encodedEmail}&type={accountType}";
 
+        // Resolve user type from DB to pick the correct template
+        var user = await userRepository.GetByEmailAsync(email);
+        var template = string.Equals(user?.UserType, "business_user", StringComparison.OrdinalIgnoreCase)
+            ? "registeration-business"
+            : "registeration";
+
         // Send the notification — failure is logged but does not throw so that
         // the registration itself is not rolled back.
         var sent = await notificationClient.SendNotificationAsync(
-            template: "registeration",
+            template: template,
             recipient: email,
             channel: "email",
             payload: new { username, url }

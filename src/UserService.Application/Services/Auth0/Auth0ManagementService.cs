@@ -77,14 +77,9 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
         var auth0UserId = userJson.RootElement.GetProperty("user_id").GetString()!;
 
         // ----------------------------------------------------------------------
-        // 2) ASSIGN ROLE
+        // 3) ASSIGN ROLE
         // ----------------------------------------------------------------------
         await AssignRoleAsync(auth0UserId, roleId);
-
-        // ----------------------------------------------------------------------
-        // 3) SEND "SET YOUR PASSWORD" EMAIL
-        // ----------------------------------------------------------------------
-        await SendPasswordSetupEmailAsync(email);
 
         return auth0UserId;
     }
