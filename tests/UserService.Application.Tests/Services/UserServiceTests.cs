@@ -28,6 +28,7 @@ public class UserServiceTests
     private Mock<IMemoryCache> _mockCache = null!;
     private Mock<IRegistrationVerificationService> _mockRegisterationVerificationRepository = null!;
     private Application.Services.UserService _service = null!;
+    private Mock<IEncryptionService> _mockEncryptionService = null!;
 
     [SetUp]
     public void Setup()
@@ -45,6 +46,7 @@ public class UserServiceTests
         _mockCache = new Mock<IMemoryCache>();
         _mockConfig = new Mock<IConfiguration>();
         _mockRegisterationVerificationRepository = new Mock<IRegistrationVerificationService>();
+        _mockEncryptionService = new Mock<IEncryptionService>();
 
         // Auth0 role mappings
         _mockConfig.Setup(c => c["Auth0:Roles:BusinessUser"]).Returns("auth0_business_role");
@@ -87,7 +89,8 @@ public class UserServiceTests
             _mockAuth0.Object,
             _mockConfig.Object,
             _mockCache.Object,
-            _mockRegisterationVerificationRepository.Object
+            _mockRegisterationVerificationRepository.Object,
+            _mockEncryptionService.Object
         );
     }
 
@@ -1110,7 +1113,8 @@ public void GetEndUserSummaryAsync_ShouldThrow_WhenUserNotFound()
             _mockAuth0.Object,
             _mockConfig.Object,
             _mockCache.Object,
-            _mockRegisterationVerificationRepository.Object
+            _mockRegisterationVerificationRepository.Object,
+            _mockEncryptionService.Object
         );
 
         Assert.ThrowsAsync<DuplicateUserEmailException>(() => service.RegisterBusinessAfterClaimAsync(dto));
