@@ -1098,7 +1098,26 @@ public void GetEndUserSummaryAsync_ShouldThrow_WhenUserNotFound()
 
         _mockUserRepository.Setup(r => r.EmailExistsAsync(dto.Email)).ReturnsAsync(true);
 
-        Assert.ThrowsAsync<DuplicateUserEmailException>(() => _service.RegisterBusinessAfterClaimAsync(dto));
+        var service = new Application.Services.UserService(
+            _mockUserRepository.Object,
+            _mockBusinessRepRepository.Object,
+            _mockBusinessServiceClient.Object,
+            mockClaimRepo.Object,
+            mockBizRepo.Object,
+            _mockSupportUserProfileRepository.Object,
+            _mockEndUserProfileRepository.Object,
+            _mockUserSettingsRepository.Object,
+            _mockBadgeService.Object,
+            _mockPointsService.Object,
+            _mockReferralService.Object,
+            _mockAuth0.Object,
+            _mockConfig.Object,
+            _mockCache.Object,
+            _mockRegisterationVerificationRepository.Object,
+            _mockEncryptionService.Object
+        );
+
+        Assert.ThrowsAsync<DuplicateUserEmailException>(() => service.RegisterBusinessAfterClaimAsync(dto));
         _mockAuth0.Verify(
             a => a.CreateUserAndAssignRoleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
             Times.Never);
