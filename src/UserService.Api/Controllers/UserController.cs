@@ -259,7 +259,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         }
     }
 
-    [Authorize]
+    [InternalOrJwt] 
     [HttpGet("business-rep/parent/{businessId:guid}")]
     public async Task<IActionResult> GetParentRepByBusinessId(Guid businessId)
     {
