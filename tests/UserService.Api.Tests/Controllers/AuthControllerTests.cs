@@ -25,6 +25,7 @@ public class AuthControllerTests
     private Mock<IEmailUpdateRequestRepository> _mockEmailUpdateRequestRepository = null!;
     private Mock<ILogger<AuthController>> _mockLogger = null!;
     private AuthController _controller = null!;
+    private Mock<IEncryptionService> _encryptionService = null!;
 
     [SetUp]
     public void Setup()
@@ -36,6 +37,7 @@ public class AuthControllerTests
         _mockPointsService = new Mock<IPointsService>();
         _mockEmailUpdateRequestRepository = new Mock<IEmailUpdateRequestRepository>();
         _mockLogger = new Mock<ILogger<AuthController>>();
+        _encryptionService = new Mock<IEncryptionService>();
 
         _controller = new AuthController(
             _mockAuth0Login.Object,
@@ -44,7 +46,8 @@ public class AuthControllerTests
             _mockUserRepository.Object,
             _mockPointsService.Object,
             _mockEmailUpdateRequestRepository.Object,
-            _mockLogger.Object);
+            _mockLogger.Object,
+            _encryptionService.Object);
 
         _controller.ControllerContext = new ControllerContext
         {

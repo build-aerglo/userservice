@@ -130,4 +130,27 @@ public class BusinessRepository : IBusinessRepository
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }
+    
+    public async Task<bool> AnyFieldTakenAsync(string name, string email, string? phone)
+    {
+        var sql = @"
+            SELECT COUNT(1) FROM business
+            WHERE LOWER(name) = LOWER(@Name)
+               OR LOWER(business_email) = LOWER(@Email)";
+ 
+        var includePhone = !string.IsNullOrWhiteSpace(phone);
+        if (includePhone)
+            sql += " OR business_phone_number = @Phone";
+ 
+        sql += ";";
+ 
+        var conn = GetConnection();
+        try
+        {
+            await EnsureOpenAsync(conn);
+            var count = await conn.ExecuteScalarAsync<int>(sql, new { Name = name, Email = email, Phone = phone });
+            return count > 0;
+        }
+        finally { await DisposeIfOwnedAsync(conn); }
+    }
 }

@@ -26,7 +26,8 @@ public class UserService(
     IAuth0ManagementService _auth0,
     IConfiguration _config,
     IMemoryCache cache,
-    IRegistrationVerificationService registrationVerificationService
+    IRegistrationVerificationService registrationVerificationService,
+    IEncryptionService encryptionService
 ) : IUserService
 {
     public async Task<User?> GetUserByIdAsync(Guid userId)
@@ -44,14 +45,25 @@ public class UserService(
 
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
+        
+        // decrypt password
+        string decryptedPassword;
+        try
+        {
+            decryptedPassword = encryptionService.Decrypt(dto.Password);
+        }
+        catch (Exception ex)
+        {
+            throw new UserCreationFailedException($"Password Error - '{ex}'");
+        }
 
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password, _config["Auth0:Roles:BusinessUser"]);
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, decryptedPassword, _config["Auth0:Roles:BusinessUser"]);
 
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
-            password: dto.Password,
+            password: decryptedPassword,
             userType: "business_user",
             address: dto.Address,
             auth0UserId
@@ -135,13 +147,24 @@ public class UserService(
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
 
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password, _config["Auth0:Roles:SupportUser"]);
+        // decrypt password
+        string decryptedPassword;
+        try
+        {
+            decryptedPassword = encryptionService.Decrypt(dto.Password);
+        }
+        catch (Exception ex)
+        {
+            throw new UserCreationFailedException($"Password Error - '{ex}'");
+        }
+        
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, decryptedPassword, _config["Auth0:Roles:SupportUser"]);
 
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
-            password: dto.Password,
+            password: decryptedPassword,
             userType: "support_user",
             address: dto.Address,
             auth0UserId: auth0UserId
@@ -210,16 +233,30 @@ public class UserService(
 
     public async Task<(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload)
     {
+        if (await businessRepository.AnyFieldTakenAsync(userPayload.Name, userPayload.Email, userPayload.Phone))
+            throw new DuplicateBusinessException("Business data already used.");
+        
         if (await userRepository.EmailExistsAsync(userPayload.Email))
             throw new DuplicateUserEmailException($"Email '{userPayload.Email}' already exists.");
 
         var businessId = await businessServiceClient.CreateBusinessAsync(userPayload);
         if (businessId == null || businessId == Guid.Empty)
             throw new BusinessUserCreationFailedException("Business creation failed: BusinessId is missing from services.");
+        
+        // decrypt password
+        string decryptedPassword;
+        try
+        {
+            decryptedPassword = encryptionService.Decrypt(userPayload.Password);
+        }
+        catch (Exception ex)
+        {
+            throw new UserCreationFailedException($"Password Error - '{ex}'");
+        }
+        
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(userPayload.Email, userPayload.Name, decryptedPassword, _config["Auth0:Roles:BusinessUser"]);
 
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(userPayload.Email, userPayload.Name, userPayload.Password, _config["Auth0:Roles:BusinessUser"]);
-
-        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, userPayload.Password, userPayload.UserType, userPayload.Address, auth0UserId);
+        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, decryptedPassword, userPayload.UserType, userPayload.Address, auth0UserId);
         await userRepository.AddAsync(user);
 
         var savedUser = await userRepository.GetByIdAsync(user.Id);
@@ -266,16 +303,27 @@ public class UserService(
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
 
+        // decrypt password
+        string decryptedPassword;
+        try
+        {
+            decryptedPassword = encryptionService.Decrypt(dto.Password);
+        }
+        catch (Exception ex)
+        {
+            throw new UserCreationFailedException($"Password Error - '{ex}'");
+        }
+        
         // 3. Create Auth0 user with business_user role
         var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(
-            dto.Email, businessName, dto.Password, _config["Auth0:Roles:BusinessUser"]);
+            dto.Email, businessName, decryptedPassword, _config["Auth0:Roles:BusinessUser"]);
 
         // 4. Create local user record (username = business name)
         var user = new User(
             username: businessName,
             email: dto.Email,
             phone: dto.PhoneNumber ?? "",
-            password: dto.Password,
+            password: decryptedPassword,
             userType: "business_user",
             address: null,
             auth0UserId: auth0UserId);
@@ -313,14 +361,25 @@ public class UserService(
     {
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new DuplicateUserEmailException($"Email '{dto.Email}' already exists.");
-
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, dto.Password, _config["Auth0:Roles:EndUser"]);
+        
+        // decrypt password
+        string decryptedPassword;
+        try
+        {
+            decryptedPassword = encryptionService.Decrypt(dto.Password);
+        }
+        catch (Exception ex)
+        {
+            throw new UserCreationFailedException($"Password Error - '{ex}'");
+        }
+        
+        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(dto.Email, dto.Username, decryptedPassword, _config["Auth0:Roles:EndUser"]);
 
         var user = new User(
             username: dto.Username,
             email: dto.Email,
             phone: dto.Phone,
-            password: dto.Password,
+            password: decryptedPassword,
             userType: "end_user",
             address: dto.Address,
             auth0UserId

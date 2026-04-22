@@ -7,4 +7,5 @@ public interface IBusinessRepository
     Task MarkEmailVerifiedAsync(Guid businessId);
     Task UpdateOwnerAsync(Guid businessId, Guid userId, string email, string? phoneNumber);
     Task UpdateStatusAsync(Guid businessId, string status);
+    Task<bool> AnyFieldTakenAsync(string name, string email, string? phone);
 }
