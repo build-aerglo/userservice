@@ -24,6 +24,7 @@ public class RegisterBusinessAfterClaimTests
     private Mock<IConfiguration> _mockConfig = null!;
     private Mock<IRegistrationVerificationService> _mockRegVerification = null!;
     private Application.Services.UserService _service = null!;
+    private Mock<IEncryptionService> _mockEncryptionService = null!;
 
     private static readonly Guid BusinessId = Guid.NewGuid();
     private const string BusinessName = "Acme Corp";
@@ -40,6 +41,7 @@ public class RegisterBusinessAfterClaimTests
         _mockAuth0 = new Mock<IAuth0ManagementService>();
         _mockConfig = new Mock<IConfiguration>();
         _mockRegVerification = new Mock<IRegistrationVerificationService>();
+        _mockEncryptionService = new Mock<IEncryptionService>();
 
         _mockConfig.Setup(c => c["Auth0:Roles:BusinessUser"]).Returns("auth0_biz_role");
 
@@ -84,7 +86,8 @@ public class RegisterBusinessAfterClaimTests
             _mockAuth0.Object,
             _mockConfig.Object,
             mockCache.Object,
-            _mockRegVerification.Object
+            _mockRegVerification.Object,
+            _mockEncryptionService.Object
         );
     }
 

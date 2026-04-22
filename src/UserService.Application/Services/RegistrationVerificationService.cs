@@ -41,11 +41,16 @@ public class RegistrationVerificationService(
         var accountType = userType.Equals("business_user", StringComparison.OrdinalIgnoreCase) ? "business" : "user";
         var frontendUrl = config["FrontendUrl"]?.TrimEnd('/');
         var url = $"{frontendUrl}/auth/verify-email?token={encodedToken}&e={encodedEmail}&type={accountType}";
+        
+        // Resolve user type from DB to pick the correct template
+        var template = userType.Equals("business_user", StringComparison.OrdinalIgnoreCase)
+            ? "registeration-business"
+            : "registeration";
 
         // Send the notification — failure is logged but does not throw so that
         // the registration itself is not rolled back.
         var sent = await notificationClient.SendNotificationAsync(
-            template: "registeration",
+            template: template,
             recipient: email,
             channel: "email",
             payload: new { username, url }
@@ -99,7 +104,11 @@ public class RegistrationVerificationService(
         {
             var businessId = await businessRepository.GetIdByEmailAsync(email);
             if (businessId.HasValue)
+            {
                 await businessRepository.MarkEmailVerifiedAsync(businessId.Value);
+                await businessRepository.MarkEmailVerifiedOnVerificationTableAsync(businessId.Value);
+            }
+            
             else
                 logger.LogWarning("No business found for email {Email} during email verification", email);
         }
