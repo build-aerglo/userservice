@@ -13,7 +13,7 @@ public class ContactService(
 {
     public async Task<bool> SendContactMessageAsync(ContactDto dto)
     {
-        var recipient = config["Services:ContactEmail"];
+        var recipient = config["Services:ContactEmail"] ?? "contact@clereview.com";
         if (string.IsNullOrWhiteSpace(recipient))
         {
             logger.LogError("Services:ContactEmail is not configured. Cannot send contact-us message from {Email}", dto.Email);
