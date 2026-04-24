@@ -57,7 +57,8 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
             email,
             password,
             connection,
-            email_verified = false
+            email_verified = false,
+            verify_email = false
         };
 
         var createResp = await http.PostAsync(
@@ -143,7 +144,8 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
         var payload = new
         {
             email = newEmail,
-            email_verified = false
+            email_verified = false,
+            verify_email = false
         };
 
         var request = new HttpRequestMessage(HttpMethod.Patch, $"https://{domain}/api/v2/users/{Uri.EscapeDataString(auth0UserId)}")
