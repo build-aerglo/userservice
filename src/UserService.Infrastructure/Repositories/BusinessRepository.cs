@@ -73,7 +73,8 @@ public class BusinessRepository : IBusinessRepository
         const string sql = @"
             UPDATE business
             SET is_verified = true,
-                updated_at  = NOW()
+                updated_at  = NOW(),
+                business_verification_status = 'verified'
             WHERE id = @BusinessId;";
 
         var conn = GetConnection();
@@ -127,6 +128,46 @@ public class BusinessRepository : IBusinessRepository
                 BusinessId = GuidParam(businessId),
                 Status     = status
             });
+        }
+        finally { await DisposeIfOwnedAsync(conn); }
+    }
+    
+    public async Task<bool> AnyFieldTakenAsync(string name, string email, string? phone)
+    {
+        var sql = @"
+            SELECT COUNT(1) FROM business
+            WHERE LOWER(name) = LOWER(@Name)
+               OR LOWER(business_email) = LOWER(@Email)";
+ 
+        var includePhone = !string.IsNullOrWhiteSpace(phone);
+        if (includePhone)
+            sql += " OR business_phone_number = @Phone";
+ 
+        sql += ";";
+ 
+        var conn = GetConnection();
+        try
+        {
+            await EnsureOpenAsync(conn);
+            var count = await conn.ExecuteScalarAsync<int>(sql, new { Name = name, Email = email, Phone = phone });
+            return count > 0;
+        }
+        finally { await DisposeIfOwnedAsync(conn); }
+    }
+    
+    public async Task MarkEmailVerifiedOnVerificationTableAsync(Guid businessId)
+    {
+        const string sql = @"
+            UPDATE business_verification
+            SET email_verified = true,
+                updated_at     = NOW()
+            WHERE business_id = @BusinessId;";
+
+        var conn = GetConnection();
+        try
+        {
+            await EnsureOpenAsync(conn);
+            await conn.ExecuteAsync(sql, new { BusinessId = GuidParam(businessId) });
         }
         finally { await DisposeIfOwnedAsync(conn); }
     }

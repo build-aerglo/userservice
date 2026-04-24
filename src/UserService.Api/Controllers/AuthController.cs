@@ -23,6 +23,7 @@ public class AuthController : ControllerBase
     private readonly IPointsService _pointsService;
     private readonly IEmailUpdateRequestRepository _emailUpdateRequestRepository;
     private readonly ILogger<AuthController> _logger;
+    private readonly IEncryptionService _encryptionService;
 
     public AuthController(
         IAuth0UserLoginService auth0Login,
@@ -31,7 +32,8 @@ public class AuthController : ControllerBase
         IUserRepository userRepository,
         IPointsService pointsService,
         IEmailUpdateRequestRepository emailUpdateRequestRepository,
-        ILogger<AuthController> logger)
+        ILogger<AuthController> logger,
+        IEncryptionService encryptionService)
     {
         _auth0Login = auth0Login ?? throw new ArgumentNullException(nameof(auth0Login));
         _socialLogin = socialLogin ?? throw new ArgumentNullException(nameof(socialLogin));
@@ -40,6 +42,7 @@ public class AuthController : ControllerBase
         _pointsService = pointsService ?? throw new ArgumentNullException(nameof(pointsService));
         _emailUpdateRequestRepository = emailUpdateRequestRepository ?? throw new ArgumentNullException(nameof(emailUpdateRequestRepository));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _encryptionService = encryptionService ?? throw new ArgumentNullException(nameof(encryptionService));
     }
 
     // ========================================================================
@@ -70,12 +73,24 @@ public class AuthController : ControllerBase
         // --- 400: Password too short ---
         if (dto.Password.Length < 6)
             return BadRequest(ErrorResponse("invalid_password", "Password must be at least 6 characters."));
-
+        
+        // decrypt password
+        string decryptedPassword;
+        try
+        {
+            decryptedPassword = _encryptionService.Decrypt(dto.Password);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Password decryption failed");
+            return BadRequest(ErrorResponse("invalid_password", "Password error"));
+        }
+        
         try
         {
             _logger.LogInformation("Login attempt for email: {Email}", MaskEmail(dto.Email));
 
-            var token = await _auth0Login.LoginAsync(dto.Email, dto.Password);
+            var token = await _auth0Login.LoginAsync(dto.Email, decryptedPassword);
 
             // --- 502: Auth provider returned nothing ---
             if (token == null)
@@ -432,7 +447,7 @@ public class AuthController : ControllerBase
 
         try
         {
-            var userId = GetCurrentUserId();
+            var userId = await GetCurrentUserIdAsync();
 
             // --- 401: No valid user in token ---
             if (userId == null)
@@ -531,7 +546,7 @@ public class AuthController : ControllerBase
 
         try
         {
-            var userId = GetCurrentUserId();
+            var userId = await GetCurrentUserIdAsync();
 
             // --- 401: No valid user in token ---
             if (userId == null)
@@ -607,7 +622,7 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var userId = GetCurrentUserId();
+            var userId = await GetCurrentUserIdAsync();
 
             // --- 401: No valid user in token ---
             if (userId == null)
@@ -679,23 +694,26 @@ public class AuthController : ControllerBase
     // PRIVATE HELPERS
     // ========================================================================
 
-    private Guid? GetCurrentUserId()
+    private async Task<Guid?> GetCurrentUserIdAsync()
     {
-        var subClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                       ?? User.FindFirst("sub")?.Value;
+        var auth0Id = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                      ?? User.FindFirst("sub")?.Value;
 
-        if (string.IsNullOrEmpty(subClaim))
+        if (string.IsNullOrEmpty(auth0Id))
         {
             _logger.LogWarning("No NameIdentifier or sub claim found in token. Claims present: {Claims}",
                 string.Join(", ", User.Claims.Select(c => c.Type)));
             return null;
         }
 
-        if (Guid.TryParse(subClaim, out var userId))
-            return userId;
+        var user = await _userRepository.GetByAuth0IdAsync(auth0Id);
+        if (user == null)
+        {
+            _logger.LogWarning("No user found for Auth0 ID: {Auth0Id}", auth0Id);
+            return null;
+        }
 
-        _logger.LogWarning("Could not parse user ID from claim value: {ClaimValue}", subClaim);
-        return null;
+        return user.Id;
     }
 
     private async Task TrackLoginStreakAsync(string email)

@@ -12,7 +12,7 @@ namespace UserService.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class UserController(IUserService service, IBusinessRepRepository businessRepRepository, IBadgeService badgeService, IReferralService referralService, ILogger<UserController> logger) : ControllerBase
+public class UserController(IUserService service, IBusinessRepRepository businessRepRepository, IBadgeService badgeService, IReferralService referralService, ILogger<UserController> logger, IUserRepository userRepository) : ControllerBase
 {
     // BUSINESS USER creates sub-business users
     [Authorize(Roles = "business_user")]
@@ -164,16 +164,44 @@ public class UserController(IUserService service, IBusinessRepRepository busines
     [HttpPost("business")]
     public async Task<IActionResult> CreateBusinessUser([FromBody] BusinessUserDto dto)
     {
-        var (user, businessId, business) = await service.RegisterBusinessAccountAsync(dto);
-
-        return Created("", new
+        try
         {
-            user.Id,
-            user.Email,
-            businessId,
-            business,
-            user.Auth0UserId
-        });
+            var (user, businessId, business) = await service.RegisterBusinessAccountAsync(dto);
+            return Created("", new
+            {
+                user.Id,
+                user.Email,
+                businessId,
+                business,
+                user.Auth0UserId
+            });
+        }
+        catch (DuplicateUserEmailException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+        catch (DuplicateBusinessException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+        catch (UserCreationFailedException ex)
+        {
+            // Includes password decryption failures and Auth0/user-record errors.
+            // The service layer has already attempted to clean up any orphaned
+            // BusinessService record before throwing this exception.
+            logger.LogError(ex, "User creation step failed for {Email}", dto.Email);
+            return StatusCode(500, new { error = ex.Message });
+        }
+        catch (BusinessUserCreationFailedException ex)
+        {
+            logger.LogError(ex, "Business registration failed for {Email}", dto.Email);
+            return StatusCode(500, new { error = "Registration failed. Please try again." });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error registering business for {Email}", dto.Email);
+            return StatusCode(500, new { error = "An unexpected error occurred. Please try again." });
+        }
     }
 
     [Authorize(Roles = "business_user,support_user")]
@@ -239,7 +267,7 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         }
     }
 
-    [Authorize]
+    [InternalOrJwt] 
     [HttpGet("business-rep/parent/{businessId:guid}")]
     public async Task<IActionResult> GetParentRepByBusinessId(Guid businessId)
     {
@@ -321,10 +349,15 @@ public class UserController(IUserService service, IBusinessRepRepository busines
             return BadRequest(ModelState);
 
         // Enforce ownership: only the user themselves may update their own profile.
-        var sub = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                  ?? User.FindFirst("sub")?.Value;
+        // MapInboundClaims=false → Auth0 "sub" arrives as "sub", not ClaimTypes.NameIdentifier.
+        var auth0Id = User.FindFirst("sub")?.Value
+                      ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        if (!Guid.TryParse(sub, out var currentUserId) || currentUserId != userId)
+        if (string.IsNullOrEmpty(auth0Id))
+            return Forbid();
+
+        var currentUser = await userRepository.GetByAuth0IdAsync(auth0Id);
+        if (currentUser == null || currentUser.Id != userId)
             return Forbid();
 
         try

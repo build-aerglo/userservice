@@ -17,7 +17,7 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
         {
             client_id = config["Auth0:ClientId"],
             client_secret = config["Auth0:ClientSecret"],
-            audience = "https://dev-jx8cz5q0wcoddune.us.auth0.com/api/v2/",
+            audience = config["Auth0:ManagementAudience"],
             grant_type = "client_credentials"
         };
 
@@ -81,10 +81,10 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
         // ----------------------------------------------------------------------
         await AssignRoleAsync(auth0UserId, roleId);
 
-        // ----------------------------------------------------------------------
-        // 3) SEND "SET YOUR PASSWORD" EMAIL
-        // ----------------------------------------------------------------------
-        await SendPasswordSetupEmailAsync(email);
+        // // ----------------------------------------------------------------------
+        // // 3) SEND "SET YOUR PASSWORD" EMAIL
+        // // ----------------------------------------------------------------------
+        // await SendPasswordSetupEmailAsync(email);
 
         return auth0UserId;
     }

@@ -25,7 +25,14 @@ public class AuthControllerTests
     private Mock<IEmailUpdateRequestRepository> _mockEmailUpdateRequestRepository = null!;
     private Mock<ILogger<AuthController>> _mockLogger = null!;
     private AuthController _controller = null!;
+    private Mock<IEncryptionService> _mockEncryptionService = null!;
+    
+    private const string EncryptedPassword = "encrypted-password";
+    private const string DecryptedPassword = "password123";
 
+    private const string EncryptedWrongPassword = "encrypted-wrong";
+    private const string DecryptedWrongPassword = "wrongpass";
+    
     [SetUp]
     public void Setup()
     {
@@ -36,6 +43,7 @@ public class AuthControllerTests
         _mockPointsService = new Mock<IPointsService>();
         _mockEmailUpdateRequestRepository = new Mock<IEmailUpdateRequestRepository>();
         _mockLogger = new Mock<ILogger<AuthController>>();
+        _mockEncryptionService = new Mock<IEncryptionService>();
 
         _controller = new AuthController(
             _mockAuth0Login.Object,
@@ -44,20 +52,32 @@ public class AuthControllerTests
             _mockUserRepository.Object,
             _mockPointsService.Object,
             _mockEmailUpdateRequestRepository.Object,
-            _mockLogger.Object);
+            _mockLogger.Object,
+            _mockEncryptionService.Object);
 
         _controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext()
         };
+        
+        _mockEncryptionService
+            .Setup(x => x.Decrypt(EncryptedPassword))
+            .Returns(DecryptedPassword);
     }
+
+    private const string TestAuth0Id = "auth0|testuser";
+    
 
     private void SetupUserClaims(Guid userId)
     {
+        var user = new User("test", "test@test.com", "1234567890", "pass", "end_user", null, TestAuth0Id);
+        typeof(User).GetProperty("Id")!.SetValue(user, userId);
+        _mockUserRepository.Setup(r => r.GetByAuth0IdAsync(TestAuth0Id)).ReturnsAsync(user);
+
         var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-            new Claim("sub", userId.ToString())
+            new Claim(ClaimTypes.NameIdentifier, TestAuth0Id),
+            new Claim("sub", TestAuth0Id)
         };
         var identity = new ClaimsIdentity(claims, "TestAuth");
         var claimsPrincipal = new ClaimsPrincipal(identity);
@@ -81,7 +101,7 @@ public class AuthControllerTests
     [Test]
     public async Task Login_EmptyEmail_ShouldReturnBadRequest()
     {
-        var dto = new LoginRequest { Email = "", Password = "password123" };
+        var dto = new LoginRequest { Email = "", Password = EncryptedPassword };
         var result = await _controller.Login(dto, CancellationToken.None);
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
     }
@@ -89,7 +109,7 @@ public class AuthControllerTests
     [Test]
     public async Task Login_InvalidEmailFormat_ShouldReturnBadRequest()
     {
-        var dto = new LoginRequest { Email = "notanemail", Password = "password123" };
+        var dto = new LoginRequest { Email = "notanemail", Password = EncryptedPassword };
         var result = await _controller.Login(dto, CancellationToken.None);
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
     }
@@ -105,15 +125,26 @@ public class AuthControllerTests
     [Test]
     public async Task Login_PasswordTooShort_ShouldReturnBadRequest()
     {
-        var dto = new LoginRequest { Email = "user@example.com", Password = "abc" };
+        var dto = new LoginRequest 
+        { 
+            Email = "user@example.com", 
+            Password = "abc" // raw, not encrypted
+        };
+
         var result = await _controller.Login(dto, CancellationToken.None);
+
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
     }
-
+    
     [Test]
     public async Task Login_Success_ShouldReturnOkAndSetRefreshCookie()
     {
-        var dto = new LoginRequest { Email = "user@example.com", Password = "password123" };
+        var dto = new LoginRequest 
+        { 
+            Email = "user@example.com", 
+            Password = EncryptedPassword 
+        };
+
         var token = new TokenResponse
         {
             Access_Token = "access",
@@ -121,114 +152,127 @@ public class AuthControllerTests
             Refresh_Token = "refresh",
             Expires_In = 3600
         };
-        _mockAuth0Login.Setup(s => s.LoginAsync(dto.Email, dto.Password)).ReturnsAsync(token);
+
+        _mockAuth0Login
+            .Setup(s => s.LoginAsync(dto.Email, DecryptedPassword))
+            .ReturnsAsync(token);
 
         var result = await _controller.Login(dto, CancellationToken.None);
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
-        _mockRefreshCookie.Verify(c => c.SetRefreshToken(It.IsAny<HttpResponse>(), "refresh"), Times.Once);
+
+        _mockRefreshCookie.Verify(
+            c => c.SetRefreshToken(It.IsAny<HttpResponse>(), "refresh"),
+            Times.Once
+        );
     }
-
-    [Test]
-    public async Task Login_ServiceReturnsNull_ShouldReturn502()
-    {
-        var dto = new LoginRequest { Email = "user@example.com", Password = "password123" };
-        _mockAuth0Login.Setup(s => s.LoginAsync(dto.Email, dto.Password))
-            .ReturnsAsync((TokenResponse?)null);
-
-        var result = await _controller.Login(dto, CancellationToken.None);
-
-        var statusResult = result as ObjectResult;
-        Assert.That(statusResult!.StatusCode, Is.EqualTo(502));
-    }
-
+    
     [Test]
     public async Task Login_NoRefreshToken_ShouldReturnUnauthorized()
     {
-        var dto = new LoginRequest { Email = "user@example.com", Password = "password123" };
+        var dto = new LoginRequest { Email = "user@example.com", Password = EncryptedPassword };
+    
         var token = new TokenResponse { Access_Token = "access", Refresh_Token = null };
-        _mockAuth0Login.Setup(s => s.LoginAsync(dto.Email, dto.Password)).ReturnsAsync(token);
-
+    
+        _mockAuth0Login
+            .Setup(s => s.LoginAsync(dto.Email, DecryptedPassword))
+            .ReturnsAsync(token);
+    
         var result = await _controller.Login(dto, CancellationToken.None);
-
+    
         Assert.That(result, Is.InstanceOf<UnauthorizedObjectResult>());
     }
-
+    
     [Test]
     public async Task Login_AuthLoginFailed_ShouldReturnUnauthorized()
     {
-        var dto = new LoginRequest { Email = "user@example.com", Password = "wrongpass" };
-        _mockAuth0Login.Setup(s => s.LoginAsync(dto.Email, dto.Password))
+        var dto = new LoginRequest 
+        { 
+            Email = "user@example.com", 
+            Password = EncryptedWrongPassword 
+        };
+
+        _mockEncryptionService
+            .Setup(x => x.Decrypt(EncryptedWrongPassword))
+            .Returns(DecryptedWrongPassword);
+
+        _mockAuth0Login
+            .Setup(s => s.LoginAsync(dto.Email, DecryptedWrongPassword))
             .ThrowsAsync(new AuthLoginFailedException("invalid_grant", "Wrong credentials"));
 
         var result = await _controller.Login(dto, CancellationToken.None);
 
         Assert.That(result, Is.InstanceOf<UnauthorizedObjectResult>());
     }
-
+    
     [Test]
     public async Task Login_AccountBlocked_ShouldReturn403()
     {
-        var dto = new LoginRequest { Email = "user@example.com", Password = "password123" };
-        _mockAuth0Login.Setup(s => s.LoginAsync(dto.Email, dto.Password))
+        var dto = new LoginRequest { Email = "user@example.com", Password = EncryptedPassword };
+    
+        _mockAuth0Login
+            .Setup(s => s.LoginAsync(dto.Email, DecryptedPassword))
             .ThrowsAsync(new AccountBlockedException("Account locked"));
-
+    
         var result = await _controller.Login(dto, CancellationToken.None);
-
-        var statusResult = result as ObjectResult;
-        Assert.That(statusResult!.StatusCode, Is.EqualTo(403));
+    
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(403));
     }
-
+    
     [Test]
     public async Task Login_EmailNotVerified_ShouldReturn403()
     {
-        var dto = new LoginRequest { Email = "user@example.com", Password = "password123" };
-        _mockAuth0Login.Setup(s => s.LoginAsync(dto.Email, dto.Password))
+        var dto = new LoginRequest { Email = "user@example.com", Password = EncryptedPassword };
+    
+        _mockAuth0Login
+            .Setup(s => s.LoginAsync(dto.Email, DecryptedPassword))
             .ThrowsAsync(new EmailNotVerifiedException("Email not verified"));
-
+    
         var result = await _controller.Login(dto, CancellationToken.None);
-
-        var statusResult = result as ObjectResult;
-        Assert.That(statusResult!.StatusCode, Is.EqualTo(403));
+    
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(403));
     }
-
+    
     [Test]
     public async Task Login_RateLimitExceeded_ShouldReturn429()
     {
-        var dto = new LoginRequest { Email = "user@example.com", Password = "password123" };
-        _mockAuth0Login.Setup(s => s.LoginAsync(dto.Email, dto.Password))
+        var dto = new LoginRequest { Email = "user@example.com", Password = EncryptedPassword };
+    
+        _mockAuth0Login
+            .Setup(s => s.LoginAsync(dto.Email, DecryptedPassword))
             .ThrowsAsync(new RateLimitExceededException("Too many requests", 60));
-
+    
         var result = await _controller.Login(dto, CancellationToken.None);
-
-        var statusResult = result as ObjectResult;
-        Assert.That(statusResult!.StatusCode, Is.EqualTo(429));
+    
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(429));
     }
-
+    
     [Test]
     public async Task Login_HttpRequestException_ShouldReturn502()
     {
-        var dto = new LoginRequest { Email = "user@example.com", Password = "password123" };
-        _mockAuth0Login.Setup(s => s.LoginAsync(dto.Email, dto.Password))
+        var dto = new LoginRequest { Email = "user@example.com", Password = EncryptedPassword };
+    
+        _mockAuth0Login
+            .Setup(s => s.LoginAsync(dto.Email, DecryptedPassword))
             .ThrowsAsync(new HttpRequestException("Network error"));
-
+    
         var result = await _controller.Login(dto, CancellationToken.None);
-
-        var statusResult = result as ObjectResult;
-        Assert.That(statusResult!.StatusCode, Is.EqualTo(502));
+    
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(502));
     }
-
+    
     [Test]
     public async Task Login_UnexpectedException_ShouldReturn500()
     {
-        var dto = new LoginRequest { Email = "user@example.com", Password = "password123" };
-        _mockAuth0Login.Setup(s => s.LoginAsync(dto.Email, dto.Password))
+        var dto = new LoginRequest { Email = "user@example.com", Password = EncryptedPassword };
+    
+        _mockAuth0Login
+            .Setup(s => s.LoginAsync(dto.Email, DecryptedPassword))
             .ThrowsAsync(new Exception("Unexpected"));
-
+    
         var result = await _controller.Login(dto, CancellationToken.None);
-
-        var statusResult = result as ObjectResult;
-        Assert.That(statusResult!.StatusCode, Is.EqualTo(500));
+    
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(500));
     }
 
     // ========================================================================

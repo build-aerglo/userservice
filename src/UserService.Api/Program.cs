@@ -64,7 +64,10 @@ builder.Services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
 DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 // MVC
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(opts =>
+        opts.JsonSerializerOptions.PropertyNamingPolicy =
+            System.Text.Json.JsonNamingPolicy.CamelCase);
 
 // TLS for macOS + Auth0 issue
 ServicePointManager.SecurityProtocol =
@@ -177,8 +180,11 @@ builder.Services.AddHttpClient<IBusinessServiceClient, BusinessServiceClient>(cl
     var baseUrl = builder.Configuration["Services:BusinessServiceBaseUrl"];
     if (!string.IsNullOrWhiteSpace(baseUrl))
         client.BaseAddress = new Uri(baseUrl);
-});
 
+    var bizKey = builder.Configuration["Services:BusinessApiKey"];
+    if (!string.IsNullOrWhiteSpace(bizKey))
+        client.DefaultRequestHeaders.Add("X-Api-Key", bizKey);
+});
 // ---------- Auth0 Management API ----------
 builder.Services.AddHttpClient<IAuth0ManagementService, Auth0ManagementService>();
 
@@ -205,12 +211,15 @@ builder.Services
     {
         options.Authority = $"https://{builder.Configuration["Auth0:Domain"]}/";
         options.Audience = builder.Configuration["Auth0:Audience"];
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
             ValidateIssuer = true,
             ValidateAudience = true,
-            ValidateLifetime = true
+            ValidateLifetime = true,
+            NameClaimType = "sub",
+            RoleClaimType = $"{builder.Configuration["Auth0:Audience"]}/roles"
         };
     });
 

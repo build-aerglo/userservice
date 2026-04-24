@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using UserService.Application.DTOs.Verification;
 using UserService.Application.Interfaces;
@@ -13,10 +14,10 @@ public class RegistrationVerificationService(
     IEncryptionService encryptionService,
     INotificationServiceClient notificationClient,
     IBusinessRepository businessRepository,
-    ILogger<RegistrationVerificationService> logger
+    ILogger<RegistrationVerificationService> logger,
+    IConfiguration config
 ) : IRegistrationVerificationService
 {
-    private const string VerificationBaseUrl = "https://www.clereview.com/auth/verify-email";
 
     /// <summary>
     /// Creates a registration_verification entry and sends the verification email.
@@ -38,12 +39,18 @@ public class RegistrationVerificationService(
         var encodedToken = Uri.EscapeDataString(token);
         var encodedEmail = Uri.EscapeDataString(email);
         var accountType = userType.Equals("business_user", StringComparison.OrdinalIgnoreCase) ? "business" : "user";
-        var url = $"{VerificationBaseUrl}?token={encodedToken}&e={encodedEmail}&type={accountType}";
+        var frontendUrl = config["FrontendUrl"]?.TrimEnd('/');
+        var url = $"{frontendUrl}/auth/verify-email?token={encodedToken}&e={encodedEmail}&type={accountType}";
+        
+        // Resolve user type from DB to pick the correct template
+        var template = userType.Equals("business_user", StringComparison.OrdinalIgnoreCase)
+            ? "registeration-business"
+            : "registeration";
 
         // Send the notification — failure is logged but does not throw so that
         // the registration itself is not rolled back.
         var sent = await notificationClient.SendNotificationAsync(
-            template: "registeration",
+            template: template,
             recipient: email,
             channel: "email",
             payload: new { username, url }
@@ -97,7 +104,11 @@ public class RegistrationVerificationService(
         {
             var businessId = await businessRepository.GetIdByEmailAsync(email);
             if (businessId.HasValue)
+            {
                 await businessRepository.MarkEmailVerifiedAsync(businessId.Value);
+                await businessRepository.MarkEmailVerifiedOnVerificationTableAsync(businessId.Value);
+            }
+            
             else
                 logger.LogWarning("No business found for email {Email} during email verification", email);
         }
