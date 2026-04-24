@@ -89,6 +89,33 @@ public class BusinessServiceClient(HttpClient httpClient, ILogger<BusinessServic
         }
     }
 
+    public async Task<bool> DeleteBusinessAsync(Guid businessId)
+    {
+        try
+        {
+            var response = await httpClient.DeleteAsync($"/api/business/{businessId}");
+
+            if (response.StatusCode == HttpStatusCode.OK
+                || response.StatusCode == HttpStatusCode.NoContent
+                || response.StatusCode == HttpStatusCode.NotFound)
+            {
+                // NotFound is treated as success — business is already gone, goal achieved.
+                return true;
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            logger.LogWarning(
+                "Unexpected response deleting orphaned business {BusinessId}: {StatusCode} | {Error}",
+                businessId, response.StatusCode, error);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error deleting orphaned business {BusinessId}.", businessId);
+            return false;
+        }
+    }
+
     public async Task<bool> UpdateBusinessEmailAsync(string oldEmail, string newEmail)
     {
         try

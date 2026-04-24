@@ -184,6 +184,14 @@ public class UserController(IUserService service, IBusinessRepRepository busines
         {
             return Conflict(new { error = ex.Message });
         }
+        catch (UserCreationFailedException ex)
+        {
+            // Includes password decryption failures and Auth0/user-record errors.
+            // The service layer has already attempted to clean up any orphaned
+            // BusinessService record before throwing this exception.
+            logger.LogError(ex, "User creation step failed for {Email}", dto.Email);
+            return StatusCode(500, new { error = ex.Message });
+        }
         catch (BusinessUserCreationFailedException ex)
         {
             logger.LogError(ex, "Business registration failed for {Email}", dto.Email);

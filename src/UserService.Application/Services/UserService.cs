@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using UserService.Application.DTOs;
 using UserService.Application.DTOs.Badge;
 using UserService.Application.DTOs.Referral;
@@ -27,7 +28,8 @@ public class UserService(
     IConfiguration _config,
     IMemoryCache cache,
     IRegistrationVerificationService registrationVerificationService,
-    IEncryptionService encryptionService
+    IEncryptionService encryptionService,
+    ILogger<UserService> logger
 ) : IUserService
 {
     public async Task<User?> GetUserByIdAsync(Guid userId)
@@ -233,17 +235,16 @@ public class UserService(
 
     public async Task<(User, Guid businessId, BusinessRep)> RegisterBusinessAccountAsync(BusinessUserDto userPayload)
     {
+        // ── 1. Duplicate checks ────────────────────────────────────────────
         if (await businessRepository.AnyFieldTakenAsync(userPayload.Name, userPayload.Email, userPayload.Phone))
             throw new DuplicateBusinessException("Business data already used.");
-        
+
         if (await userRepository.EmailExistsAsync(userPayload.Email))
             throw new DuplicateUserEmailException($"Email '{userPayload.Email}' already exists.");
 
-        var businessId = await businessServiceClient.CreateBusinessAsync(userPayload);
-        if (businessId == null || businessId == Guid.Empty)
-            throw new BusinessUserCreationFailedException("Business creation failed: BusinessId is missing from services.");
-        
-        // decrypt password
+        // ── 2. Decrypt password BEFORE any external calls ─────────────────
+        // This is a fast, local operation. Failing here never creates any
+        // external resources, so there is nothing to roll back.
         string decryptedPassword;
         try
         {
@@ -253,17 +254,52 @@ public class UserService(
         {
             throw new UserCreationFailedException($"Password Error - '{ex}'");
         }
-        
-        var auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(userPayload.Email, userPayload.Name, decryptedPassword, _config["Auth0:Roles:BusinessUser"]);
 
-        var user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, decryptedPassword, userPayload.UserType, userPayload.Address, auth0UserId);
-        await userRepository.AddAsync(user);
+        // ── 3. Create business record in BusinessService ───────────────────
+        var businessId = await businessServiceClient.CreateBusinessAsync(userPayload);
+        if (businessId == null || businessId == Guid.Empty)
+            throw new BusinessUserCreationFailedException("Business creation failed: BusinessId is missing from services.");
 
-        var savedUser = await userRepository.GetByIdAsync(user.Id);
-        if (savedUser == null)
-            throw new UserCreationFailedException("Failed to create user record.");
+        // ── 4. Create Auth0 user + local user record ───────────────────────
+        // If anything below fails we must delete the business record created
+        // in step 3 to avoid orphaned rows in the BusinessService database.
+        string auth0UserId;
+        try
+        {
+            auth0UserId = await _auth0.CreateUserAndAssignRoleAsync(
+                userPayload.Email, userPayload.Name, decryptedPassword,
+                _config["Auth0:Roles:BusinessUser"]);
+        }
+        catch (Exception ex)
+        {
+            // Compensating action: remove the orphaned business record.
+            await TryDeleteOrphanedBusinessAsync(businessId.Value);
+            throw new UserCreationFailedException($"Auth0 user creation failed: {ex.Message}");
+        }
 
-        await userRepository.SetUserIdAsync(savedUser.Id, businessId.Value);
+        User user;
+        User? savedUser;
+        try
+        {
+            user = new User(userPayload.Name, userPayload.Email, userPayload.Phone, decryptedPassword, userPayload.UserType, userPayload.Address, auth0UserId);
+            await userRepository.AddAsync(user);
+
+            savedUser = await userRepository.GetByIdAsync(user.Id);
+            if (savedUser == null)
+                throw new UserCreationFailedException("Failed to create user record.");
+
+            await userRepository.SetUserIdAsync(savedUser.Id, businessId.Value);
+        }
+        catch (UserCreationFailedException)
+        {
+            await TryDeleteOrphanedBusinessAsync(businessId.Value);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await TryDeleteOrphanedBusinessAsync(businessId.Value);
+            throw new UserCreationFailedException($"User record creation failed: {ex.Message}");
+        }
 
         var businessRep = new BusinessRep(businessId.Value, savedUser.Id, userPayload.BranchName, userPayload.BranchAddress);
         await businessRepRepository.AddAsync(businessRep);
@@ -276,6 +312,33 @@ public class UserService(
         await registrationVerificationService.SendVerificationEmailAsync(user.Email, user.Username, "business_user");
 
         return (user, businessId.Value, businessRep);
+    }
+
+    /// <summary>
+    /// Best-effort compensating action: delete the BusinessService record
+    /// created during registration if subsequent steps fail.
+    /// Never throws — a failure here is logged but must not mask the original error.
+    /// </summary>
+    private async Task TryDeleteOrphanedBusinessAsync(Guid businessId)
+    {
+        try
+        {
+            var deleted = await businessServiceClient.DeleteBusinessAsync(businessId);
+            if (!deleted)
+                logger.LogWarning(
+                    "Could not delete orphaned business {BusinessId}. Manual cleanup may be required.",
+                    businessId);
+            else
+                logger.LogInformation(
+                    "Orphaned business {BusinessId} cleaned up successfully after failed registration.",
+                    businessId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Exception during orphaned business cleanup for {BusinessId}. Manual cleanup required.",
+                businessId);
+        }
     }
 
     public async Task<BusinessRep?> GetBusinessRepByIdAsync(Guid id)
