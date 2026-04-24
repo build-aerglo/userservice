@@ -87,7 +87,8 @@ public class RegisterBusinessAfterClaimTests
             _mockConfig.Object,
             mockCache.Object,
             _mockRegVerification.Object,
-            _mockEncryptionService.Object
+            _mockEncryptionService.Object,
+            new Microsoft.Extensions.Logging.Abstractions.NullLogger<Application.Services.UserService>()
         );
     }
 

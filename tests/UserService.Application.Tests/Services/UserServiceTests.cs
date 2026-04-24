@@ -90,7 +90,8 @@ public class UserServiceTests
             _mockConfig.Object,
             _mockCache.Object,
             _mockRegisterationVerificationRepository.Object,
-            _mockEncryptionService.Object
+            _mockEncryptionService.Object,
+            new Microsoft.Extensions.Logging.Abstractions.NullLogger<Application.Services.UserService>()
         );
     }
 
@@ -1114,7 +1115,8 @@ public void GetEndUserSummaryAsync_ShouldThrow_WhenUserNotFound()
             _mockConfig.Object,
             _mockCache.Object,
             _mockRegisterationVerificationRepository.Object,
-            _mockEncryptionService.Object
+            _mockEncryptionService.Object,
+            new Microsoft.Extensions.Logging.Abstractions.NullLogger<Application.Services.UserService>()
         );
 
         Assert.ThrowsAsync<DuplicateUserEmailException>(() => service.RegisterBusinessAfterClaimAsync(dto));
