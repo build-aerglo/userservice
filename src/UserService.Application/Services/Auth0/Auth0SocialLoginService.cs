@@ -343,6 +343,8 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
             auth0UserId: auth0UserId,
             loginType: "social_handle");
 
+        user.MarkEmailVerified();
+
         try
         {
             await _userRepo.AddAsync(user);
