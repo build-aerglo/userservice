@@ -162,10 +162,12 @@ public class EndUserProfileRepository : IEndUserProfileRepository
             // ----------------------------------------------------------------
             // Reviews
             // ----------------------------------------------------------------
+            // RS-DeferredAuth: count only reviews that are not pending verification
             const string countSql = @"
                 SELECT COUNT(*)
                 FROM review r
-                WHERE (r.reviewer_id = @ReviewerId OR r.email = @Email);";
+                WHERE (r.reviewer_id = @ReviewerId OR r.email = @Email)
+                  AND r.is_verification_pending = FALSE;";
 
             var totalCount = await conn.ExecuteScalarAsync<int>(countSql,
                 new { ReviewerId = reviewerIdParam, Email = email });
@@ -191,6 +193,7 @@ public class EndUserProfileRepository : IEndUserProfileRepository
     LEFT  JOIN business_branches bb    ON r.location_id  = bb.id
     LEFT  JOIN business_reply br       ON br.review_id   = r.id
     WHERE (r.reviewer_id = @ReviewerId OR r.email = @Email)
+      AND r.is_verification_pending = FALSE
     ORDER BY r.created_at DESC
     LIMIT @PageSize OFFSET @Offset;";
 
@@ -287,6 +290,7 @@ public class EndUserProfileRepository : IEndUserProfileRepository
                         FROM review r
                         WHERE (r.reviewer_id = @ReviewerId OR r.email = @Email)
                           AND r.status = 'APPROVED'
+                          AND r.is_verification_pending = FALSE
                           AND r.location_id IS NOT NULL
                     ),
                     city_reviews AS (
@@ -329,6 +333,7 @@ public class EndUserProfileRepository : IEndUserProfileRepository
                         FROM review r
                         WHERE (r.reviewer_id = @ReviewerId OR r.email = @Email)
                           AND r.status = 'APPROVED'
+                          AND r.is_verification_pending = FALSE
                     ),
                     category_reviews AS (
                         SELECT c.id AS category_id, c.name AS category_name,

@@ -141,7 +141,8 @@ public abstract class InMemoryTestBase
                 validation_result TEXT,
                 validated_at      TEXT,
                 created_at        TEXT NOT NULL,
-                updated_at        TEXT
+                updated_at        TEXT,
+                is_verification_pending INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS user_badges (

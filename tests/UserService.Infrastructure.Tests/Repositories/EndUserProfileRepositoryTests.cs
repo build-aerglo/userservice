@@ -138,7 +138,8 @@ public class EndUserProfileRepositoryTests
         validated_at      TEXT,
         created_at        TEXT NOT NULL,
         updated_at        TEXT,
-        helpful_count     INTEGER DEFAULT 0
+        helpful_count     INTEGER DEFAULT 0,
+        is_verification_pending INTEGER NOT NULL DEFAULT 0
     );");
 
         await _connection.ExecuteAsync(@"
