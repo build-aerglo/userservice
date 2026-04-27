@@ -162,6 +162,15 @@ builder.Services.AddHttpClient<IReviewServiceClient, ReviewServiceClient>(client
         client.BaseAddress = new Uri(baseUrl);
 });
 
+// ---------- RS-DeferredAuth: Review Activation Client ----------
+builder.Services.AddHttpClient<IReviewActivationClient, ReviewActivationClient>(client =>
+{
+    var url = builder.Configuration["Services:ReviewServiceBaseUrl"]
+        ?? throw new InvalidOperationException("Services:ReviewServiceBaseUrl not configured");
+    client.BaseAddress = new Uri(url);
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+
 // ---------- Notification Service HTTP Client ----------
 builder.Services.AddHttpClient<INotificationServiceClient, NotificationServiceClient>(client =>
 {

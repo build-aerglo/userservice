@@ -15,7 +15,8 @@ public class RegistrationVerificationService(
     INotificationServiceClient notificationClient,
     IBusinessRepository businessRepository,
     ILogger<RegistrationVerificationService> logger,
-    IConfiguration config
+    IConfiguration config,
+    IReviewActivationClient reviewActivationClient  // RS-DeferredAuth
 ) : IRegistrationVerificationService
 {
 
@@ -118,6 +119,10 @@ public class RegistrationVerificationService(
 
         // d) Clean up the pending registration_verification entry
         await registrationVerificationRepository.DeleteByEmailAsync(email);
+
+        // RS-DeferredAuth: Activate any pending-verification reviews for this user.
+        // Fire-and-forget — do not let a ReviewService failure break the verification response.
+        _ = reviewActivationClient.ActivateReviewsForUserAsync(user.Id);
 
         logger.LogInformation("Email verified successfully for {Email} (userType={UserType})", email, user.UserType);
 
