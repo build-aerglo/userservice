@@ -688,10 +688,11 @@ public class UserService(
             Profile = profileDetail,
             Reviews = new PaginatedReviews
             {
-                Items      = entity.Reviews,
-                TotalCount = entity.TotalReviewCount,
-                Page       = page,
-                PageSize   = pageSize
+                Items                   = entity.Reviews,
+                TotalCount              = entity.TotalReviewCount,
+                Page                    = page,
+                PageSize                = pageSize,
+                PendingVerificationCount = entity.PendingVerificationCount
             },
             TopCities      = entity.TopCities,
             TopCategories  = entity.TopCategories,

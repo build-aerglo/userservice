@@ -172,6 +172,19 @@ public class EndUserProfileRepository : IEndUserProfileRepository
             var totalCount = await conn.ExecuteScalarAsync<int>(countSql,
                 new { ReviewerId = reviewerIdParam, Email = email });
 
+            // RS-DeferredAuth: separately count pending-verification reviews.
+            // This is returned so the frontend can show "verify your account to
+            // publish your reviews" instead of "no reviews yet" on the user's
+            // own profile page when all reviews are pending verification.
+            const string pendingCountSql = @"
+                SELECT COUNT(*)
+                FROM review r
+                WHERE (r.reviewer_id = @ReviewerId OR r.email = @Email)
+                  AND r.is_verification_pending = TRUE;";
+
+            var pendingVerificationCount = await conn.ExecuteScalarAsync<int>(pendingCountSql,
+                new { ReviewerId = reviewerIdParam, Email = email });
+
             const string reviewsSql = @"
     SELECT 
         r.id, r.business_id, r.location_id, r.reviewer_id, r.email, r.star_rating,
@@ -206,6 +219,7 @@ public class EndUserProfileRepository : IEndUserProfileRepository
             });
 
             result.TotalReviewCount = totalCount;
+            result.PendingVerificationCount = pendingVerificationCount;
             result.Reviews = reviewRecords.Select(r =>
             {
                 // Postgres returns uuid columns as Guid, bool columns as bool, timestamps
