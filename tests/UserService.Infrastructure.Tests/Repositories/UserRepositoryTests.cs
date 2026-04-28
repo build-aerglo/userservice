@@ -77,6 +77,13 @@ public class UserRepository : IUserRepository
             await conn.ExecuteScalarAsync<int>(sql, new { Email = email }) > 0);
     }
 
+    public async Task<bool> UsernameExistsAsync(string username)
+    {
+        const string sql = "SELECT COUNT(1) FROM users WHERE username = @Username;";
+        return await QueryAsync(async conn =>
+            await conn.ExecuteScalarAsync<int>(sql, new { Username = username }) > 0);
+    }
+
     public async Task<IEnumerable<User>> GetAllAsync()
     {
         const string sql = "SELECT * FROM users ORDER BY created_at DESC;";

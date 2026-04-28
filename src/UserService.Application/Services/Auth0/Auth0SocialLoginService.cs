@@ -322,14 +322,17 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
     {
         var email = userInfo.Email ?? $"{userInfo.Sub}@{provider}.social";
 
-        // Generate username from name/nickname, fallback to email prefix
-        var baseUsername = userInfo.Name ?? userInfo.Nickname ?? email.Split('@')[0];
-
-        // Make username unique by appending a short hash of the auth0UserId
-        // This prevents conflicts when multiple providers return the same name/email
         var auth0UserId = userInfo.Sub;
-        var uniqueSuffix = Math.Abs(auth0UserId.GetHashCode()).ToString().Substring(0, 6);
-        var username = $"{baseUsername}_{uniqueSuffix}";
+
+        var rawName = userInfo.Name ?? userInfo.Nickname ?? email.Split('@')[0];
+        var baseUsername = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(rawName.ToLower());
+
+        var username = baseUsername;
+        if (await _userRepo.UsernameExistsAsync(username))
+        {
+            var uniqueSuffix = Math.Abs(auth0UserId.GetHashCode()).ToString().Substring(0, 6);
+            username = $"{baseUsername}_{uniqueSuffix}";
+        }
 
         Console.WriteLine($"[CreateEndUserFromSocialAsync] Creating user - Email: {email}, BaseUsername: {baseUsername}, Username: {username}, Auth0Sub: {auth0UserId}");
 
