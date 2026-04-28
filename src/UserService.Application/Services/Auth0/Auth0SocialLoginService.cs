@@ -328,9 +328,11 @@ public class Auth0SocialLoginService : IAuth0SocialLoginService
         var baseUsername = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(rawName.ToLower());
 
         var username = baseUsername;
-        var counter = 2;
-        while (await _userRepo.UsernameExistsAsync(username))
-            username = $"{baseUsername}_{counter++}";
+        if (await _userRepo.UsernameExistsAsync(username))
+        {
+            var uniqueSuffix = Math.Abs(auth0UserId.GetHashCode()).ToString().Substring(0, 6);
+            username = $"{baseUsername}_{uniqueSuffix}";
+        }
 
         Console.WriteLine($"[CreateEndUserFromSocialAsync] Creating user - Email: {email}, BaseUsername: {baseUsername}, Username: {username}, Auth0Sub: {auth0UserId}");
 
