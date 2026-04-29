@@ -22,7 +22,11 @@ public class ReviewActivationClient : IReviewActivationClient
     {
         _httpClient     = httpClient;
         _logger         = logger;
-        _internalApiKey = config["Services:InternalApiKey"] ?? string.Empty;
+        // UserService stores this as "InternalApiKey" at the root level.
+        // Fall back to "Services:InternalApiKey" for consistency with other services.
+        _internalApiKey = config["InternalApiKey"]
+                       ?? config["Services:InternalApiKey"]
+                       ?? string.Empty;
     }
 
     public async Task ActivateReviewsForUserAsync(Guid userId)
