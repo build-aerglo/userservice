@@ -40,7 +40,7 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
     }
 
     // =============================================================================================
-    // CREATE USER + ASSIGN ROLE + SEND PASSWORD RESET LINK
+    // CREATE USER + ASSIGN ROLE
     // =============================================================================================
     public async Task<string> CreateUserAndAssignRoleAsync(string email, string username,string password, string roleId)
     {
@@ -82,11 +82,6 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
         // ----------------------------------------------------------------------
         await AssignRoleAsync(auth0UserId, roleId);
 
-        // // ----------------------------------------------------------------------
-        // // 3) SEND "SET YOUR PASSWORD" EMAIL
-        // // ----------------------------------------------------------------------
-        // await SendPasswordSetupEmailAsync(email);
-
         return auth0UserId;
     }
 
@@ -104,29 +99,6 @@ public class Auth0ManagementService(HttpClient http, IConfiguration config) : IA
         var resp = await http.PostAsync(
             $"https://{domain}/api/v2/users/{Uri.EscapeDataString(auth0UserId)}/roles",
             new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
-        );
-
-        resp.EnsureSuccessStatusCode();
-    }
-
-    // =============================================================================================
-    // SEND PASSWORD RESET EMAIL
-    // =============================================================================================
-    public async Task SendPasswordSetupEmailAsync(string email)
-    {
-        var domain = config["Auth0:Domain"]!;
-        var connection = config["Auth0:DbConnection"] ?? "Username-Password-Authentication";
-
-        var payload = new
-        {
-            client_id = config["Auth0:ClientId"], // frontend client id OK for password reset
-            email,
-            connection
-        };
-
-        var resp = await http.PostAsync(
-            $"https://{domain}/dbconnections/change_password",
-            new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
         );
 
         resp.EnsureSuccessStatusCode();
