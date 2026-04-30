@@ -7,6 +7,13 @@ public class PaginatedReviews
     public int Page { get; set; }
     public int PageSize { get; set; }
     public int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
+    /// <summary>
+    /// RS-DeferredAuth: number of reviews this user has that are hidden behind
+    /// email verification. Non-zero only when the user views their own profile
+    /// and has not yet verified. Frontend shows a "verify to publish" banner
+    /// instead of "no reviews yet" when this is > 0 and Items is empty.
+    /// </summary>
+    public int PendingVerificationCount { get; set; }
 }
 
 public class EndUserSummaryDto

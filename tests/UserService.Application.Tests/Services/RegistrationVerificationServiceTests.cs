@@ -19,6 +19,7 @@ public class RegistrationVerificationServiceTests
     private Mock<IBusinessRepository> _mockBusinessRepo = null!;
     private Mock<ILogger<RegistrationVerificationService>> _mockLogger = null!;
     private Mock<IConfiguration> _mockConfig = null!;
+    private Mock<IReviewActivationClient> _mockReviewActivationClient = null!;
     private RegistrationVerificationService _service = null!;
 
     [SetUp]
@@ -33,6 +34,12 @@ public class RegistrationVerificationServiceTests
         _mockConfig = new Mock<IConfiguration>();
         _mockConfig.Setup(c => c["FrontendUrl"]).Returns("https://www.clereview.com");
 
+        // RS-DeferredAuth: fire-and-forget — always succeeds silently in tests
+        _mockReviewActivationClient = new Mock<IReviewActivationClient>();
+        _mockReviewActivationClient
+            .Setup(c => c.ActivateReviewsForUserAsync(It.IsAny<Guid>()))
+            .Returns(Task.CompletedTask);
+
         _service = new RegistrationVerificationService(
             _mockRegVerificationRepo.Object,
             _mockUserRepo.Object,
@@ -40,7 +47,8 @@ public class RegistrationVerificationServiceTests
             _mockNotificationClient.Object,
             _mockBusinessRepo.Object,
             _mockLogger.Object,
-            _mockConfig.Object
+            _mockConfig.Object,
+            _mockReviewActivationClient.Object
         );
     }
 

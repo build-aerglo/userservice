@@ -82,6 +82,13 @@ public class UserRepository : IUserRepository
             await conn.ExecuteScalarAsync<int>(sql, new { Email = email }) > 0);
     }
 
+    public async Task<bool> UsernameExistsAsync(string username)
+    {
+        const string sql = "SELECT COUNT(1) FROM users WHERE username = @Username;";
+        return await QueryAsync(async conn =>
+            await conn.ExecuteScalarAsync<int>(sql, new { Username = username }) > 0);
+    }
+
     public async Task<IEnumerable<User>> GetAllAsync()
     {
         const string sql = "SELECT * FROM users ORDER BY created_at DESC;";
@@ -98,8 +105,8 @@ public class UserRepository : IUserRepository
     public async Task AddAsync(User user)
     {
         const string sql = @"
-            INSERT INTO users (id, username, email, phone, user_type, address, join_date, created_at, updated_at, login_type, auth0_user_id)
-            VALUES (@Id, @Username, @Email, @Phone, @UserType, @Address, @JoinDate, @CreatedAt, @UpdatedAt, @LoginType, @Auth0UserId);";
+            INSERT INTO users (id, username, email, phone, user_type, address, join_date, created_at, updated_at, login_type, auth0_user_id, is_email_verified)
+            VALUES (@Id, @Username, @Email, @Phone, @UserType, @Address, @JoinDate, @CreatedAt, @UpdatedAt, @LoginType, @Auth0UserId, @IsEmailVerified);";
 
         await ExecuteAsync(conn => conn.ExecuteAsync(sql, user));
     }

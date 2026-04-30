@@ -10,6 +10,11 @@ namespace UserService.Domain.Entities
         public IEnumerable<ReviewResponseDto> Reviews { get; set; } = new List<ReviewResponseDto>();
         
         public int TotalReviewCount { get; set; }
+        /// <summary>
+        /// RS-DeferredAuth: reviews hidden behind email verification.
+        /// Used by frontend to show verify-to-publish banner instead of empty state.
+        /// </summary>
+        public int PendingVerificationCount { get; set; }
         public IEnumerable<TopCityStat> TopCities { get; set; } = new List<TopCityStat>();
         public IEnumerable<TopCategoryStat> TopCategories { get; set; } = new List<TopCategoryStat>();
         
